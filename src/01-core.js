@@ -276,6 +276,7 @@ const AudioSys = (() => {
       src.connect(f); f.connect(g); g.connect(p); p.connect(amb); src.start(t); src.stop(t + dur);
     },
     atm() { [0, 0.15, 0.3].forEach(d => tone(1250, 0.07, { delay: d, gain: 0.06, type: 'square' })); for (let i = 0; i < 20; i++) noise(0.02, { delay: 0.6 + i * 0.03, freq: 1500, q: 2, gain: 0.05 }); },
+    laugh(pos) { const f0 = rand(220, 340); for (let i = 0; i < randi(3, 5); i++) { noise(0.11, { delay: i * 0.16, freq: f0 * 3.2, q: 6, gain: 0.08, attack: 0.01, pos, ref: 2 }); tone(f0 * (1 + i * 0.03), 0.1, { delay: i * 0.16, gain: 0.03, type: 'triangle', pos, ref: 2 }); } },
     eat() { for (let i = 0; i < 5; i++) noise(0.08, { delay: i * 0.22, freq: 1800, q: 1, gain: 0.07 }); },
   };
   // --- continuous ambience ---

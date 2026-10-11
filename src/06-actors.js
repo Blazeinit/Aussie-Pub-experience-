@@ -226,11 +226,13 @@ function makeStream() {
 // =====================================================================
 const NPC_NAMES = ['Davo', 'Shazza', 'Gazza', 'Kev', 'Bazza', 'Trev', 'Macca', 'Robbo', 'Jonesy', 'Tracey', 'Kylie', 'Big Sue', 'Old Mick', 'Nev', 'Dazza', 'Steve-O', 'Brenda', 'Noddy', 'Spud', 'Fitzy', 'Wazza', 'Lorraine', 'Bev', 'Sticks', 'Kenno', 'Deb', 'Mully', 'Chook'];
 const SKIN = [0xf0c4a0, 0xd9a383, 0xc68a64, 0x9a6440, 0x6a4028, 0xe8b894];
-const SHIRTS = [{ c: 0xff7a1a, hv: 1 }, { c: 0xe8e01a, hv: 1 }, { c: 0x8a1a1a, flannel: 1 }, { c: 0x1a2a4a }, { c: 0x111111 }, { c: 0x2a5a2a }, { c: 0xe8e8e8 }, { c: 0x4a2a5a }, { c: 0x1a4a8a, flannel: 1 }, { c: 0xff7a1a, hv: 1 }];
-const PANTS = [0x1a2440, 0x2a3a5a, 0x6a5a3a, 0x222222, 0x3a4a6a];
-const HAIR = [0x1a120a, 0x3a2412, 0x6a4a2a, 0xa8a8a8, 0xd8c08a, 0x2a1a0a];
-const capsGeo = new THREE.CapsuleGeometry(1, 1, 4, 10);
-const sphGeoH = new THREE.SphereGeometry(1, 18, 14);
+// outfit = { tile: atlas pattern, c: tint }
+const SHIRTS = [{ tile: 'hivis', c: 0xff7a1a }, { tile: 'hivis', c: 0xe8e01a }, { tile: 'flannel', c: 0xb02424 }, { tile: 'flannel', c: 0x2a5aa8 }, { tile: 'flannel', c: 0x2f7a34 },
+  { tile: 'collar', c: 0x1a2a4a }, { tile: 'collar', c: 0x161616 }, { tile: 'cloth', c: 0xe8e8e8 }, { tile: 'hoops', c: 0xffffff }, { tile: 'hoops', c: 0xb03040 }, { tile: 'collar', c: 0x4a2a5a }, { tile: 'hivis', c: 0xff7a1a }, { tile: 'cloth', c: 0x2a5a2a }];
+const PANTS = [{ tile: 'denim', c: 0xffffff }, { tile: 'denim', c: 0xcfd6e0 }, { tile: 'cloth', c: 0x6a5a3a }, { tile: 'cloth', c: 0x222222 }, { tile: 'cloth', c: 0x1a2440 }, { tile: 'denim', c: 0xffffff }];
+const HAIR = [0x1a120a, 0x3a2412, 0x6a4a2a, 0xa8a8a8, 0xd8c08a, 0x2a1a0a, 0x8a3a18];
+const capsGeo = new THREE.CapsuleGeometry(1, 1, 5, 14);
+const sphGeoH = new THREE.SphereGeometry(1, 24, 18);
 const matCache = {};
 function cm(col, rough = 0.7) { const k = col + '_' + rough; if (!matCache[k]) { matCache[k] = M({ color: col, roughness: rough }); } return matCache[k]; }
 function flannelMat(col) {
@@ -242,69 +244,133 @@ function flannelMat(col) {
   const fm = M({ map: canvasTex(c, 3, 3), roughness: 0.9 }); fm.userData.base = col;
   return (matCache[k] = fm);
 }
-function limb(parent, r, len, mat, y = 0) {
-  const m = new THREE.Mesh(capsGeo, mat); m.scale.set(r, len / 2, r); m.position.y = -len / 2 + y; parent.add(m); return m;
+
+// ---------- character texture atlas: fabrics, hair, painted faces (one texture for everyone) ----------
+const ATLAS = { tex: null, rect: {} };
+function buildAtlas() {
+  const N = 4, T = 256, c = mkCanvas(N * T, N * T), x = c.getContext('2d');
+  const names = ['cloth', 'skin', 'flannel', 'hivis', 'hoops', 'denim', 'hair', 'shoe', 'collar', 'face0', 'face1', 'face2', 'face3', 'face4', 'face5', 'mouth'];
+  const grain = (x0, y0, amt, a = 0.08) => { for (let i = 0; i < amt; i++) { x.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${Math.random() * a})`; x.fillRect(x0 + Math.random() * T, y0 + Math.random() * T, rand(1, 3), rand(1, 3)); } };
+  names.forEach((n, i) => {
+    const x0 = (i % N) * T, y0 = Math.floor(i / N) * T;
+    x.save(); x.beginPath(); x.rect(x0, y0, T, T); x.clip();
+    if (n === 'cloth' || n === 'collar') { x.fillStyle = '#f2f2f2'; x.fillRect(x0, y0, T, T); grain(x0, y0, 2500, 0.06); for (let k = 0; k < T; k += 3) { x.fillStyle = 'rgba(0,0,0,.035)'; x.fillRect(x0, y0 + k, T, 1); }
+      if (n === 'collar') { x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(x0, y0 + 8, T, 5); x.fillStyle = 'rgba(255,255,255,.5)'; x.fillRect(x0 + T * 0.24, y0 + 14, 3, 40); for (let b = 0; b < 3; b++) { x.fillStyle = '#ddd'; x.beginPath(); x.arc(x0 + T * 0.25 + 6, y0 + 24 + b * 14, 3, 0, 7); x.fill(); } } }
+    if (n === 'skin') { x.fillStyle = '#ffffff'; x.fillRect(x0, y0, T, T); grain(x0, y0, 1800, 0.035); }
+    if (n === 'flannel') { x.fillStyle = '#ffffff'; x.fillRect(x0, y0, T, T); for (let k = 0; k < T; k += 42) { x.fillStyle = 'rgba(0,0,0,.42)'; x.fillRect(x0 + k, y0, 16, T); x.fillRect(x0, y0 + k, T, 16); x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(x0 + k + 26, y0, 3, T); x.fillRect(x0, y0 + k + 26, T, 3); } grain(x0, y0, 2000, 0.07); }
+    if (n === 'hivis') { x.fillStyle = '#ffffff'; x.fillRect(x0, y0, T, T); grain(x0, y0, 1500, 0.05); for (const yy of [0.42, 0.62]) { x.fillStyle = '#5a5a5a'; x.fillRect(x0, y0 + T * (1 - yy) - 9, T, 18); x.fillStyle = '#a8a8a8'; x.fillRect(x0, y0 + T * (1 - yy) - 6, T, 12); } }
+    if (n === 'hoops') { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#262626' : '#ffffff'; x.fillRect(x0, y0 + k * T / 8, T, T / 8); } grain(x0, y0, 1500, 0.06); }
+    if (n === 'denim') { x.fillStyle = '#3c5a86'; x.fillRect(x0, y0, T, T); for (let k = 0; k < 3000; k++) { x.strokeStyle = `rgba(${Math.random() < 0.5 ? '20,30,60' : '170,190,220'},.18)`; const px = x0 + Math.random() * T, py = y0 + Math.random() * T; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 4, py + 4); x.stroke(); } x.fillStyle = 'rgba(200,150,60,.6)'; x.fillRect(x0 + T * 0.5, y0, 2, T); }
+    if (n === 'hair') { x.fillStyle = '#ffffff'; x.fillRect(x0, y0, T, T); for (let k = 0; k < 900; k++) { x.strokeStyle = `rgba(0,0,0,${rand(0.05, 0.25)})`; x.lineWidth = rand(0.5, 1.5); const px = x0 + Math.random() * T; x.beginPath(); x.moveTo(px, y0); x.bezierCurveTo(px + rand(-6, 6), y0 + T / 3, px + rand(-6, 6), y0 + T * 2 / 3, px + rand(-8, 8), y0 + T); x.stroke(); } }
+    if (n === 'shoe') { x.fillStyle = '#ffffff'; x.fillRect(x0, y0, T, T); grain(x0, y0, 1500, 0.08); x.fillStyle = '#222'; x.fillRect(x0, y0 + T * 0.82, T, T * 0.18); x.fillStyle = 'rgba(0,0,0,.4)'; for (let k = 0; k < 6; k++) x.fillRect(x0 + T * 0.2 + k * 10, y0 + T * 0.3, 5, 3); }
+    if (n === 'mouth') { x.fillStyle = '#5a1a18'; x.fillRect(x0, y0, T, T); x.fillStyle = '#e8e0d4'; x.fillRect(x0, y0 + T * 0.4, T, T * 0.14); }
+    if (n.startsWith('face')) {
+      const tone = new THREE.Color(SKIN[+n[4]]), hex = '#' + tone.getHexString(), dark = '#' + tone.clone().multiplyScalar(0.62).getHexString();
+      x.fillStyle = hex; x.fillRect(x0, y0, T, T); grain(x0, y0, 1600, 0.03);
+      // head sphere UVs: front of the face sits at u = 0.25; v = 1 - polar/π
+      const U = u => x0 + u * T, Vy = v => y0 + (1 - v) * T;
+      const blush = x.createRadialGradient(U(0.25), Vy(0.45), 2, U(0.25), Vy(0.45), 40); blush.addColorStop(0, 'rgba(190,70,60,.18)'); blush.addColorStop(1, 'rgba(190,70,60,0)'); x.fillStyle = blush; x.fillRect(x0, y0, T, T);
+      for (const s of [-1, 1]) {
+        const ex = U(0.25 + s * 0.052), ey = Vy(0.555);
+        x.fillStyle = dark; x.beginPath(); x.ellipse(ex, ey + 1, 10, 6.5, 0, 0, 7); x.fill(); // socket shadow
+        x.fillStyle = '#f4f0ea'; x.beginPath(); x.ellipse(ex, ey, 8, 4.6, 0, 0, 7); x.fill();
+        x.fillStyle = choice(['#4a2a14', '#2a4a7a', '#3a5a2a', '#1a1208']); x.beginPath(); x.arc(ex + s * -0.8, ey, 3.6, 0, 7); x.fill();
+        x.fillStyle = '#050505'; x.beginPath(); x.arc(ex + s * -0.8, ey, 1.7, 0, 7); x.fill();
+        x.fillStyle = 'rgba(255,255,255,.9)'; x.fillRect(ex + s * -0.8 + 1, ey - 2, 1.5, 1.5);
+        x.strokeStyle = '#2a1a10'; x.lineWidth = 3.2; x.beginPath(); x.moveTo(ex - 9, ey - 9 + s * 0); x.quadraticCurveTo(ex, ey - 13, ex + 9, ey - 9); x.stroke();
+      }
+      x.strokeStyle = dark; x.lineWidth = 2; x.beginPath(); x.moveTo(U(0.25), Vy(0.53)); x.lineTo(U(0.255), Vy(0.46)); x.stroke(); // nose ridge shade
+      x.strokeStyle = '#7a3a30'; x.lineWidth = 2.6; x.beginPath(); x.moveTo(U(0.25) - 13, Vy(0.392)); x.quadraticCurveTo(U(0.25), Vy(0.385), U(0.25) + 13, Vy(0.392)); x.stroke();
+      x.strokeStyle = 'rgba(150,70,60,.6)'; x.lineWidth = 3.5; x.beginPath(); x.moveTo(U(0.25) - 9, Vy(0.375)); x.quadraticCurveTo(U(0.25), Vy(0.366), U(0.25) + 9, Vy(0.375)); x.stroke();
+    }
+    x.restore();
+    ATLAS.rect[n] = [(i % N) / N, 1 - (Math.floor(i / N) + 1) / N, (i % N + 1) / N, 1 - Math.floor(i / N) / N];
+  });
+  ATLAS.tex = new THREE.CanvasTexture(c); ATLAS.tex.colorSpace = THREE.SRGBColorSpace; ATLAS.tex.anisotropy = 4;
+}
+
+function limb(parent, r, len, tile, col, y = 0, sx = 1) {
+  const m = new THREE.Mesh(capsGeo); m.scale.set(r * sx, len / 2, r); m.position.y = -len / 2 + y;
+  m.userData = { tile, col }; parent.add(m); return m;
+}
+function part(parent, geo, tile, col, px, py, pz, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
+  const m = new THREE.Mesh(geo); m.position.set(px, py, pz); m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz); m.userData = { tile, col }; parent.add(m); return m;
 }
 function makeHuman(o = {}) {
-  const fem = o.fem ?? Math.random() < 0.35;
-  const skin = cm(o.skin ?? choice(SKIN), 0.6);
-  const sh = o.shirt ?? choice(SHIRTS);
-  const shirt = sh.flannel ? flannelMat(sh.c) : cm(sh.c, 0.8);
-  const pants = cm(o.pants ?? choice(PANTS), 0.85);
-  const hairC = o.hair ?? choice(HAIR);
-  const hair = cm(hairC, 0.9), shoe = cm(o.shoes ?? choice([0x2a1a0a, 0x111111, 0x5a3a1a]), 0.6);
-  const sc = o.scale ?? (fem ? rand(0.92, 0.98) : rand(0.97, 1.08)), girth = o.girth ?? (fem ? rand(0.9, 1.0) : rand(0.95, 1.3));
-  const root = new THREE.Group();
-  const body = new THREE.Group(); body.scale.setScalar(sc); root.add(body);
+  if (!ATLAS.tex) buildAtlas();
+  const fem = o.fem ?? Math.random() < 0.38;
+  const skinI = o.skinI ?? randi(0, SKIN.length - 1), skin = SKIN[skinI];
+  const sh = o.shirt ?? choice(SHIRTS), pa = o.pants ?? choice(PANTS);
+  const hairC = o.hair ?? choice(HAIR), shoeC = o.shoes ?? choice([0x2a1a0a, 0x161616, 0x6a4a2a, 0xe8e8e8]);
+  const sc = o.scale ?? (fem ? rand(0.92, 0.99) : rand(0.97, 1.08)), girth = o.girth ?? (fem ? rand(0.88, 1.02) : rand(0.95, 1.3));
+  const gC = Math.min(girth, 1.15), shorts = o.shorts ?? (!fem && Math.random() < 0.45), skirt = o.skirt ?? (fem && Math.random() < 0.45);
+  const root = new THREE.Group(), body = new THREE.Group(); body.scale.setScalar(sc); root.add(body);
   const J = {};
   J.hips = new THREE.Group(); J.hips.position.y = 0.92; body.add(J.hips);
-  const pelvis = new THREE.Mesh(sphGeoH, pants); pelvis.scale.set(0.17 * girth, 0.11, 0.12 * girth); pelvis.castShadow = true; J.hips.add(pelvis);
+  part(J.hips, sphGeoH, pa.tile, pa.c, 0, 0, 0, 0.165 * girth * (fem ? 1.08 : 1), 0.11, 0.12 * girth);
+  part(J.hips, new THREE.CylinderGeometry(1, 1, 1, 20, 1, true), 'cloth', 0x2a1a10, 0, 0.05, 0, 0.158 * girth * (fem ? 1.06 : 1), 0.03, 0.118 * girth); // belt
+  if (skirt) part(J.hips, new THREE.CylinderGeometry(0.6, 1, 1, 20, 1, false), pa.tile === 'denim' ? 'denim' : 'cloth', pa.c, 0, -0.16, 0, 0.21 * girth, 0.3, 0.17 * girth);
   J.spine = new THREE.Group(); J.spine.position.y = 0.05; J.hips.add(J.spine);
-  const belly = new THREE.Mesh(sphGeoH, shirt); belly.scale.set(0.16 * girth, 0.17, 0.13 * girth * (girth > 1.15 ? 1.15 : 1)); belly.position.set(0, 0.13, girth > 1.15 ? 0.02 : 0); belly.castShadow = true; J.spine.add(belly);
+  part(J.spine, capsGeo, sh.tile, sh.c, 0, 0.12, girth > 1.15 ? 0.02 : 0, 0.15 * girth, 0.08, 0.125 * girth * (girth > 1.15 ? 1.12 : 1));
   J.chest = new THREE.Group(); J.chest.position.y = 0.24; J.spine.add(J.chest);
-  const torso = new THREE.Mesh(sphGeoH, shirt); torso.scale.set(0.2 * Math.min(girth, 1.15), 0.17, 0.12 * Math.min(girth, 1.1)); torso.position.y = 0.08; torso.castShadow = true; J.chest.add(torso);
-  if (sh.hv) { const band = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true), cm(0xd8d8d8, 0.2)); band.scale.set(0.185 * Math.min(girth, 1.15), 0.025, 0.125 * Math.min(girth, 1.1)); band.position.y = 0.06; J.chest.add(band); }
+  part(J.chest, capsGeo, sh.tile, sh.c, 0, 0.07, 0, 0.19 * gC * (fem ? 0.92 : 1), 0.075, 0.118 * Math.min(girth, 1.1));
+  if (fem) for (const s of [-1, 1]) part(J.chest, sphGeoH, sh.tile, sh.c, s * 0.06, 0.06, 0.075, 0.06, 0.055, 0.05);
+  part(J.chest, sphGeoH, sh.tile, sh.c, 0, 0.16, 0, 0.21 * gC * (fem ? 0.9 : 1), 0.06, 0.11); // shoulders
   J.neck = new THREE.Group(); J.neck.position.y = 0.24; J.chest.add(J.neck);
-  limb(J.neck, 0.045, 0.06, skin, 0.05);
+  limb(J.neck, 0.047, 0.07, 'skin', skin, 0.055);
+  if (sh.tile === 'collar') part(J.neck, new THREE.CylinderGeometry(1, 1.1, 1, 16, 1, true), 'collar', sh.c, 0, -0.005, 0, 0.058, 0.035, 0.058);
   J.head = new THREE.Group(); J.head.position.y = 0.07; J.neck.add(J.head);
-  const head = new THREE.Mesh(sphGeoH, skin); head.scale.set(0.095, 0.115, 0.105); head.position.y = 0.08; head.castShadow = true; J.head.add(head);
-  const eyeM = cm(0x111111, 0.2);
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(sphGeoH, eyeM); e.scale.setScalar(0.012); e.position.set(s * 0.035, 0.1, 0.092); J.head.add(e); }
-  const nose = new THREE.Mesh(sphGeoH, skin); nose.scale.set(0.016, 0.022, 0.02); nose.position.set(0, 0.075, 0.103); J.head.add(nose);
-  // hair / hats
-  const style = o.style ?? (fem ? choice(['long', 'bob', 'pony']) : choice(['short', 'short', 'bald', 'cap', 'bucket', 'mullet']));
+  part(J.head, sphGeoH, 'face' + skinI, 0xffffff, 0, 0.085, 0, 0.093, 0.115, 0.104);
+  part(J.head, sphGeoH, 'skin', skin, 0, 0.03, 0.03, 0.075, 0.05, 0.075); // jaw / chin
+  part(J.head, sphGeoH, 'skin', skin, 0, 0.074, 0.103, 0.015, 0.024, 0.02); // nose
+  for (const s of [-1, 1]) part(J.head, sphGeoH, 'skin', skin, s * 0.092, 0.085, -0.005, 0.014, 0.026, 0.02); // ears
+  // eyelids (blink) and mouth (talk) get their own bones
+  J.lids = new THREE.Group(); J.lids.position.set(0, 0.101, 0.083); J.head.add(J.lids);
+  for (const s of [-1, 1]) part(J.lids, sphGeoH, 'skin', skin, s * 0.034, 0, 0.004, 0.019, 0.011, 0.012);
+  J.jaw = new THREE.Group(); J.jaw.position.set(0, 0.046, 0.09); J.head.add(J.jaw);
+  part(J.jaw, sphGeoH, 'mouth', 0xffffff, 0, 0, 0.004, 0.016, 0.009, 0.01);
+  // hair / hats / facial hair / glasses
+  const style = o.style ?? (fem ? choice(['long', 'bob', 'pony', 'long']) : choice(['short', 'short', 'bald', 'cap', 'bucket', 'mullet', 'short']));
   if (style !== 'bald') {
-    const h = new THREE.Mesh(sphGeoH, hair); h.scale.set(0.1, 0.1, 0.11); h.position.set(0, 0.12, -0.008); J.head.add(h);
-    if (style === 'long' || style === 'mullet') { const b = new THREE.Mesh(sphGeoH, hair); b.scale.set(0.095, style === 'long' ? 0.17 : 0.11, 0.06); b.position.set(0, style === 'long' ? 0.0 : 0.02, -0.07); J.head.add(b); }
-    if (style === 'pony') { const b = new THREE.Mesh(capsGeo, hair); b.scale.set(0.03, 0.06, 0.03); b.position.set(0, 0.06, -0.12); b.rotation.x = 0.5; J.head.add(b); }
-    if (style === 'bob') { const b = new THREE.Mesh(sphGeoH, hair); b.scale.set(0.11, 0.1, 0.1); b.position.set(0, 0.06, -0.02); J.head.add(b); }
-  }
-  if (style === 'cap') { const capM = cm(choice([0x1a2a5a, 0x8a1a1a, 0x111111, 0x2a5a2a]), 0.7); const c = new THREE.Mesh(sphGeoH, capM); c.scale.set(0.102, 0.075, 0.112); c.position.set(0, 0.14, 0); J.head.add(c); const br = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.008, 16), capM); br.scale.set(1, 1, 0.8); br.position.set(0, 0.145, 0.1); br.rotation.x = 0.15; J.head.add(br); }
-  if (style === 'bucket') { const hm = cm(choice([0xd8c8a0, 0x3a4a2a]), 0.9); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.1, 0.08, 16), hm); c.position.y = 0.175; J.head.add(c); const br = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.008, 18), hm); br.position.y = 0.14; br.rotation.x = 0.08; J.head.add(br); }
-  if (!fem && Math.random() < 0.35) { const bd = new THREE.Mesh(sphGeoH, hair); bd.scale.set(0.085, 0.06, 0.07); bd.position.set(0, 0.025, 0.045); J.head.add(bd); }
-  // arms
+    part(J.head, sphGeoH, 'hair', hairC, 0, 0.122, -0.01, 0.099, 0.095, 0.11);
+    if (style === 'long' || style === 'mullet') part(J.head, sphGeoH, 'hair', hairC, 0, style === 'long' ? 0.0 : 0.03, -0.065, 0.098, style === 'long' ? 0.17 : 0.1, 0.06);
+    if (style === 'pony') part(J.head, capsGeo, 'hair', hairC, 0, 0.06, -0.12, 0.03, 0.06, 0.03, 0.5);
+    if (style === 'bob') part(J.head, sphGeoH, 'hair', hairC, 0, 0.065, -0.02, 0.108, 0.1, 0.1);
+    if (fem) part(J.head, sphGeoH, 'hair', hairC, 0, 0.16, 0.06, 0.08, 0.035, 0.05, 0.3); // fringe
+  } else part(J.head, sphGeoH, 'hair', hairC, 0, 0.07, -0.03, 0.098, 0.05, 0.09); // fringe of a bald head
+  if (style === 'cap') { const cc = choice([0x1a2a5a, 0x8a1a1a, 0x161616, 0x2a5a2a, 0xe8e8e8]); part(J.head, sphGeoH, 'cloth', cc, 0, 0.14, 0, 0.102, 0.075, 0.112); part(J.head, new THREE.CylinderGeometry(1, 1, 1, 18), 'cloth', cc, 0, 0.145, 0.1, 0.07, 0.008, 0.056, 0.15); if (Math.random() < 0.4) part(J.head, new THREE.BoxGeometry(1, 1, 1), 'cloth', 0x111111, 0, 0.17, 0.06, 0.12, 0.03, 0.03, 0.2); }
+  if (style === 'bucket') { const hc = choice([0xd8c8a0, 0x3a4a2a]); part(J.head, new THREE.CylinderGeometry(0.85, 1, 1, 18), 'cloth', hc, 0, 0.175, 0, 0.1, 0.08, 0.1); part(J.head, new THREE.CylinderGeometry(1, 1, 1, 20), 'cloth', hc, 0, 0.14, 0, 0.15, 0.008, 0.15, 0.08); }
+  if (!fem && Math.random() < 0.4) { const full = Math.random() < 0.6; part(J.head, sphGeoH, 'hair', hairC, 0, full ? 0.022 : 0.05, full ? 0.05 : 0.093, full ? 0.083 : 0.03, full ? 0.06 : 0.009, full ? 0.068 : 0.012); }
+  if (Math.random() < 0.18) { const gc = Math.random() < 0.5 ? 0x111111 : 0x6a4a2a; for (const s of [-1, 1]) part(J.head, new THREE.TorusGeometry(1, 0.18, 6, 16), 'cloth', gc, s * 0.034, 0.1, 0.104, 0.018, 0.014, 0.01); part(J.head, new THREE.BoxGeometry(1, 1, 1), 'cloth', gc, 0, 0.103, 0.106, 0.03, 0.003, 0.003); }
+  // arms & legs
   for (const s of [1, -1]) {
     const side = s > 0 ? 'l' : 'r';
-    const ua = new THREE.Group(); ua.position.set(s * 0.2 * Math.min(girth, 1.12), 0.2, 0); J.chest.add(ua);
-    limb(ua, 0.048, 0.26, shirt); const el = new THREE.Group(); el.position.y = -0.29; ua.add(el);
-    limb(el, 0.04, 0.22, sh.long || sh.flannel ? shirt : skin); const hand = new THREE.Group(); hand.position.y = -0.26; el.add(hand);
-    const hm = new THREE.Mesh(sphGeoH, skin); hm.scale.set(0.035, 0.05, 0.022); hm.position.y = -0.03; hand.add(hm);
+    const ua = new THREE.Group(); ua.position.set(s * 0.2 * Math.min(girth, 1.12) * (fem ? 0.92 : 1), 0.18, 0); J.chest.add(ua);
+    limb(ua, 0.05 * (fem ? 0.88 : 1), 0.27, sh.tile, sh.c);
+    const el = new THREE.Group(); el.position.y = -0.29; ua.add(el);
+    const longSleeve = sh.tile === 'flannel' || sh.tile === 'hivis';
+    limb(el, 0.042 * (fem ? 0.88 : 1), 0.23, longSleeve ? sh.tile : 'skin', longSleeve ? sh.c : skin);
+    const hand = new THREE.Group(); hand.position.y = -0.26; el.add(hand);
+    part(hand, sphGeoH, 'skin', skin, 0, -0.035, 0, 0.034, 0.05, 0.02);
+    part(hand, capsGeo, 'skin', skin, s * -0.02, -0.03, 0.012, 0.009, 0.018, 0.009, 0.5, 0, s * -0.5); // thumb
     J[side + 'UA'] = ua; J[side + 'EL'] = el; J[side + 'H'] = hand;
-    const th = new THREE.Group(); th.position.set(s * 0.09, -0.04, 0); J.hips.add(th);
-    limb(th, 0.07 * Math.min(girth, 1.15), 0.4, pants); const kn = new THREE.Group(); kn.position.y = -0.43; th.add(kn);
-    const shortsKid = Math.random() < 0.5 && !fem;
-    limb(kn, 0.052, 0.38, shortsKid ? skin : pants); const ft = new THREE.Group(); ft.position.y = -0.42; kn.add(ft);
-    const fm = new THREE.Mesh(new RoundedBoxGeometry(0.09, 0.07, 0.24, 2, 0.03), shoe); fm.position.set(0, -0.035, 0.05); fm.castShadow = true; ft.add(fm);
+    const th = new THREE.Group(); th.position.set(s * 0.09 * (fem ? 1.05 : 1), -0.04, 0); J.hips.add(th);
+    limb(th, 0.072 * Math.min(girth, 1.15), 0.41, skirt ? 'skin' : pa.tile, skirt ? skin : pa.c);
+    const kn = new THREE.Group(); kn.position.y = -0.43; th.add(kn);
+    limb(kn, 0.054, 0.38, shorts || skirt ? 'skin' : pa.tile, shorts || skirt ? skin : pa.c);
+    if (shorts) part(kn, new THREE.CylinderGeometry(1, 1, 1, 14, 1, true), 'cloth', 0xe8e8e8, 0, -0.33, 0, 0.056, 0.05, 0.056); // footy socks
+    const ft = new THREE.Group(); ft.position.y = -0.42; kn.add(ft);
+    part(ft, new RoundedBoxGeometry(0.09, 0.07, 0.25, 2, 0.03), 'shoe', shoeC, 0, -0.035, 0.05, 1, 1, 1);
     J[side + 'TH'] = th; J[side + 'KN'] = kn; J[side + 'FT'] = ft;
   }
   return skinify({ root, J, fem, scale: sc, style });
 }
 
-// Collapse the ~22-part procedural body into ONE skinned mesh (rigid weights):
+// Collapse the procedural body into ONE skinned mesh (rigid weights) using the shared atlas:
 // identical animation code (it drives Bones instead of Groups), one draw call per person.
 let npcSkinMat = null;
 function skinify(h) {
-  if (!npcSkinMat) { npcSkinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0 }); interiorMats.push(npcSkinMat); }
+  if (!npcSkinMat) { npcSkinMat = new THREE.MeshStandardMaterial({ map: ATLAS.tex, vertexColors: true, roughness: 0.78, metalness: 0 }); interiorMats.push(npcSkinMat); }
   const body = h.root.children[0], groups = [body], names = ['body'];
   for (const k in h.J) { groups.push(h.J[k]); names.push(k); }
   h.root.updateMatrixWorld(true);
@@ -316,10 +382,16 @@ function skinify(h) {
       if (!m.isMesh) continue;
       const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
       geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
-      for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+      for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
       const n = geo.attributes.position.count, ca = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-      col.set(m.material.userData.base ?? m.material.color);
-      for (let i = 0; i < n; i++) { ca[i * 3] = col.r; ca[i * 3 + 1] = col.g; ca[i * 3 + 2] = col.b; si[i * 4] = bi; sw[i * 4] = 1; }
+      const ud = m.userData || {}, r = ATLAS.rect[ud.tile || 'cloth'];
+      col.set(ud.col ?? 0xffffff);
+      const pad = 0.004, uv = geo.attributes.uv;
+      for (let i = 0; i < n; i++) {
+        ca[i * 3] = col.r; ca[i * 3 + 1] = col.g; ca[i * 3 + 2] = col.b; si[i * 4] = bi; sw[i * 4] = 1;
+        if (uv) uv.setXY(i, lerp(r[0] + pad, r[2] - pad, clamp(uv.getX(i), 0, 1)), lerp(r[1] + pad, r[3] - pad, clamp(uv.getY(i), 0, 1)));
+      }
+      if (!uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2).fill((r[0] + r[2]) / 2), 2));
       geo.setAttribute('color', new THREE.BufferAttribute(ca, 3));
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
       geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
@@ -332,13 +404,14 @@ function skinify(h) {
   h.root.updateMatrixWorld(true);
   sm.bind(new THREE.Skeleton(bones));
   const J = {}; names.forEach((n, i) => { if (i > 0) J[n] = bones[i]; });
+  J.lids.scale.y = 0.05; J.jaw.scale.y = 0.35;
   h.J = J; h.mesh = sm;
   return h;
 }
 
 // pose targets in radians. Convention: x<0 swings a limb forward (+z).
 function poseFor(kind, t, a) {
-  const p = { hipsY: 0.92, hipsX: 0, spine: 0, chest: 0, neck: 0, headX: 0, headY: 0, lUAx: 0.05, lUAz: 0.12, lEL: -0.15, rUAx: 0.05, rUAz: -0.12, rEL: -0.15, lTH: 0, lKN: 0, rTH: 0, rKN: 0, lFT: 0, rFT: 0 };
+  const p = { hipsY: 0.92, hipsX: 0, hipsZ: 0, spineZ: 0, spine: 0, chest: 0, neck: 0, headX: 0, headY: 0, lUAx: 0.05, lUAz: 0.12, lEL: -0.15, rUAx: 0.05, rUAz: -0.12, rEL: -0.15, lTH: 0, lKN: 0, rTH: 0, rKN: 0, lFT: 0, rFT: 0 };
   const breath = Math.sin(t * 1.6) * 0.02;
   p.chest = breath; p.headX = Math.sin(t * 0.3) * 0.05; p.headY = Math.sin(t * 0.21 + a.seed) * 0.3;
   if (kind === 'walk') {
@@ -361,15 +434,23 @@ function poseFor(kind, t, a) {
   else if (kind === 'darts') { const th = (t % 4) < 0.5 ? Math.sin(((t % 4) / 0.5) * Math.PI) : 0; p.rUAx = -1.6 + th * 0.4; p.rEL = -1.8 + th * 1.6; p.lUAx = 0; p.headX = -0.05; p.rTH = 0.15; }
   else if (kind === 'cheer') { p.lUAx = -2.8; p.rUAx = -2.8; p.lUAz = 0.3; p.rUAz = -0.3; p.lEL = -0.3 + Math.sin(t * 12) * 0.3; p.rEL = -0.3 + Math.sin(t * 12 + 1) * 0.3; p.headX = -0.3; }
   else if (kind === 'wipe') { p.spine = 0.2; p.rUAx = -0.9; p.rEL = -0.6 + Math.sin(t * 5) * 0.4; p.rUAz = -0.2 + Math.sin(t * 5) * 0.25; p.headX = 0.3; }
-  else if (kind === 'stand') { p.lUAz = 0.1 + Math.sin(t * 0.7) * 0.02; }
+  else if (kind === 'stand') {
+    // weight shift from foot to foot
+    const w = Math.sin(t * 0.32 + a.seed * 3);
+    p.lUAz = 0.1 + Math.sin(t * 0.7) * 0.02; p.hipsZ = w * 0.05; p.spineZ = -w * 0.04; p.lKN = Math.max(0, w) * 0.18; p.rKN = Math.max(0, -w) * 0.18; p.lTH = -Math.max(0, w) * 0.08; p.rTH = -Math.max(0, -w) * 0.08;
+    if (a.crossed && !a.holdDrink && !a.smoking && !a.phone) { p.lUAx = -0.55; p.lUAz = 0.38; p.lEL = -1.95; p.rUAx = -0.6; p.rUAz = -0.38; p.rEL = -1.9; }
+  }
   // overlays
-  if (a.talk > 0) { p.lUAx = -0.6 + Math.sin(t * 4) * 0.25; p.lEL = -1.2 + Math.sin(t * 5.3) * 0.3; p.lUAz = 0.3; }
+  if (a.phone && kind !== 'walk' && kind !== 'pokie' && !a.smoking) { p.lUAx = -0.42; p.lUAz = 0.15; p.lEL = -1.8; p.headX = 0.42; p.headY = 0.12; }
+  if (a.talk > 0 && !a.phone) { p.lUAx = -0.6 + Math.sin(t * 4) * 0.25; p.lEL = -1.2 + Math.sin(t * 5.3) * 0.3; p.lUAz = 0.3; }
+  if (a.listen) { p.headX += Math.max(0, Math.sin(t * 2.6)) * 0.08; }
+  if (a.laughT > 0) { const k = Math.min(1, a.laughT); p.spine -= 0.12 * k; p.headX = -0.35 * k; p.chest += Math.sin(t * 22) * 0.05 * k; p.hipsY += Math.abs(Math.sin(t * 22)) * 0.006 * k; }
   if (a.holdDrink && kind !== 'pokie' && kind !== 'pool' && kind !== 'darts' && kind !== 'wipe' && kind !== 'cheer') { p.rUAx = -0.25; p.rEL = -1.35; p.rUAz = -0.08; }
   if (a.sipT > 0) { const k = Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.1, k); p.rEL = lerp(p.rEL, -2.2, k); p.rUAz = lerp(p.rUAz, 0.35, k); p.headX = lerp(p.headX, -0.35, k); }
   if (a.smoking) { const k = a.dragT > 0 ? Math.sin(clamp(a.dragT / 2, 0, 1) * Math.PI) : 0; p.lUAx = lerp(-0.2, -0.9, k); p.lEL = lerp(-1.5, -2.35, k); p.lUAz = lerp(0.15, -0.3, k); }
   return p;
 }
-const JOINT_MAP = [['hips', 'x', 'hipsX'], ['spine', 'x', 'spine'], ['chest', 'x', 'chest'], ['head', 'x', 'headX'], ['head', 'y', 'headY'], ['lUA', 'x', 'lUAx'], ['lUA', 'z', 'lUAz'], ['lEL', 'x', 'lEL'], ['rUA', 'x', 'rUAx'], ['rUA', 'z', 'rUAz'], ['rEL', 'x', 'rEL'], ['lTH', 'x', 'lTH'], ['lKN', 'x', 'lKN'], ['rTH', 'x', 'rTH'], ['rKN', 'x', 'rKN'], ['lFT', 'x', 'lFT'], ['rFT', 'x', 'rFT']];
+const JOINT_MAP = [['hips', 'x', 'hipsX'], ['hips', 'z', 'hipsZ'], ['spine', 'z', 'spineZ'], ['spine', 'x', 'spine'], ['chest', 'x', 'chest'], ['head', 'x', 'headX'], ['head', 'y', 'headY'], ['lUA', 'x', 'lUAx'], ['lUA', 'z', 'lUAz'], ['lEL', 'x', 'lEL'], ['rUA', 'x', 'rUAx'], ['rUA', 'z', 'rUAz'], ['rEL', 'x', 'rEL'], ['lTH', 'x', 'lTH'], ['lKN', 'x', 'lKN'], ['rTH', 'x', 'rTH'], ['rKN', 'x', 'rKN'], ['lFT', 'x', 'lFT'], ['rFT', 'x', 'rFT']];
 function applyPose(h, p, dt, speed = 10, skip = {}) {
   const J = h.J;
   J.hips.position.y = damp(J.hips.position.y, p.hipsY, speed, dt);
@@ -456,6 +537,10 @@ function mkNPC(o = {}) {
   const cig = new THREE.Group(); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.07, 6), MAT.white); cb.rotation.z = Math.PI / 2; cig.add(cb);
   const tip = new THREE.Mesh(new THREE.SphereGeometry(0.004, 6, 6), MAT.ember); tip.position.x = 0.036; cig.add(tip);
   cig.position.set(0, -0.07, 0.02); cig.visible = false; h.J.lH.add(cig); n.cig = cig; n.cigTip = tip;
+  // phone (a glowing screen in the left hand) and face animation state
+  const ph = new THREE.Mesh(phoneGeo(), phoneMats()); ph.position.set(0.0, -0.075, 0.025); ph.rotation.x = -1.2; ph.visible = false; h.J.lH.add(ph); n.phone = ph;
+  n.blinkT = rand(1, 5); n.idleT = rand(8, 25);
+  if (Math.random() < 0.35) n.a.crossed = true;
   NPCS.push(n);
   return n;
 }
@@ -538,6 +623,20 @@ function updateNPC(n, dt, t, player) {
       if (m.state === 'showWin' && m.win > m.bet * 10 && m.st < 0.1) { n.cheerT = 2; bark(n, choice(["Get in!", "YES! About bloody time!", "Come on!"]), true); }
       if (m.credit < m.bet && m.state === 'ready' && Math.random() < dt * 0.1) n.timer = 0;
     }
+    // social life: chat with whoever shares your table / neighbouring stool
+    const partner = s && s.group ? SPOTS.find(o => o !== s && o.group === s.group && o.occ && o.occ !== n && o.occ.state === 'idle' && o.occ.role !== 'bartender') : null;
+    n.partner = partner ? partner.occ : null;
+    if (n.partner) {
+      const cv = CONVS[s.group] || (CONVS[s.group] = { talker: n, t: rand(2, 5) });
+      cv.t -= dt / 2; // two members tick it
+      if (cv.t <= 0) { cv.talker = cv.talker === n ? n.partner : n; cv.t = rand(2.5, 6); if (Math.random() < 0.22) { n.a.laughT = 1.3; n.partner.a.laughT = 1.3; if (n.dist2 < 60) SFX.laugh(n.pos.clone().add(V3(0, 1.6, 0))); } }
+      a.listen = cv.talker !== n; if (!a.listen) a.talk = Math.max(a.talk, 0.25);
+      a.phone = false;
+    } else {
+      a.listen = false;
+      n.idleT -= dt;
+      if (n.idleT <= 0) { n.idleT = rand(10, 30); a.phone = n.kind !== 'pokie' && !a.smoking && Math.random() < 0.4; }
+    }
     if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
     if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
       if (a.dragT > 0 && a.dragT < 0.3 && Math.random() < dt * 30) { n.h.J.head.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.head.matrixWorld).add(V3(0, 0.08, 0)); const fw = V3(Math.sin(n.ry), 0.15, Math.cos(n.ry)); smokeFX.emit(hp.addScaledVector(fw, 0.12), fw.multiplyScalar(0.5), 0.05, 3, 0.18, [0.9, 0.9, 0.92], 0.18); } }
@@ -557,11 +656,38 @@ function updateNPC(n, dt, t, player) {
   const kind = n.cheerT > 0 ? 'cheer' : n.kind;
   const p = poseFor(kind, t + a.seed, a);
   if (lookAt) { const ang = angleDiff(n.ry, Math.atan2(player.x - n.pos.x, player.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); p.headX = -0.05; }
+  else if (n.partner && n.state === 'idle') { const ang = angleDiff(n.ry, Math.atan2(n.partner.pos.x - n.pos.x, n.partner.pos.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); }
   if (n.glassOnLedge) { p.rUAx = kind === 'pokie' ? p.rUAx : p.rUAx; }
   applyPose(n.h, p, dt, n.state === 'walk' ? 14 : 6);
+  faceAnim(n, dt, t);
+  n.phone.visible = !!a.phone && n.state === 'idle' && n.dist2 < 600;
   n.h.root.position.set(n.pos.x, groundY(n.pos.x, n.pos.z), n.pos.z); n.h.root.rotation.y = n.ry;
   if (!n.glassOnLedge && n.glass.group.visible && n.dist2 < 400) uprightInHand(n.glass.group, n.ry, a.sipT > 0 ? Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI) * 1.3 : 0);
   if (n.glass.group.visible && n.dist2 < 400) n.glass.update(dt, t);
+}
+const CONVS = {};
+// soft contact shadows under every person (one instanced draw call)
+let peopleShadows = null;
+function updatePeopleShadows() {
+  if (!peopleShadows) { peopleShadows = new THREE.InstancedMesh(G.plane, MAT.blob, 64); peopleShadows.frustumCulled = false; peopleShadows.renderOrder = 1; scene.add(peopleShadows); }
+  let i = 0;
+  for (const n of NPCS) { if (i >= 64) break; const s = n.state === 'walk' ? 0.75 : (n.kind === 'sit' || n.kind === 'pokie') ? 0.95 : 0.8; _m1.compose(_v1.set(n.pos.x, groundY(n.pos.x, n.pos.z) + 0.006, n.pos.z), _q1.setFromEuler(_e1.set(-Math.PI / 2, 0, 0)), _v2.set(s, s, 1)); peopleShadows.setMatrixAt(i++, _m1); }
+  peopleShadows.count = i; peopleShadows.instanceMatrix.needsUpdate = true;
+}
+let _phoneGeo, _phoneMats;
+function phoneGeo() { return _phoneGeo || (_phoneGeo = new THREE.BoxGeometry(0.07, 0.14, 0.009)); }
+function phoneMats() { if (_phoneMats) return _phoneMats; const body = M({ color: 0x111114, roughness: 0.3, metalness: 0.4 }); const scr = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.7, 0.95) }); return (_phoneMats = [body, body, body, body, scr, body]); }
+// blinking eyelids and a jaw that moves while talking / laughing
+function faceAnim(n, dt, t) {
+  const J = n.h.J, a = n.a;
+  if (!J.lids) return;
+  n.blinkT -= dt;
+  if (n.blinkT < 0) { n.blinkT = rand(2.2, 6); n.blinkLeft = 0.14; }
+  if (n.blinkLeft > 0) n.blinkLeft -= dt;
+  J.lids.scale.y = n.blinkLeft > 0 ? 1 : 0.05;
+  const open = a.laughT > 0 ? 1.5 + Math.abs(Math.sin(t * 20)) * 0.4 : a.talk > 0 ? 0.35 + Math.abs(Math.sin(t * 13 + a.seed)) * 0.95 * (Math.sin(t * 2.3 + a.seed) > -0.6 ? 1 : 0.2) : 0.35;
+  J.jaw.scale.y = damp(J.jaw.scale.y, open, 20, dt);
+  if (a.laughT > 0) a.laughT -= dt;
 }
 const _uq = new THREE.Quaternion(), _uq2 = new THREE.Quaternion();
 function uprightInHand(g, yaw, tiltToFace) {
@@ -582,7 +708,7 @@ function bark(n, line, loud = false) {
 // ---------------- bartender: serves & pours ----------------
 let bartender = null, beerStream = null;
 function makeBartender() {
-  bartender = mkNPC({ name: choice(['Jacko', 'Rhonda', 'Mick']), shirt: { c: 0x111111 }, pants: 0x111111, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
+  bartender = mkNPC({ name: choice(['Jacko', 'Rhonda', 'Mick']), shirt: { tile: 'collar', c: 0x161616 }, pants: { tile: 'cloth', c: 0x161616 }, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
   bartender.glass.group.visible = false;
   // apron
   const ap = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), cm(0x1f4d34, 0.9)); ap.position.set(0, -0.05, 0.135); bartender.h.J.spine.add(ap);

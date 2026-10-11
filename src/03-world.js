@@ -50,8 +50,10 @@ function M(o, interior = true) {
   return m;
 }
 function buildMaterials() {
-  MAT.timber = M({ map: TEX.timber.map, roughnessMap: TEX.timber.rough, roughness: 0.85, metalness: 0, color: 0xffffff });
-  MAT.carpet = M({ map: TEX.carpet, roughness: 1 });
+  MAT.timber = M({ map: TEX.timber.map, roughnessMap: TEX.timber.rough, bumpMap: TEX.timber.map, bumpScale: 1.4, roughness: 0.85, metalness: 0, color: 0xffffff });
+  MAT.carpet = M({ map: TEX.carpet, bumpMap: TEX.carpet, bumpScale: 2.2, roughness: 1 });
+  MAT.blob = new THREE.MeshBasicMaterial({ map: TEX.blob, transparent: true, depthWrite: false, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -3 });
+  MAT.ao = new THREE.MeshBasicMaterial({ map: TEX.ao, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
   MAT.deck = M({ map: TEX.deck, roughness: 0.85 }, false);
   MAT.concrete = M({ map: TEX.concrete, roughness: 0.92 }, false);
   MAT.asphalt = M({ map: TEX.asphalt, roughness: 0.82, color: 0xbbbbbb }, false);
@@ -60,7 +62,7 @@ function buildMaterials() {
   MAT.tileGreen = M({ map: TEX.tileGreen, roughness: 0.12, metalness: 0.05 }, false);
   MAT.tileCream = M({ map: TEX.tileCream, roughness: 0.15, metalness: 0.05 }, false);
   MAT.wainscot = M({ map: TEX.wainscot, roughness: 0.45 });
-  MAT.paintCream = M({ map: TEX.paintCream, roughness: 0.9 });
+  MAT.paintCream = M({ map: TEX.paintCream, bumpMap: TEX.paintCream, bumpScale: 0.6, roughness: 0.82 });
   MAT.paintGreen = M({ map: TEX.paintGreen, roughness: 0.85 });
   MAT.paintRed = M({ map: TEX.paintRed, roughness: 0.85 });
   MAT.gamingWall = M({ map: TEX.paintDark, color: 0x6a3a4a, roughness: 0.8 });
@@ -618,19 +620,23 @@ function buildBar() {
   addInteract({ id: 'bar', pos: V3(F - 0.1, 1.2, -8.5), r: 0, label: () => 'Order at the bar', zone: { x0: F, x1: F + 1.9, z0: z0 + 0.3, z1: z1 - 0.3 }, action: () => Game.openBar() });
 }
 
+function blob(x, z, s, y = 0.004) { SB.add(G.plane, MAT.blob, x, y, z, 0, -Math.PI / 2, 0, s, s, 1); }
 function stool(b, x, z, h = 0.76, mat = MAT.vinylRed) {
+  blob(x, z, 0.62);
   addCylS(b, mat, x, h, z, 0.19, 0.07, 18);
   addCylS(b, MAT.chrome, x, h / 2, z, 0.025, h, 8);
   b.add(G.torus, MAT.chrome, x, 0.3, z, 0, Math.PI / 2, 0, 0.17, 0.17, 0.17);
   addCylS(b, MAT.chrome, x, 0.015, z, 0.2, 0.03, 16);
 }
 function roundTable(b, x, z, h, r = 0.38) {
+  blob(x, z, 1.1);
   addCylS(b, MAT.barTop, x, h, z, r, 0.05, 24);
   addCylS(b, MAT.iron, x, h / 2, z, 0.04, h, 8);
   addCylS(b, MAT.iron, x, 0.02, z, 0.3, 0.04, 16);
   addCol(x, z, r * 1.6, r * 1.6);
 }
 function chair(b, x, z, ry) {
+  blob(x, z, 0.75);
   const s = Math.sin(ry), c = Math.cos(ry);
   b.add(G.box, MAT.darkWood, x, 0.46, z, ry, 0, 0, 0.44, 0.05, 0.44);
   for (const [lx, lz] of [[-.19, -.19], [.19, -.19], [-.19, .19], [.19, .19]]) b.add(G.box, MAT.darkWood, x + lx * c + lz * s, 0.23, z - lx * s + lz * c, ry, 0, 0, 0.04, 0.46, 0.04);
@@ -642,12 +648,12 @@ function buildPublicBar() {
   // bar stools
   for (let i = 0; i < 11; i++) {
     const z = -13.6 + i * 1.05; stool(SB, -7.9, z);
-    addSpot({ kind: 'stool', pos: V3(-7.9, 0, z), ry: -Math.PI / 2, sitH: 0.8, area: 'bar', node: 'P3' });
+    addSpot({ kind: 'stool', pos: V3(-7.9, 0, z), ry: -Math.PI / 2, sitH: 0.8, area: 'bar', node: 'P3', group: 'bs' + Math.floor(i / 2) });
   }
   // high tables
   for (const tz of [-10.5, -6.5, -2.5]) {
     roundTable(SB, -5.4, tz, 1.05);
-    for (const dz of [-0.6, 0.6]) { stool(SB, -5.4, tz + dz, 0.72, MAT.vinylBlack); addSpot({ kind: 'stool', pos: V3(-5.4, 0, tz + dz), ry: dz > 0 ? Math.PI : 0, sitH: 0.76, area: 'bar' }); }
+    for (const dz of [-0.6, 0.6]) { stool(SB, -5.4, tz + dz, 0.72, MAT.vinylBlack); addSpot({ kind: 'stool', pos: V3(-5.4, 0, tz + dz), ry: dz > 0 ? Math.PI : 0, sitH: 0.76, area: 'bar', group: 'ht' + tz }); }
   }
   // standing spots near bar ends / poles
   addSpot({ kind: 'lean', pos: V3(-7.6, 0, -1.8), ry: -2.3, area: 'bar' });
@@ -663,6 +669,7 @@ function buildPublicBar() {
   const ballCols = [0xf2f2ee, 0xe8c52a, 0x1a3aa8, 0xc7352b, 0x5a1a8a, 0xe8772a, 0x1a7a3a, 0x7a1a1a, 0x111111, 0xe8c52a, 0x1a3aa8, 0xc7352b];
   ballCols.forEach((c, i) => SB.add(G.sph, M({ color: c, roughness: 0.15 }), px + rand(-0.5, 0.5), 0.877, pz + rand(-1.0, 1.0), 0, 0, 0, 0.028, 0.028, 0.028));
   addCol(px, pz, 1.5, 2.7);
+  SB.add(G.plane, MAT.blob, px, 0.004, pz, 0, -Math.PI / 2, 0, 2.3, 3.6, 1);
   addSpot({ kind: 'pool', pos: V3(px + 1.1, 0, pz - 0.6), ry: -Math.PI / 2, area: 'bar' });
   addSpot({ kind: 'pool', pos: V3(px - 1.1, 0, pz + 0.8), ry: Math.PI / 2, area: 'bar' });
   // cue rack + dartboard + toilets on back wall
@@ -742,7 +749,7 @@ function buildLounge() {
     addCol(tx, tz, 1.2, 0.9);
     for (const [dx, dz, ry] of [[-0.75, 0, Math.PI / 2], [0.75, 0, -Math.PI / 2]]) {
       chair(SB, tx + dx, tz + dz, ry);
-      addSpot({ kind: 'chair', pos: V3(tx + dx, 0, tz + dz), ry, sitH: 0.48, area: 'lounge' });
+      addSpot({ kind: 'chair', pos: V3(tx + dx, 0, tz + dz), ry, sitH: 0.48, area: 'lounge', group: 'lt' + tx + '_' + tz });
     }
     // salt/pepper + menu + condiments
     SB.add(G.cyl8, MAT.white, tx - 0.1, 0.83, tz, 0, 0, 0, 0.02, 0.09, 0.02); SB.add(G.cyl8, MAT.iron, tx + 0.1, 0.83, tz, 0, 0, 0, 0.02, 0.09, 0.02);
@@ -834,8 +841,8 @@ function buildTerrace() {
   // bench + milk crate + ashtray stands + bin
   SB.add(G.box, MAT.darkWood, 16.3, 0.45, -8.55, 0, 0, 0, 3.5, 0.06, 0.4); for (const dx of [-1.5, 1.5]) SB.add(G.box, MAT.iron, 16.3 + dx, 0.22, -8.55, 0, 0, 0, 0.06, 0.45, 0.4);
   addColBox(14.5, 18.1, -8.8, -8.3);
-  addSpot({ kind: 'chair', pos: V3(15.6, 0, -8.6), ry: Math.PI, sitH: 0.48, area: 'terrace', smoke: true });
-  addSpot({ kind: 'chair', pos: V3(17.0, 0, -8.6), ry: Math.PI, sitH: 0.48, area: 'terrace', smoke: true });
+  addSpot({ kind: 'chair', pos: V3(15.6, 0, -8.6), ry: Math.PI, sitH: 0.48, area: 'terrace', smoke: true, group: 'tb' });
+  addSpot({ kind: 'chair', pos: V3(17.0, 0, -8.6), ry: Math.PI, sitH: 0.48, area: 'terrace', smoke: true, group: 'tb' });
   SB.add(G.box, M({ color: 0x1a4aa8, roughness: 0.6 }), 14.2, 0.17, -17.4, 0.3, 0, 0, 0.36, 0.34, 0.36);
   for (const [ax, az] of [[14.0, -10.2], [17.6, -10.9]]) { addCylS(SB, MAT.chrome, ax, 0.5, az, 0.03, 1.0, 8); addCylS(SB, MAT.chrome, ax, 1.0, az, 0.16, 0.06, 16); }
   addSpot({ kind: 'stand', pos: V3(14.3, 0, -11.0), ry: 0.6, area: 'terrace', smoke: true });
@@ -1070,7 +1077,25 @@ function spillTex() {
   g.globalCompositeOperation = 'destination-out'; g.fillStyle = side; g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
+// fake ambient occlusion: soft dark gradients where walls meet floor and ceiling
+function aoStrip(x1, z1, x2, z2, nx, nz, h = 0.5, ceiling = false) {
+  const len = Math.hypot(x2 - x1, z2 - z1), cx = (x1 + x2) / 2 + nx * 0.012, cz = (z1 + z2) / 2 + nz * 0.012;
+  const ry = Math.atan2(nx, nz);
+  if (!ceiling) SB.add(G.plane, MAT.ao, cx, h / 2 + 0.002, cz, ry, 0, 0, len, h, 1);
+  else SB.add(G.plane, MAT.ao, cx, PUB.ceil - h / 2 - 0.002, cz, ry, 0, Math.PI, len, h, 1);
+}
+function buildAO() {
+  const segs = [ // [x1,z1,x2,z2, normal x, normal z]
+    [-12.84, -17.8, -12.84, 1.8, 1, 0], [12.84, -17.8, 12.84, 1.8, -1, 0], [-12.9, -17.84, 12.9, -17.84, 0, 1],
+    [-12.9, 1.84, -10.5, 1.84, 0, -1], [-4.5, 1.84, -1.3, 1.84, 0, -1], [1.3, 1.84, 4.5, 1.84, 0, -1], [10.5, 1.84, 12.9, 1.84, 0, -1],
+    [2.9, -17.8, 2.9, -11, -1, 0], [2.9, -9, 2.9, -4.1, -1, 0], [3.1, -17.8, 3.1, -11, 1, 0], [3.1, -9, 3.1, -4.1, 1, 0],
+    [3.1, -4.1, 6.5, -4.1, 0, -1], [8.5, -4.1, 12.9, -4.1, 0, -1], [3.1, -3.9, 6.5, -3.9, 0, 1], [8.5, -3.9, 12.9, -3.9, 0, 1],
+  ];
+  for (const [x1, z1, x2, z2, nx, nz] of segs) { aoStrip(x1, z1, x2, z2, nx, nz, 0.5); aoStrip(x1, z1, x2, z2, nx, nz, 0.4, true); }
+  aoStrip(BAR.front, BAR.z0, BAR.front, BAR.z1, 1, 0, 0.35); // foot of the bar
+}
 function buildAtmosphere() {
+  buildAO();
   // light shafts under pendants, pool lamp, gaming rows
   for (const p of atmo.pendants) lightCone(p.x, p.y, p.z, 0.13, 1.05, 0xffc890, 0.055);
   lightCone(-3, 2.35, -13.2, 0.42, 1.0, 0xfff0d0, 0.05, 4, 0.75, 1.9, Math.PI / 4);

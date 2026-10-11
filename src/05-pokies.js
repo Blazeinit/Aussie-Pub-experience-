@@ -337,6 +337,7 @@ function buildMachineMesh(def, idx) {
   // stool
   addS(MGEO.seat, MAT.vinylBlack, 0, 0.66, 0.82); addS(MGEO.back, MAT.vinylBlack, 0, 0.95, 1.02);
   addS(MGEO.leg, MAT.chrome, 0, 0.31, 0.82); addS(MGEO.base, MAT.chrome, 0, 0.015, 0.82);
+  { const bm = new THREE.Matrix4().compose(V3(0, 0.005, 0.25), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), V3(1.0, 1.7, 1)); SB.addM(G.plane, MAT.blob, new THREE.Matrix4().multiplyMatrices(root.matrixWorld, bm)); }
   // live parts: the screen, the clickable deck and the pressable SPIN button
   const scrMat = new THREE.MeshBasicMaterial({ map: shared[def.game].at }); scrMat.color.setScalar(1.12);
   const scr = add(MGEO.screen, scrMat, 0, 1.44, 0.04, 0);

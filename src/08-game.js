@@ -681,6 +681,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
+    updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0), 2, dt);
     fxPass.uniforms.uSmoke.value = damp(fxPass.uniforms.uSmoke.value, onTerrace(camera.position.x, camera.position.z) ? 0.6 : 0, 1, dt);

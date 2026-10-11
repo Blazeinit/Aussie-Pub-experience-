@@ -227,6 +227,31 @@ function signTex(lines, o = {}) {
   return t;
 }
 
+// Victorian damask wallpaper: cream ground, gilt motif, two motifs per tile
+function texDamask() {
+  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d');
+  x.fillStyle = '#d6c49a'; x.fillRect(0, 0, W, W);
+  for (let i = 0; i < 4000; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '90,60,20' : '255,245,220'},${Math.random() * 0.05})`; x.fillRect(Math.random() * W, Math.random() * W, 2, 2); }
+  const motif = (cx, cy, s) => {
+    x.save(); x.translate(cx, cy); x.scale(s, s);
+    x.fillStyle = 'rgba(150,108,40,.55)'; x.strokeStyle = 'rgba(120,80,25,.5)'; x.lineWidth = 3;
+    for (const m of [1, -1]) {
+      x.save(); x.scale(m, 1);
+      x.beginPath(); x.moveTo(0, -110); x.bezierCurveTo(40, -90, 60, -40, 20, -10); x.bezierCurveTo(70, 10, 70, 70, 0, 110); x.bezierCurveTo(30, 60, 30, 20, 0, 0); x.closePath(); x.fill(); x.stroke();
+      x.beginPath(); x.moveTo(20, -60); x.bezierCurveTo(70, -80, 90, -30, 60, -10); x.stroke();
+      x.beginPath(); x.arc(46, 40, 12, 0, 7); x.stroke();
+      x.restore();
+    }
+    x.fillStyle = 'rgba(170,125,50,.6)'; x.beginPath(); x.ellipse(0, 0, 12, 22, 0, 0, 7); x.fill();
+    x.restore();
+  };
+  motif(W / 4, W / 4, 0.95); motif(W * 3 / 4, W * 3 / 4, 0.95); motif(W * 3 / 4, W / 4, 0.45); motif(W / 4, W * 3 / 4, 0.45);
+  x.strokeStyle = 'rgba(110,80,30,.15)'; x.lineWidth = 2; for (let i = 0; i <= 4; i++) { x.beginPath(); x.moveTo(i * W / 4, 0); x.lineTo(i * W / 4, W); x.stroke(); }
+  return canvasTex(c, 1, 1);
+}
+// soft ground shadow + vertical ambient-occlusion gradient
+function texBlob() { const c = mkCanvas(128, 128), x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 4, 64, 64, 62); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(0.5, 'rgba(0,0,0,.4)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); }
+function texAO() { const c = mkCanvas(8, 128), x = c.getContext('2d'); const g = x.createLinearGradient(0, 128, 0, 0); g.addColorStop(0, 'rgba(0,0,0,.62)'); g.addColorStop(0.35, 'rgba(0,0,0,.22)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 8, 128); return new THREE.CanvasTexture(c); }
 function buildTextures() {
   TEX.timber = texTimber();
   TEX.brick = texBrick(); TEX.brickDark = texBrick(true);
@@ -236,7 +261,7 @@ function buildTextures() {
   TEX.asphalt = texAsphalt();
   TEX.concrete = texConcrete();
   TEX.wainscot = texWainscot();
-  TEX.paintCream = texPaint('#d8ccaa'); TEX.paintGreen = texPaint('#2f4a3a'); TEX.paintRed = texPaint('#5a1f1a'); TEX.paintDark = texPaint('#2a2622', false);
+  TEX.paintCream = texDamask(); TEX.blob = texBlob(); TEX.ao = texAO(); TEX.paintGreen = texPaint('#2f4a3a'); TEX.paintRed = texPaint('#5a1f1a'); TEX.paintDark = texPaint('#2a2622', false);
   TEX.felt = texFelt(); TEX.deck = texDeck(); TEX.corr = texCorrugated(); TEX.lace = texLace();
   TEX.smoke = texSmoke();
   TEX.glow = texSoft([[0, 'rgba(255,255,255,1)'], [0.2, 'rgba(255,240,200,.6)'], [1, 'rgba(255,200,120,0)']]);

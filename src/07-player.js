@@ -167,7 +167,7 @@ function lockPointer() { try { const p = renderer.domElement.requestPointerLock(
 // ---------- body for mirror reflection ----------
 let playerBody;
 function buildPlayerBody() {
-  playerBody = makeHuman({ fem: false, shirt: { c: 0x1a4a8a, flannel: 1 }, pants: 0x2a3a5a, style: 'short', skin: 0xd9a383, scale: 1.02, girth: 1.05 });
+  playerBody = makeHuman({ fem: false, shirt: { tile: 'flannel', c: 0x2a5aa8 }, pants: { tile: 'denim', c: 0xffffff }, style: 'short', skinI: 1, scale: 1.02, girth: 1.05, shorts: false });
   playerBody.root.visible = false; scene.add(playerBody.root);
   playerBody.a = { seed: 0, walkPh: 0, sitH: 0.7, tapT: 0, talk: 0, holdDrink: false, sipT: 0, smoking: false, dragT: 0, drunk: 0 };
   if (backMirror) { const orig = backMirror.onBeforeRender; backMirror.onBeforeRender = function (...args) { playerBody.root.visible = true; orig.apply(this, args); playerBody.root.visible = false; }; }
