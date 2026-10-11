@@ -58,6 +58,38 @@ Three difficulties: **Tradie** (easy), **Shiftie** (normal), **Uni Student** (ha
 | Tab | Phone (money, messages) |
 | At a pokie | Space spin / stop / pick · ↑↓ bet · I insert cash · Enter collect · G/R/B gamble · Q stand up |
 
+## Project structure
+
+`index.html` is the game: one self-contained file you can double-click to play. It's **generated** from the source files in `src/`; don't edit it directly.
+
+| File | What's in it |
+|---|---|
+| `src/shell.html` | Page markup: menus, HUD, panels, pokie button bar |
+| `src/style.css` | All styling |
+| `src/01-core.js` | Renderer, post-processing, audio engine, jukebox |
+| `src/02-textures.js` | Procedural textures (timber, brick, carpet, signs…) |
+| `src/03-world.js` | Street, pub building, interior, lighting, sky, atmosphere, bar clutter |
+| `src/04-pokie-math.js` | Reel maths, paytables, features, jackpots (RTP-tuned) |
+| `src/05-pokies.js` | Pokie artwork, screen rendering, machine state machine |
+| `src/06-actors.js` | Drinks/liquid physics, particles, NPC skeletons, AI, bartender |
+| `src/07-player.js` | First-person controller, hands, drinking, smoking, seating |
+| `src/08-game.js` | The week loop, menus, events, HUD, main loop, boot |
+
+After editing anything in `src/`, rebuild with:
+
+```
+node build.mjs
+```
+
+The output stays a single file on purpose. Browsers block separate script files when a page is opened straight from disk, so a split build would need a local web server to run.
+
+## Performance
+
+- **Graphics → Low** is chosen automatically on first launch if your GPU looks integrated or mobile (Intel UHD/Iris, Mali, Adreno, software rendering). Low renders at 80% resolution with no anti-aliasing, uses cheaper shadows, drops three lights and the light shafts/dust, and has 25% fewer people. You can switch presets any time in Settings.
+- NPCs are single skinned meshes, and all static props, walls and pokie cabinets are merged into shared batches. A frame costs roughly 100–500 draw calls depending on where you're looking.
+- Shadow maps re-render only when the sun moves. The back-bar mirror updates every other frame, and only when you're inside and close enough to see it.
+- If the frame rate stays below about 42 fps, the resolution steps down a notch. It never steps back up on its own, so it can't flicker between sizes.
+
 ## Online assets
 
 Textures are generated procedurally. When the network allows, the floor and brick textures upgrade to the three.js example textures from jsDelivr. If those fail to load, the game keeps the procedural ones.

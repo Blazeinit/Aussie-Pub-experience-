@@ -1,0 +1,676 @@
+
+// =====================================================================
+//  DRINKS: liquid shader (world-plane clip + back-face surface trick)
+// =====================================================================
+const DRINKS = {
+  pot:      { name: 'Pot of Golden Lager', short: 'pot', price: 6.5, std: 0.9, h: 0.118, rb: 0.026, rt: 0.035, col: [0.95, 0.55, 0.08], col2: [0.55, 0.25, 0.02], foam: 0.012, beer: true },
+  schooner: { name: 'Schooner of Southerly Bitter', short: 'schooner', price: 9.5, std: 1.4, h: 0.15, rb: 0.029, rt: 0.04, col: [0.9, 0.45, 0.06], col2: [0.45, 0.18, 0.02], foam: 0.014, beer: true },
+  pint:     { name: "Pint of Drover's Draught", short: 'pint', price: 12.5, std: 2.0, h: 0.165, rb: 0.032, rt: 0.045, col: [0.85, 0.38, 0.05], col2: [0.4, 0.14, 0.01], foam: 0.016, beer: true },
+  pale:     { name: 'Larrikin Pale Ale (schooner)', short: 'pale', price: 10.5, std: 1.5, h: 0.15, rb: 0.029, rt: 0.04, col: [1.0, 0.62, 0.18], col2: [0.7, 0.35, 0.06], foam: 0.016, beer: true, cloudy: 0.5 },
+  rum:      { name: 'Rum & Coke', short: 'rum & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.25, 0.08, 0.02], col2: [0.08, 0.02, 0.0], foam: 0.0, beer: false },
+  llb:      { name: 'Lemon Lime & Bitters', short: 'LLB', price: 5, std: 0, h: 0.135, rb: 0.033, rt: 0.035, col: [1.0, 0.55, 0.45], col2: [0.8, 0.3, 0.25], foam: 0.0, beer: false, cloudy: 0.7 },
+  water:    { name: 'Glass of tap water', short: 'water', price: 0, std: 0, h: 0.12, rb: 0.03, rt: 0.034, col: [0.75, 0.85, 0.9], col2: [0.6, 0.75, 0.85], foam: 0.0, beer: false, clear: true },
+};
+const liquidVS = `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*w; }`;
+const liquidFS = `
+uniform vec3 uP, uN, uCol, uCol2, uFoamCol; uniform float uFoamH, uTime, uCloudy, uClear, uLight;
+varying vec3 vW; varying vec3 vN;
+float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+void main(){
+  float d = dot(vW - uP, uN);
+  if (d > 0.0) discard;
+  vec3 V = normalize(cameraPosition - vW);
+  if (!gl_FrontFacing) {
+    // inside surface seen through the cut: the liquid's top
+    vec3 top = uFoamH > 0.0005 ? uFoamCol : mix(uCol, vec3(1.), .15);
+    float spec = pow(max(dot(reflect(-V, uN), normalize(vec3(.3,1.,.2))), 0.), 30.);
+    gl_FragColor = vec4(top * (0.38 + 0.3*uLight) + spec*.25, 1.0); return;
+  }
+  float depth = -d;
+  vec3 c = mix(uCol2, uCol, smoothstep(0.0, 0.12, depth*3.0 + 0.2));
+  float fres = pow(1.0 - abs(dot(V, vN)), 2.5);
+  c = mix(c, c*1.25 + 0.02, fres*0.45);
+  // rising bubbles
+  vec2 g = vec2(atan(vN.z, vN.x)*12.0, vW.y*90.0 - uTime*25.0);
+  vec2 cell = floor(g); vec2 f = fract(g) - .5;
+  float b = step(0.92, h1(cell)) * smoothstep(.25, .05, length(f));
+  c += b * 0.22 * (1.0 - uClear*0.5);
+  c = mix(c, vec3(dot(c,vec3(.33)))*1.1, uCloudy*0.25);
+  if (uFoamH > 0.0005 && depth < uFoamH) c = uFoamCol * (0.85 + 0.15*h1(floor(vW.xy*900.)));
+  c *= 0.3 + 0.42*uLight;
+  gl_FragColor = vec4(c, uClear > 0.5 ? 0.5 : 0.96);
+}`;
+const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 2.2 });
+interiorMats.push(glassMat);
+function makeGlass(type) {
+  const D = DRINKS[type];
+  const g = new THREE.Group();
+  const outer = new THREE.LatheGeometry([V3(0, 0), V3(D.rb + 0.003, 0), V3(D.rb + 0.003, 0.006), V3(D.rt + 0.002, D.h), V3(D.rt, D.h)], 24);
+  const gm = new THREE.Mesh(outer, glassMat); gm.renderOrder = 3; g.add(gm);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(D.rb + 0.003, D.rb + 0.004, 0.008, 20), glassMat); base.position.y = 0.004; base.renderOrder = 3; g.add(base);
+  const y0 = 0.009, y1 = D.h * 0.985;
+  const inner = new THREE.LatheGeometry([V3(0, y0), V3(D.rb - 0.001, y0), V3(D.rt - 0.002, y1)], 24);
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: liquidVS, fragmentShader: liquidFS, side: THREE.DoubleSide, transparent: !!D.clear,
+    uniforms: { uP: { value: V3() }, uN: { value: V3(0, 1, 0) }, uCol: { value: new THREE.Color(...D.col) }, uCol2: { value: new THREE.Color(...D.col2) }, uFoamCol: { value: new THREE.Color(0.86, 0.8, 0.68) }, uFoamH: { value: D.foam }, uTime: { value: 0 }, uCloudy: { value: D.cloudy || 0 }, uClear: { value: D.clear ? 1 : 0 }, uLight: { value: 1 } }
+  });
+  const lm = new THREE.Mesh(inner, mat); lm.renderOrder = 2; lm.frustumCulled = false; g.add(lm);
+  const o = { type, D, group: g, mat, liquid: lm, fill: 1, y0, y1, slosh: new THREE.Vector2(), sloshV: new THREE.Vector2(), lastPos: null, lastVel: V3(), foam: D.foam,
+    update(dt, t) {
+      const u = mat.uniforms; u.uTime.value = t;
+      g.updateWorldMatrix(true, false);
+      const up = _v1.set(0, 1, 0).transformDirection(g.matrixWorld);
+      const base = _v2.setFromMatrixPosition(g.matrixWorld);
+      // volume-ish: tilted glass raises the level along its axis a little
+      const tilt = Math.acos(clamp(up.y, -1, 1));
+      const hh = this.y0 + (this.y1 - this.y0) * this.fill;
+      u.uP.value.copy(base).addScaledVector(up, hh + Math.min(0.03, tilt * 0.02 * this.fill));
+      u.uN.value.set(this.slosh.x, 1, this.slosh.y).normalize();
+      u.uFoamH.value = this.fill > 0.02 ? this.foam : 0;
+      lm.visible = this.fill > 0.004;
+    },
+    // spring-damper slosh driven by acceleration of the glass
+    physics(dt) {
+      g.updateWorldMatrix(true, false);
+      const p = _v3.setFromMatrixPosition(g.matrixWorld);
+      if (!this.lastPos) { this.lastPos = p.clone(); return 0; }
+      const vel = p.clone().sub(this.lastPos).divideScalar(Math.max(dt, 1e-4));
+      const acc = vel.clone().sub(this.lastVel).divideScalar(Math.max(dt, 1e-4));
+      this.lastPos.copy(p); this.lastVel.copy(vel);
+      acc.clampLength(0, 40);
+      const k = 140, c = 4.5;
+      this.sloshV.x += (-k * this.slosh.x - c * this.sloshV.x - acc.x * 0.9) * dt;
+      this.sloshV.y += (-k * this.slosh.y - c * this.sloshV.y - acc.z * 0.9) * dt;
+      this.slosh.addScaledVector(this.sloshV, dt);
+      this.slosh.clampLength(0, 1.2);
+      // spill when the surface reaches the rim
+      const margin = (1 - this.fill) * 1.6 + 0.12;
+      const amp = this.slosh.length();
+      if (amp > margin && this.fill > 0.02) { const spill = Math.min(this.fill, (amp - margin) * 0.25); this.fill -= spill; return spill; }
+      return 0;
+    }
+  };
+  return o;
+}
+
+// =====================================================================
+//  PARTICLES: smoke (soft billboard) + droplets/sparks; puddles; shards
+// =====================================================================
+class Particles {
+  constructor(n, tex, opts) {
+    this.n = n; this.i = 0; this.opts = opts;
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(n * 3); this.vel = new Float32Array(n * 3); this.life = new Float32Array(n); this.max = new Float32Array(n);
+    this.size = new Float32Array(n); this.alpha = new Float32Array(n); this.col = new Float32Array(n * 3); this.grow = new Float32Array(n); this.a0 = new Float32Array(n);
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); g.setAttribute('size', new THREE.BufferAttribute(this.size, 1));
+    g.setAttribute('alpha', new THREE.BufferAttribute(this.alpha, 1)); g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { tex: { value: tex }, uScale: { value: innerHeight / 2 } }, transparent: true, depthWrite: false, blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      vertexShader: `attribute float size; attribute float alpha; attribute vec3 color; varying float vA; varying vec3 vC; uniform float uScale;
+        void main(){ vC=color; vec4 mv=modelViewMatrix*vec4(position,1.); float z=-mv.z; vA=alpha*smoothstep(0.12,0.7,z); gl_PointSize = min(size*uScale/max(0.05,z), 420.0); gl_Position=projectionMatrix*mv; }`,
+      fragmentShader: `uniform sampler2D tex; varying float vA; varying vec3 vC; void main(){ vec4 t=texture2D(tex,gl_PointCoord); gl_FragColor=vec4(vC, t.a*vA); if(gl_FragColor.a<0.004) discard; }`
+    });
+    this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.renderOrder = 5; scene.add(this.points);
+    this.onHit = null;
+  }
+  emit(p, v, size, life, alpha, col = [1, 1, 1], grow = 0) {
+    const i = this.i; this.i = (this.i + 1) % this.n;
+    this.pos.set([p.x, p.y, p.z], i * 3); this.vel.set([v.x, v.y, v.z], i * 3);
+    this.life[i] = life; this.max[i] = life; this.size[i] = size; this.a0[i] = alpha; this.alpha[i] = alpha; this.col.set(col, i * 3); this.grow[i] = grow;
+  }
+  update(dt, t) {
+    const o = this.opts;
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0) { this.alpha[i] = 0; continue; }
+      this.life[i] -= dt;
+      const k = i * 3, f = this.life[i] / this.max[i];
+      if (o.smoke) {
+        this.vel[k] += Math.sin(t * 1.7 + i * 0.37 + this.pos[k + 1] * 4) * 0.25 * dt;
+        this.vel[k + 2] += Math.cos(t * 1.3 + i * 0.71 + this.pos[k + 1] * 3) * 0.25 * dt;
+        this.vel[k + 1] += 0.08 * dt;
+        const drag = Math.exp(-1.6 * dt); this.vel[k] *= drag; this.vel[k + 1] *= Math.exp(-0.6 * dt); this.vel[k + 2] *= drag;
+        this.size[i] += this.grow[i] * dt;
+        this.alpha[i] = this.a0[i] * Math.min(1, (1 - f) * 6) * f;
+        if (this.pos[k + 1] > PUB.ceil - 0.1 && isInside(this.pos[k], this.pos[k + 2])) { this.vel[k + 1] = 0; this.pos[k + 1] = PUB.ceil - 0.1; this.vel[k] *= 1.02; }
+      } else {
+        this.vel[k + 1] -= 9.8 * dt;
+        this.alpha[i] = this.a0[i] * Math.min(1, f * 3);
+        const gy = groundY(this.pos[k], this.pos[k + 2]);
+        if (this.pos[k + 1] < gy + 0.005 && this.vel[k + 1] < 0) {
+          if (this.onHit) this.onHit(this.pos[k], gy, this.pos[k + 2], i);
+          this.life[i] = 0; this.alpha[i] = 0;
+        }
+      }
+      this.pos[k] += this.vel[k] * dt; this.pos[k + 1] += this.vel[k + 1] * dt; this.pos[k + 2] += this.vel[k + 2] * dt;
+    }
+    const a = this.points.geometry.attributes; a.position.needsUpdate = a.size.needsUpdate = a.alpha.needsUpdate = a.color.needsUpdate = true;
+  }
+}
+let smokeFX, dropFX, sparkFX;
+const puddles = [];
+const puddleMat = new THREE.MeshStandardMaterial({ color: 0x3a2008, roughness: 0.02, metalness: 0.3, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+function addPuddle(x, y, z, s) {
+  for (const p of puddles) if (Math.hypot(p.position.x - x, p.position.z - z) < p.scale.x * 0.7) { p.userData.target = Math.min(0.6, p.userData.target + s * 0.3); return; }
+  if (puddles.length > 40) { const old = puddles.shift(); scene.remove(old); }
+  const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), puddleMat); m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.008, z);
+  m.scale.setScalar(0.01); m.userData.target = s; scene.add(m); puddles.push(m);
+}
+function initFX() {
+  smokeFX = new Particles(700, TEX.smoke, { smoke: true });
+  dropFX = new Particles(300, TEX.dot, {});
+  sparkFX = new Particles(120, TEX.dot, { additive: true });
+  dropFX.onHit = (x, y, z, i) => { if (Math.random() < 0.35) addPuddle(x, y, z, rand(0.04, 0.09)); };
+}
+function updatePuddles(dt) { for (const p of puddles) { const s = p.scale.x; p.scale.setScalar(damp(s, p.userData.target, 2, dt)); } }
+function spillDrops(pos, amount, col) {
+  const n = Math.min(40, Math.ceil(amount * 120));
+  for (let i = 0; i < n; i++) dropFX.emit(pos, V3(rand(-0.6, 0.6), rand(-0.2, 0.8), rand(-0.6, 0.6)), rand(0.006, 0.014), 2, 0.9, col);
+}
+
+// glass shards — tiny rigid bodies with floor bounce + friction
+const shards = [];
+function shatterGlass(pos, glass) {
+  const D = glass.D;
+  for (let i = 0; i < 22; i++) {
+    const s = rand(0.012, 0.035);
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, s, rand(-s, s), 0, rand(0, s), s, rand(-s / 2, s / 2)], 3)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, glassMat); m.position.copy(pos).add(V3(rand(-.03, .03), rand(0, .1), rand(-.03, .03))); m.renderOrder = 3; scene.add(m);
+    shards.push({ m, v: V3(rand(-2, 2), rand(0.5, 2.8), rand(-2, 2)), w: V3(rand(-20, 20), rand(-20, 20), rand(-20, 20)), life: 25 + rand(0, 10) });
+  }
+  if (glass.fill > 0.02) { spillDrops(pos, glass.fill * 0.8, [D.col[0] * 0.8, D.col[1] * 0.8, D.col[2] * 0.8]); addPuddle(pos.x, groundY(pos.x, pos.z), pos.z, 0.25 + glass.fill * 0.35); }
+  SFX.smash(pos);
+}
+function updateShards(dt) {
+  for (let i = shards.length - 1; i >= 0; i--) {
+    const s = shards[i]; s.life -= dt;
+    const gy = groundY(s.m.position.x, s.m.position.z) + 0.004;
+    s.v.y -= 9.8 * dt; s.m.position.addScaledVector(s.v, dt);
+    s.m.rotation.x += s.w.x * dt; s.m.rotation.y += s.w.y * dt; s.m.rotation.z += s.w.z * dt;
+    if (s.m.position.y < gy) { s.m.position.y = gy; if (s.v.y < -0.3) { s.v.y *= -0.35; s.v.x *= 0.6; s.v.z *= 0.6; s.w.multiplyScalar(0.5); if (Math.random() < 0.3) SFX.tone(rand(4000, 7000), 0.05, { gain: 0.02, pos: s.m.position }); } else { s.v.set(0, 0, 0); s.w.multiplyScalar(0.8); } }
+    if (s.life <= 0) { scene.remove(s.m); s.m.geometry.dispose(); shards.splice(i, 1); }
+  }
+}
+// free-falling dropped glass (until impact)
+const fallingGlasses = [];
+function dropGlass(glass, vel) {
+  glass.group.updateWorldMatrix(true, false);
+  const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); glass.group.matrixWorld.decompose(wp, wq, _v3);
+  glass.group.parent && glass.group.parent.remove(glass.group);
+  scene.add(glass.group); glass.group.position.copy(wp); glass.group.quaternion.copy(wq); glass.group.scale.set(1, 1, 1);
+  fallingGlasses.push({ glass, v: vel.clone(), w: V3(rand(-6, 6), rand(-2, 2), rand(-6, 6)) });
+}
+function updateFalling(dt, t) {
+  for (let i = fallingGlasses.length - 1; i >= 0; i--) {
+    const f = fallingGlasses[i], g = f.glass.group;
+    f.v.y -= 9.8 * dt; g.position.addScaledVector(f.v, dt);
+    g.rotateX(f.w.x * dt); g.rotateZ(f.w.z * dt);
+    f.glass.update(dt, t);
+    if (f.glass.fill > 0.02 && Math.random() < 0.6) { dropFX.emit(g.position.clone().add(V3(0, 0.12, 0)), V3(rand(-.3, .3), 0, rand(-.3, .3)), 0.01, 2, 0.9, f.glass.D.col); f.glass.fill -= dt * 0.5; }
+    if (g.position.y < groundY(g.position.x, g.position.z) + 0.02) { shatterGlass(g.position.clone(), f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(g.position.clone()); }
+  }
+}
+
+// beer stream from tap to glass
+function makeStream() {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uCol: { value: new THREE.Color(1, 0.6, 0.1) } }, transparent: true, depthWrite: false,
+    vertexShader: `varying vec2 vUv; uniform float uTime; void main(){ vUv=uv; vec3 p=position; p.x += sin(uv.y*20.+uTime*30.)*0.0008; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.); }`,
+    fragmentShader: `varying vec2 vUv; uniform float uTime; uniform vec3 uCol; void main(){ float s = 0.75+0.25*sin(vUv.y*60.-uTime*40.); float edge = smoothstep(0.,.3,vUv.x)*smoothstep(1.,.7,vUv.x); gl_FragColor=vec4(uCol*s*1.3, .85*edge); }`
+  });
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.004, 1, 8, 1, true), mat); m.visible = false; m.renderOrder = 4; scene.add(m);
+  return m;
+}
+
+// =====================================================================
+//  HUMANS: procedural rig, poses, IK
+// =====================================================================
+const NPC_NAMES = ['Davo', 'Shazza', 'Gazza', 'Kev', 'Bazza', 'Trev', 'Macca', 'Robbo', 'Jonesy', 'Tracey', 'Kylie', 'Big Sue', 'Old Mick', 'Nev', 'Dazza', 'Steve-O', 'Brenda', 'Noddy', 'Spud', 'Fitzy', 'Wazza', 'Lorraine', 'Bev', 'Sticks', 'Kenno', 'Deb', 'Mully', 'Chook'];
+const SKIN = [0xf0c4a0, 0xd9a383, 0xc68a64, 0x9a6440, 0x6a4028, 0xe8b894];
+const SHIRTS = [{ c: 0xff7a1a, hv: 1 }, { c: 0xe8e01a, hv: 1 }, { c: 0x8a1a1a, flannel: 1 }, { c: 0x1a2a4a }, { c: 0x111111 }, { c: 0x2a5a2a }, { c: 0xe8e8e8 }, { c: 0x4a2a5a }, { c: 0x1a4a8a, flannel: 1 }, { c: 0xff7a1a, hv: 1 }];
+const PANTS = [0x1a2440, 0x2a3a5a, 0x6a5a3a, 0x222222, 0x3a4a6a];
+const HAIR = [0x1a120a, 0x3a2412, 0x6a4a2a, 0xa8a8a8, 0xd8c08a, 0x2a1a0a];
+const capsGeo = new THREE.CapsuleGeometry(1, 1, 4, 10);
+const sphGeoH = new THREE.SphereGeometry(1, 18, 14);
+const matCache = {};
+function cm(col, rough = 0.7) { const k = col + '_' + rough; if (!matCache[k]) { matCache[k] = M({ color: col, roughness: rough }); } return matCache[k]; }
+function flannelMat(col) {
+  const k = 'fl' + col; if (matCache[k]) return matCache[k];
+  const c = mkCanvas(64, 64), x = c.getContext('2d'); const base = new THREE.Color(col);
+  x.fillStyle = '#' + base.getHexString(); x.fillRect(0, 0, 64, 64);
+  x.fillStyle = 'rgba(0,0,0,.45)'; for (let i = 0; i < 64; i += 16) { x.fillRect(i, 0, 6, 64); x.fillRect(0, i, 64, 6); }
+  x.fillStyle = 'rgba(255,255,255,.15)'; for (let i = 8; i < 64; i += 16) { x.fillRect(i, 0, 2, 64); x.fillRect(0, i, 64, 2); }
+  const fm = M({ map: canvasTex(c, 3, 3), roughness: 0.9 }); fm.userData.base = col;
+  return (matCache[k] = fm);
+}
+function limb(parent, r, len, mat, y = 0) {
+  const m = new THREE.Mesh(capsGeo, mat); m.scale.set(r, len / 2, r); m.position.y = -len / 2 + y; parent.add(m); return m;
+}
+function makeHuman(o = {}) {
+  const fem = o.fem ?? Math.random() < 0.35;
+  const skin = cm(o.skin ?? choice(SKIN), 0.6);
+  const sh = o.shirt ?? choice(SHIRTS);
+  const shirt = sh.flannel ? flannelMat(sh.c) : cm(sh.c, 0.8);
+  const pants = cm(o.pants ?? choice(PANTS), 0.85);
+  const hairC = o.hair ?? choice(HAIR);
+  const hair = cm(hairC, 0.9), shoe = cm(o.shoes ?? choice([0x2a1a0a, 0x111111, 0x5a3a1a]), 0.6);
+  const sc = o.scale ?? (fem ? rand(0.92, 0.98) : rand(0.97, 1.08)), girth = o.girth ?? (fem ? rand(0.9, 1.0) : rand(0.95, 1.3));
+  const root = new THREE.Group();
+  const body = new THREE.Group(); body.scale.setScalar(sc); root.add(body);
+  const J = {};
+  J.hips = new THREE.Group(); J.hips.position.y = 0.92; body.add(J.hips);
+  const pelvis = new THREE.Mesh(sphGeoH, pants); pelvis.scale.set(0.17 * girth, 0.11, 0.12 * girth); pelvis.castShadow = true; J.hips.add(pelvis);
+  J.spine = new THREE.Group(); J.spine.position.y = 0.05; J.hips.add(J.spine);
+  const belly = new THREE.Mesh(sphGeoH, shirt); belly.scale.set(0.16 * girth, 0.17, 0.13 * girth * (girth > 1.15 ? 1.15 : 1)); belly.position.set(0, 0.13, girth > 1.15 ? 0.02 : 0); belly.castShadow = true; J.spine.add(belly);
+  J.chest = new THREE.Group(); J.chest.position.y = 0.24; J.spine.add(J.chest);
+  const torso = new THREE.Mesh(sphGeoH, shirt); torso.scale.set(0.2 * Math.min(girth, 1.15), 0.17, 0.12 * Math.min(girth, 1.1)); torso.position.y = 0.08; torso.castShadow = true; J.chest.add(torso);
+  if (sh.hv) { const band = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true), cm(0xd8d8d8, 0.2)); band.scale.set(0.185 * Math.min(girth, 1.15), 0.025, 0.125 * Math.min(girth, 1.1)); band.position.y = 0.06; J.chest.add(band); }
+  J.neck = new THREE.Group(); J.neck.position.y = 0.24; J.chest.add(J.neck);
+  limb(J.neck, 0.045, 0.06, skin, 0.05);
+  J.head = new THREE.Group(); J.head.position.y = 0.07; J.neck.add(J.head);
+  const head = new THREE.Mesh(sphGeoH, skin); head.scale.set(0.095, 0.115, 0.105); head.position.y = 0.08; head.castShadow = true; J.head.add(head);
+  const eyeM = cm(0x111111, 0.2);
+  for (const s of [-1, 1]) { const e = new THREE.Mesh(sphGeoH, eyeM); e.scale.setScalar(0.012); e.position.set(s * 0.035, 0.1, 0.092); J.head.add(e); }
+  const nose = new THREE.Mesh(sphGeoH, skin); nose.scale.set(0.016, 0.022, 0.02); nose.position.set(0, 0.075, 0.103); J.head.add(nose);
+  // hair / hats
+  const style = o.style ?? (fem ? choice(['long', 'bob', 'pony']) : choice(['short', 'short', 'bald', 'cap', 'bucket', 'mullet']));
+  if (style !== 'bald') {
+    const h = new THREE.Mesh(sphGeoH, hair); h.scale.set(0.1, 0.1, 0.11); h.position.set(0, 0.12, -0.008); J.head.add(h);
+    if (style === 'long' || style === 'mullet') { const b = new THREE.Mesh(sphGeoH, hair); b.scale.set(0.095, style === 'long' ? 0.17 : 0.11, 0.06); b.position.set(0, style === 'long' ? 0.0 : 0.02, -0.07); J.head.add(b); }
+    if (style === 'pony') { const b = new THREE.Mesh(capsGeo, hair); b.scale.set(0.03, 0.06, 0.03); b.position.set(0, 0.06, -0.12); b.rotation.x = 0.5; J.head.add(b); }
+    if (style === 'bob') { const b = new THREE.Mesh(sphGeoH, hair); b.scale.set(0.11, 0.1, 0.1); b.position.set(0, 0.06, -0.02); J.head.add(b); }
+  }
+  if (style === 'cap') { const capM = cm(choice([0x1a2a5a, 0x8a1a1a, 0x111111, 0x2a5a2a]), 0.7); const c = new THREE.Mesh(sphGeoH, capM); c.scale.set(0.102, 0.075, 0.112); c.position.set(0, 0.14, 0); J.head.add(c); const br = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.008, 16), capM); br.scale.set(1, 1, 0.8); br.position.set(0, 0.145, 0.1); br.rotation.x = 0.15; J.head.add(br); }
+  if (style === 'bucket') { const hm = cm(choice([0xd8c8a0, 0x3a4a2a]), 0.9); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.1, 0.08, 16), hm); c.position.y = 0.175; J.head.add(c); const br = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.008, 18), hm); br.position.y = 0.14; br.rotation.x = 0.08; J.head.add(br); }
+  if (!fem && Math.random() < 0.35) { const bd = new THREE.Mesh(sphGeoH, hair); bd.scale.set(0.085, 0.06, 0.07); bd.position.set(0, 0.025, 0.045); J.head.add(bd); }
+  // arms
+  for (const s of [1, -1]) {
+    const side = s > 0 ? 'l' : 'r';
+    const ua = new THREE.Group(); ua.position.set(s * 0.2 * Math.min(girth, 1.12), 0.2, 0); J.chest.add(ua);
+    limb(ua, 0.048, 0.26, shirt); const el = new THREE.Group(); el.position.y = -0.29; ua.add(el);
+    limb(el, 0.04, 0.22, sh.long || sh.flannel ? shirt : skin); const hand = new THREE.Group(); hand.position.y = -0.26; el.add(hand);
+    const hm = new THREE.Mesh(sphGeoH, skin); hm.scale.set(0.035, 0.05, 0.022); hm.position.y = -0.03; hand.add(hm);
+    J[side + 'UA'] = ua; J[side + 'EL'] = el; J[side + 'H'] = hand;
+    const th = new THREE.Group(); th.position.set(s * 0.09, -0.04, 0); J.hips.add(th);
+    limb(th, 0.07 * Math.min(girth, 1.15), 0.4, pants); const kn = new THREE.Group(); kn.position.y = -0.43; th.add(kn);
+    const shortsKid = Math.random() < 0.5 && !fem;
+    limb(kn, 0.052, 0.38, shortsKid ? skin : pants); const ft = new THREE.Group(); ft.position.y = -0.42; kn.add(ft);
+    const fm = new THREE.Mesh(new RoundedBoxGeometry(0.09, 0.07, 0.24, 2, 0.03), shoe); fm.position.set(0, -0.035, 0.05); fm.castShadow = true; ft.add(fm);
+    J[side + 'TH'] = th; J[side + 'KN'] = kn; J[side + 'FT'] = ft;
+  }
+  return skinify({ root, J, fem, scale: sc, style });
+}
+
+// Collapse the ~22-part procedural body into ONE skinned mesh (rigid weights):
+// identical animation code (it drives Bones instead of Groups), one draw call per person.
+let npcSkinMat = null;
+function skinify(h) {
+  if (!npcSkinMat) { npcSkinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0 }); interiorMats.push(npcSkinMat); }
+  const body = h.root.children[0], groups = [body], names = ['body'];
+  for (const k in h.J) { groups.push(h.J[k]); names.push(k); }
+  h.root.updateMatrixWorld(true);
+  const bones = groups.map(g => { const b = new THREE.Bone(); b.position.copy(g.position); b.quaternion.copy(g.quaternion); b.scale.copy(g.scale); return b; });
+  groups.forEach((g, i) => { if (i === 0) h.root.add(bones[0]); else bones[groups.indexOf(g.parent)].add(bones[i]); });
+  const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), geos = [], col = new THREE.Color();
+  groups.forEach((g, bi) => {
+    for (const m of g.children) {
+      if (!m.isMesh) continue;
+      const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+      for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+      const n = geo.attributes.position.count, ca = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      col.set(m.material.userData.base ?? m.material.color);
+      for (let i = 0; i < n; i++) { ca[i * 3] = col.r; ca[i * 3 + 1] = col.g; ca[i * 3 + 2] = col.b; si[i * 4] = bi; sw[i * 4] = 1; }
+      geo.setAttribute('color', new THREE.BufferAttribute(ca, 3));
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+      geos.push(geo);
+    }
+  });
+  const sm = new THREE.SkinnedMesh(mergeGeometries(geos), npcSkinMat);
+  geos.forEach(g => g.dispose());
+  h.root.remove(body); h.root.add(sm);
+  h.root.updateMatrixWorld(true);
+  sm.bind(new THREE.Skeleton(bones));
+  const J = {}; names.forEach((n, i) => { if (i > 0) J[n] = bones[i]; });
+  h.J = J; h.mesh = sm;
+  return h;
+}
+
+// pose targets in radians. Convention: x<0 swings a limb forward (+z).
+function poseFor(kind, t, a) {
+  const p = { hipsY: 0.92, hipsX: 0, spine: 0, chest: 0, neck: 0, headX: 0, headY: 0, lUAx: 0.05, lUAz: 0.12, lEL: -0.15, rUAx: 0.05, rUAz: -0.12, rEL: -0.15, lTH: 0, lKN: 0, rTH: 0, rKN: 0, lFT: 0, rFT: 0 };
+  const breath = Math.sin(t * 1.6) * 0.02;
+  p.chest = breath; p.headX = Math.sin(t * 0.3) * 0.05; p.headY = Math.sin(t * 0.21 + a.seed) * 0.3;
+  if (kind === 'walk') {
+    const ph = a.walkPh, sw = Math.sin(ph), s2 = Math.sin(ph + Math.PI);
+    p.lTH = -sw * 0.5; p.rTH = -s2 * 0.5;
+    p.lKN = Math.max(0, Math.sin(ph - 1.2)) * 0.9 + 0.05; p.rKN = Math.max(0, Math.sin(ph + Math.PI - 1.2)) * 0.9 + 0.05;
+    p.lUAx = sw * 0.38; p.rUAx = s2 * 0.38; p.lEL = -0.3; p.rEL = -0.3;
+    p.hipsY = 0.92 - Math.abs(Math.cos(ph)) * 0.025 + 0.012; p.spine = 0.05; p.headY = 0;
+    if (a.drunk > 0.5) { p.hipsX = Math.sin(t * 1.3) * 0.08; p.headX = 0.2; }
+  } else if (kind === 'sit' || kind === 'pokie' || kind === 'sitTable') {
+    p.hipsY = a.sitH + 0.08; p.lTH = -1.5; p.rTH = -1.5; p.lKN = 1.45; p.rKN = 1.45; p.spine = 0.1; p.lFT = 0.1; p.rFT = 0.1;
+    if (kind === 'pokie') {
+      p.spine = 0.18; p.chest = 0.05 + breath; p.headX = 0.05; p.headY = 0;
+      const tap = a.tapT > 0 ? Math.sin(a.tapT * 18) * 0.5 + 0.5 : 0;
+      p.rUAx = -0.9 - tap * 0.15; p.rUAz = 0.15; p.rEL = -0.9 + tap * 0.25;
+      p.lUAx = -0.5; p.lUAz = 0.2; p.lEL = -1.4;
+    } else { p.lUAx = -0.35; p.rUAx = -0.35; p.lEL = -1.0; p.rEL = -1.0; p.lUAz = 0.1; p.rUAz = -0.1; }
+  } else if (kind === 'lean') { p.spine = 0.08; p.lUAx = -0.6; p.lEL = -1.3; p.rUAx = -0.2; p.rEL = -1.1; p.lTH = -0.1; p.rKN = 0.2; p.rTH = 0.15; }
+  else if (kind === 'pool') { p.spine = 0.65; p.chest = 0.25; p.headX = -0.6; p.rUAx = 0.3 + Math.sin(t * 2) * 0.25; p.rEL = -1.4; p.lUAx = -1.2; p.lEL = -0.2; p.lTH = -0.3; p.lKN = 0.3; p.rTH = 0.25; }
+  else if (kind === 'darts') { const th = (t % 4) < 0.5 ? Math.sin(((t % 4) / 0.5) * Math.PI) : 0; p.rUAx = -1.6 + th * 0.4; p.rEL = -1.8 + th * 1.6; p.lUAx = 0; p.headX = -0.05; p.rTH = 0.15; }
+  else if (kind === 'cheer') { p.lUAx = -2.8; p.rUAx = -2.8; p.lUAz = 0.3; p.rUAz = -0.3; p.lEL = -0.3 + Math.sin(t * 12) * 0.3; p.rEL = -0.3 + Math.sin(t * 12 + 1) * 0.3; p.headX = -0.3; }
+  else if (kind === 'wipe') { p.spine = 0.2; p.rUAx = -0.9; p.rEL = -0.6 + Math.sin(t * 5) * 0.4; p.rUAz = -0.2 + Math.sin(t * 5) * 0.25; p.headX = 0.3; }
+  else if (kind === 'stand') { p.lUAz = 0.1 + Math.sin(t * 0.7) * 0.02; }
+  // overlays
+  if (a.talk > 0) { p.lUAx = -0.6 + Math.sin(t * 4) * 0.25; p.lEL = -1.2 + Math.sin(t * 5.3) * 0.3; p.lUAz = 0.3; }
+  if (a.holdDrink && kind !== 'pokie' && kind !== 'pool' && kind !== 'darts' && kind !== 'wipe' && kind !== 'cheer') { p.rUAx = -0.25; p.rEL = -1.35; p.rUAz = -0.08; }
+  if (a.sipT > 0) { const k = Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.1, k); p.rEL = lerp(p.rEL, -2.2, k); p.rUAz = lerp(p.rUAz, 0.35, k); p.headX = lerp(p.headX, -0.35, k); }
+  if (a.smoking) { const k = a.dragT > 0 ? Math.sin(clamp(a.dragT / 2, 0, 1) * Math.PI) : 0; p.lUAx = lerp(-0.2, -0.9, k); p.lEL = lerp(-1.5, -2.35, k); p.lUAz = lerp(0.15, -0.3, k); }
+  return p;
+}
+const JOINT_MAP = [['hips', 'x', 'hipsX'], ['spine', 'x', 'spine'], ['chest', 'x', 'chest'], ['head', 'x', 'headX'], ['head', 'y', 'headY'], ['lUA', 'x', 'lUAx'], ['lUA', 'z', 'lUAz'], ['lEL', 'x', 'lEL'], ['rUA', 'x', 'rUAx'], ['rUA', 'z', 'rUAz'], ['rEL', 'x', 'rEL'], ['lTH', 'x', 'lTH'], ['lKN', 'x', 'lKN'], ['rTH', 'x', 'rTH'], ['rKN', 'x', 'rKN'], ['lFT', 'x', 'lFT'], ['rFT', 'x', 'rFT']];
+function applyPose(h, p, dt, speed = 10, skip = {}) {
+  const J = h.J;
+  J.hips.position.y = damp(J.hips.position.y, p.hipsY, speed, dt);
+  for (const [j, ax, k] of JOINT_MAP) { if (skip[j]) continue; J[j].rotation[ax] = damp(J[j].rotation[ax], p[k], speed, dt); }
+  // keep shoulders rotating around x before z, so arm swing reads naturally
+}
+// analytic two-bone IK for an arm, target in world space
+const _ikA = new THREE.Vector3(), _ikB = new THREE.Vector3(), _ikM = new THREE.Matrix4();
+function armIK(h, side, target, pole = V3(0, -0.6, -1)) {
+  const J = h.J, ua = J[side + 'UA'], el = J[side + 'EL'];
+  const s = h.scale, L1 = 0.29 * s, L2 = 0.29 * s;
+  J.chest.updateWorldMatrix(true, false);
+  const tl = J.chest.worldToLocal(_ikA.copy(target)).sub(ua.position);
+  // work in chest-local units (chest inherits body scale)
+  const ws = new THREE.Vector3(); J.chest.getWorldScale(ws); const l1 = 0.29, l2 = 0.29;
+  const d = clamp(tl.length(), 0.05, l1 + l2 - 0.001);
+  const dir = tl.clone().normalize();
+  const a1 = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1));
+  const pl = pole.clone().applyAxisAngle(V3(0, 1, 0), 0); pl.x *= side === 'l' ? 1 : -1;
+  const n = new THREE.Vector3().crossVectors(dir, pl).normalize();
+  if (n.lengthSq() < 1e-6) n.set(1, 0, 0);
+  const u = dir.clone().applyAxisAngle(n, -a1); // upper arm direction (bent toward pole)
+  const yAx = u.clone().negate(), xAx = n.clone(), zAx = new THREE.Vector3().crossVectors(xAx, yAx).normalize(); xAx.crossVectors(yAx, zAx).normalize();
+  _ikM.makeBasis(xAx, yAx, zAx); ua.quaternion.setFromRotationMatrix(_ikM);
+  const elbow = u.clone().multiplyScalar(l1); const f = tl.clone().sub(elbow).normalize();
+  const fl = f.applyQuaternion(ua.quaternion.clone().invert());
+  el.rotation.set(Math.atan2(-fl.z, -fl.y), 0, 0);
+}
+
+// =====================================================================
+//  NPC NAVIGATION GRAPH
+// =====================================================================
+const NODES = {
+  S2: V3(-6, 0, 8), S0: V3(0, 0, 6), S1: V3(0, 0, 3.4), D0: V3(0, 0, 0.6), D1: V3(2.6, 0, -0.6), P1: V3(-2, 0, -2.2), P2: V3(-6.9, 0, -2.4), P3: V3(-6.9, 0, -8), P4: V3(-6.9, 0, -13.2),
+  P5: V3(-3.4, 0, -8.2), P6: V3(-0.6, 0, -11), P7: V3(1.6, 0, -10), P8: V3(-6.5, 0, -16.3), G1: V3(4.3, 0, -10), G2: V3(4.0, 0, -15.2), G3: V3(9.6, 0, -15.2), G4: V3(9.6, 0, -9.2),
+  G5: V3(7.5, 0, -5.6), L1: V3(7.5, 0, -2.9), L2: V3(4.4, 0, -0.5), L3: V3(11.0, 0, -0.5), G6: V3(11.6, 0, -13), T1: V3(14.5, 0, -13), T2: V3(16.4, 0, -10.6), T3: V3(16.2, 0, -15.6),
+  FB: V3(-10.4, 0, -8)
+};
+const EDGES = [['S2', 'S0'], ['S0', 'S1'], ['S1', 'D0'], ['D0', 'P1'], ['D0', 'D1'], ['D1', 'L2'], ['L2', 'L1'], ['L2', 'L3'], ['L3', 'L1'], ['L1', 'G5'], ['P1', 'P2'], ['P2', 'P3'], ['P3', 'P4'], ['P4', 'P8'], ['P1', 'P5'], ['P5', 'P3'], ['P5', 'P6'], ['P6', 'P4'], ['P6', 'P7'], ['P5', 'P7'], ['P7', 'G1'], ['G1', 'G2'], ['G1', 'G4'], ['G2', 'G3'], ['G3', 'G4'], ['G3', 'G6'], ['G4', 'G6'], ['G4', 'G5'], ['G6', 'T1'], ['T1', 'T2'], ['T1', 'T3'], ['T2', 'T3'], ['P6', 'P8']];
+const ADJ = {}; for (const k in NODES) ADJ[k] = []; for (const [a, b] of EDGES) { ADJ[a].push(b); ADJ[b].push(a); }
+function nearestNode(p, filter) {
+  let best = null, bd = 1e9;
+  for (const k in NODES) { if (k === 'FB') continue; if (filter && !filter(k)) continue; const n = NODES[k]; const d = (n.x - p.x) ** 2 + (n.z - p.z) ** 2; if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+function nodeRegion(k) { return k[0] === 'S' ? 'out' : k[0] === 'T' ? 'ter' : k[0] === 'G' ? 'gam' : k[0] === 'L' ? 'lou' : 'bar'; }
+function regionOf(p) { if (onTerrace(p.x, p.z)) return 'ter'; if (!isInside(p.x, p.z)) return 'out'; if (inGaming(p.x, p.z)) return 'gam'; if (p.x > 3 && p.z > -4) return 'lou'; return 'bar'; }
+function findPath(from, to) {
+  const rf = regionOf(from), rt = regionOf(to);
+  const a = nearestNode(from, k => nodeRegion(k) === rf || (rf === 'lou' && k === 'D1')) || nearestNode(from);
+  const b = nearestNode(to, k => nodeRegion(k) === rt || (rt === 'lou' && k === 'D1')) || nearestNode(to);
+  const prev = { [a]: null }, q = [a];
+  while (q.length) { const c = q.shift(); if (c === b) break; for (const n of ADJ[c]) if (!(n in prev)) { prev[n] = c; q.push(n); } }
+  const path = []; let c = b; while (c) { path.unshift(NODES[c].clone()); c = prev[c]; }
+  return path;
+}
+
+// =====================================================================
+//  NPCs
+// =====================================================================
+const NPCS = [];
+const BARKS = {
+  any: ["G'day.", "How ya goin'?", "Flat out like a lizard drinkin'.", "Not bad, not bad. Yourself?", "Strewth, what a week.", "Have a good one, mate.", "Yeah, nah. Nah, yeah.", "Fair dinkum, the prices in here.", "She'll be right."],
+  bar: ["These schooners are gettin' smaller, I swear.", "Your shout next, mate.", "Nine-fifty for a schooner? Daylight robbery.", "Tap beer's cold tonight, at least.", "Barry reckons the bitter's off. Barry reckons a lot of things."],
+  pokie: ["This thing's eaten fifty already.", "She's due. She's GOTTA be due.", "Don't sit at that one, it's cursed.", "Got the feature and it paid forty cents. Forty cents!", "Told meself twenty bucks. That was a hundred ago.", "Missus thinks I'm at footy training."],
+  smoke: ["Got a light, mate?", "Forty-five bucks a pack now. Forty-five!", "Gonna quit after this one. Again.", "Only place left you can have a dart and a punt."],
+  lounge: ["Chips are ripper here.", "Parma's the size of a hubcap.", "Kids are at their nan's. Freedom."],
+  street: ["Cold one tonight.", "Bloody bus never came.", "Just havin' a quick dart before I go in."],
+};
+function mkNPC(o = {}) {
+  const h = makeHuman(o);
+  const n = {
+    h, name: o.name || choice(NPC_NAMES), pos: (o.pos || V3()).clone(), ry: o.ry || 0, vel: V3(), state: 'idle', spot: null, path: [], timer: rand(20, 80),
+    a: { seed: Math.random() * 10, walkPh: 0, sitH: 0.75, tapT: 0, talk: 0, holdDrink: false, sipT: 0, smoking: false, dragT: 0, drunk: rand(0, 0.6) },
+    kind: 'stand', speed: rand(1.0, 1.3), barkT: rand(5, 30), cheerT: 0, prop: null, cig: null, role: o.role || 'patron', smoker: o.smoker ?? Math.random() < 0.3, gambler: o.gambler ?? Math.random() < 0.45, hasPhone: false
+  };
+  h.root.position.copy(n.pos); h.root.rotation.y = n.ry; scene.add(h.root);
+  // drink prop
+  n.glass = makeGlass(choice(['schooner', 'schooner', 'pot', 'pint', 'rum']));
+  n.glass.fill = rand(0.3, 1);
+  h.J.rH.add(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.x = 0;
+  n.glass.group.visible = false;
+  // cigarette prop in left hand
+  const cig = new THREE.Group(); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.07, 6), MAT.white); cb.rotation.z = Math.PI / 2; cig.add(cb);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.004, 6, 6), MAT.ember); tip.position.x = 0.036; cig.add(tip);
+  cig.position.set(0, -0.07, 0.02); cig.visible = false; h.J.lH.add(cig); n.cig = cig; n.cigTip = tip;
+  NPCS.push(n);
+  return n;
+}
+function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && filter(s)); }
+function claim(n, s) { if (n.spot) n.spot.occ = null; n.spot = s; s.occ = n; if (s.machine) s.machine.occupiedBy = n; }
+function release(n) { if (n.spot) { if (n.spot.machine && n.spot.machine.occupiedBy === n) { n.spot.machine.occupiedBy = null; n.spot.machine.setMode('idle'); } n.spot.occ = null; } n.spot = null; }
+function chooseNextSpot(n) {
+  const ev = Game.state.event;
+  const w = [];
+  const add = (f, weight) => { const list = freeSpots(f); if (list.length) w.push([list, weight]); };
+  if (n.gambler) add(s => s.kind === 'pokie' && (!s.smoke || n.smoker), 4);
+  add(s => s.area === 'bar' && (s.kind === 'stool' || s.kind === 'stand' || s.kind === 'lean'), 3);
+  add(s => s.area === 'lounge', ev === 'parma' ? 4 : 1.5);
+  add(s => s.kind === 'pool' || s.anim === 'darts', 0.8);
+  if (n.smoker) add(s => s.smoke && s.kind !== 'pokie', 1.6);
+  if (!w.length) return null;
+  const list = wpick(w.map(x => x[0]), w.map(x => x[1]));
+  return choice(list);
+}
+function sendTo(n, s) {
+  claim(n, s);
+  n.path = findPath(n.pos, s.pos); n.path.push(s.pos.clone());
+  n.state = 'walk'; n.kind = 'walk';
+  n.a.holdDrink = Math.random() < 0.6; n.glass.group.visible = n.a.holdDrink;
+}
+function spawnPatrons(count) {
+  // pre-seat most people; a couple arrive from the street over time
+  for (let i = 0; i < count; i++) {
+    const n = mkNPC();
+    const s = chooseNextSpot(n);
+    if (!s) { scene.remove(n.h.root); NPCS.pop(); continue; }
+    claim(n, s); n.pos.copy(s.pos); n.ry = s.ry; seatNPC(n);
+  }
+}
+function seatNPC(n) {
+  const s = n.spot; n.state = 'idle'; n.pos.copy(s.pos); n.ry = s.ry; n.vel.set(0, 0, 0);
+  n.a.sitH = s.sitH || 0.75;
+  n.kind = s.kind === 'pokie' ? 'pokie' : (s.kind === 'stool' || s.kind === 'chair') ? 'sit' : s.kind === 'lean' ? 'lean' : s.kind === 'pool' ? 'pool' : s.anim === 'darts' ? 'darts' : 'stand';
+  n.timer = s.kind === 'pokie' ? rand(60, 200) : rand(40, 160);
+  n.a.smoking = n.smoker && !!s.smoke; n.cig.visible = n.a.smoking;
+  n.a.holdDrink = n.kind !== 'pokie' && n.kind !== 'pool' && n.kind !== 'darts' && Math.random() < 0.8; n.glass.group.visible = n.a.holdDrink || n.kind === 'pokie';
+  if (n.kind === 'pokie') { s.machine.occupiedBy = n; s.machine.setMode('npc'); s.machine.betIdx = choice([0, 1, 1, 2, 3]); s.machine.credit = choice([20, 50, 50, 100]);
+    // glass sits on the ledge
+    n.h.root.attach(n.glass.group); n.glass.group.position.copy(s.machine.ledge).sub(n.pos).applyAxisAngle(V3(0, 1, 0), -n.ry); n.glass.group.position.y = s.machine.ledge.y; n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = true;
+  } else if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
+}
+function updateNPC(n, dt, t, player) {
+  const a = n.a;
+  a.tapT = Math.max(0, a.tapT - dt); a.sipT = Math.max(0, a.sipT - dt); a.talk = Math.max(0, a.talk - dt); a.dragT = Math.max(0, a.dragT - dt); n.cheerT = Math.max(0, n.cheerT - dt);
+  if (n.role === 'bartender') return updateBartender(n, dt, t, player);
+  if (n.state === 'walk') {
+    if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
+    const tgt = n.path[0];
+    if (!tgt) { seatNPC(n); }
+    else {
+      const dx = tgt.x - n.pos.x, dz = tgt.z - n.pos.z, d = Math.hypot(dx, dz);
+      const last = n.path.length === 1;
+      if (d < (last ? 0.08 : 0.45)) { n.path.shift(); if (!n.path.length) seatNPC(n); }
+      else {
+        let vx = dx / d * n.speed, vz = dz / d * n.speed;
+        // separation from player + others
+        const sep = (ox, oz, r) => { const ex = n.pos.x - ox, ez = n.pos.z - oz, e = Math.hypot(ex, ez); if (e < r && e > 0.01) { vx += ex / e * (r - e) * 3; vz += ez / e * (r - e) * 3; } };
+        sep(player.x, player.z, 0.9);
+        for (const o of NPCS) if (o !== n && o.state === 'walk') sep(o.pos.x, o.pos.z, 0.6);
+        n.vel.x = damp(n.vel.x, vx, 8, dt); n.vel.z = damp(n.vel.z, vz, 8, dt);
+        n.pos.x += n.vel.x * dt; n.pos.z += n.vel.z * dt;
+        if (!last || d > 0.9) collideCircle(n.pos, 0.22);
+        n.ry = n.ry + angleDiff(n.ry, Math.atan2(n.vel.x, n.vel.z)) * Math.min(1, dt * 8);
+        a.walkPh += dt * n.speed * 5.4;
+      }
+    }
+    if (n.leaving && !isInside(n.pos.x, n.pos.z) && n.pos.z > 7.5) { n.gone = true; }
+  } else {
+    // idle at spot
+    const s = n.spot;
+    if (s) n.ry = n.ry + angleDiff(n.ry, s.ry) * Math.min(1, dt * 5);
+    n.timer -= dt;
+    if (n.kind === 'pokie' && s && s.machine) {
+      const m = s.machine; m.npcTick(dt); if (m.state === 'spinning' && m.st < 0.1) a.tapT = 0.35;
+      if (m.state === 'showWin' && m.win > m.bet * 10 && m.st < 0.1) { n.cheerT = 2; bark(n, choice(["Get in!", "YES! About bloody time!", "Come on!"]), true); }
+      if (m.credit < m.bet && m.state === 'ready' && Math.random() < dt * 0.1) n.timer = 0;
+    }
+    if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
+    if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
+      if (a.dragT > 0 && a.dragT < 0.3 && Math.random() < dt * 30) { n.h.J.head.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.head.matrixWorld).add(V3(0, 0.08, 0)); const fw = V3(Math.sin(n.ry), 0.15, Math.cos(n.ry)); smokeFX.emit(hp.addScaledVector(fw, 0.12), fw.multiplyScalar(0.5), 0.05, 3, 0.18, [0.9, 0.9, 0.92], 0.18); } }
+    if (n.timer <= 0) {
+      const ns = Math.random() < 0.1 ? SPOTS.find(s => s.kind === 'toilet') : chooseNextSpot(n);
+      if (ns && ns !== n.spot && !ns.occ) { release(n); sendTo(n, ns); }
+      else n.timer = rand(20, 60);
+      if (ns && ns.kind === 'toilet') ns.occ = null;
+    }
+  }
+  // barks when player nearby
+  const pd = Math.hypot(player.x - n.pos.x, player.z - n.pos.z);
+  n.barkT -= dt;
+  if (pd < 3.2 && n.barkT <= 0 && n.state === 'idle') { n.barkT = rand(25, 60); const ar = n.spot ? (n.spot.kind === 'pokie' ? 'pokie' : n.a.smoking ? 'smoke' : n.spot.area) : 'any'; bark(n, choice((BARKS[ar] || []).concat(BARKS.any, Game.dayBarks()))); }
+  // look at player when close
+  const lookAt = pd < 2.6 && n.state === 'idle';
+  const kind = n.cheerT > 0 ? 'cheer' : n.kind;
+  const p = poseFor(kind, t + a.seed, a);
+  if (lookAt) { const ang = angleDiff(n.ry, Math.atan2(player.x - n.pos.x, player.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); p.headX = -0.05; }
+  if (n.glassOnLedge) { p.rUAx = kind === 'pokie' ? p.rUAx : p.rUAx; }
+  applyPose(n.h, p, dt, n.state === 'walk' ? 14 : 6);
+  n.h.root.position.set(n.pos.x, groundY(n.pos.x, n.pos.z), n.pos.z); n.h.root.rotation.y = n.ry;
+  if (!n.glassOnLedge && n.glass.group.visible && n.dist2 < 400) uprightInHand(n.glass.group, n.ry, a.sipT > 0 ? Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI) * 1.3 : 0);
+  if (n.glass.group.visible && n.dist2 < 400) n.glass.update(dt, t);
+}
+const _uq = new THREE.Quaternion(), _uq2 = new THREE.Quaternion();
+function uprightInHand(g, yaw, tiltToFace) {
+  g.parent.updateWorldMatrix(true, false);
+  g.parent.getWorldQuaternion(_uq).invert();
+  _uq2.setFromEuler(_e1.set(-tiltToFace, yaw, 0, 'YXZ'));
+  g.quaternion.copy(_uq).multiply(_uq2);
+}
+function bark(n, line, loud = false) {
+  if (!line) return;
+  n.a.talk = 2.2;
+  const pd = Game.player ? Math.hypot(Game.player.pos.x - n.pos.x, Game.player.pos.z - n.pos.z) : 0;
+  if (pd < (loud ? 8 : 4.5)) Game.subtitle(`<b>${n.name}:</b> ${line}`, 3.5);
+  // murmur blip
+  SFX.noise(0.5, { freq: rand(400, 900), q: 4, gain: 0.05, attack: 0.05, pos: n.pos.clone().add(V3(0, 1.6, 0)) });
+}
+
+// ---------------- bartender: serves & pours ----------------
+let bartender = null, beerStream = null;
+function makeBartender() {
+  bartender = mkNPC({ name: choice(['Jacko', 'Rhonda', 'Mick']), shirt: { c: 0x111111 }, pants: 0x111111, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
+  bartender.glass.group.visible = false;
+  // apron
+  const ap = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), cm(0x1f4d34, 0.9)); ap.position.set(0, -0.05, 0.135); bartender.h.J.spine.add(ap);
+  bartender.queue = []; bartender.job = null; bartender.kind = 'wipe';
+  beerStream = makeStream();
+  return bartender;
+}
+// order: {type, food, forZ, cb}
+function bartenderOrder(o) { bartender.queue.push(o); }
+function updateBartender(n, dt, t, player) {
+  const a = n.a; let p;
+  const goTo = (x, z, spd = 1.5) => { const dx = x - n.pos.x, dz = z - n.pos.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const s = Math.min(d, spd * dt); n.pos.x += dx / d * s; n.pos.z += dz / d * s; n.ry += angleDiff(n.ry, Math.atan2(dx, dz)) * Math.min(1, dt * 10); a.walkPh += dt * 7; return false; };
+  if (!n.job && n.queue.length) { n.job = n.queue.shift(); n.job.phase = 'toTap'; n.job.t = 0; const D = n.job.type ? DRINKS[n.job.type] : null; n.job.tap = BAR.taps.reduce((b, tp) => Math.abs(tp.z - n.job.forZ) < Math.abs(b.z - n.job.forZ) ? tp : b, BAR.taps[0]); }
+  const j = n.job;
+  let ik = null, ikL = null, walking = false;
+  if (!j) {
+    walking = !goTo(BAR.tender.home.x, clamp(player.z, BAR.z0 + 1, BAR.z1 - 1) * 0.3 + BAR.tender.home.z * 0.7, 0.8);
+    if (!walking) n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 4);
+    p = poseFor(walking ? 'walk' : (Math.sin(t * 0.13) > 0.2 ? 'wipe' : 'stand'), t, a);
+  } else {
+    j.t += dt;
+    if (j.phase === 'toTap') {
+      if (goTo(-9.42, j.tap.z)) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); if (j.t > 0.6) { j.phase = 'grab'; j.t = 0; } } else walking = true;
+    } else if (j.phase === 'grab') {
+      if (!j.glass && !j.food) { if (j.type) { j.glass = makeGlass(j.type); j.glass.fill = 0; scene.add(j.glass.group); } }
+      if (j.food) { j.phase = 'toCustomer'; j.t = 0; }
+      else if (j.t > 0.5) { j.phase = 'pour'; j.t = 0; SFX.pourStart(); }
+    } else if (j.phase === 'pour') {
+      const D = j.glass.D, dur = D.beer ? 4.2 : 2.6, k = clamp(j.t / dur, 0, 1);
+      j.glass.fill = k;
+      // proper pour: glass tilted 45° early, straightens as it fills
+      const tilt = D.beer ? lerp(0.75, 0.0, smooth(clamp((k - 0.15) / 0.6, 0, 1))) : 0;
+      j.glass.foam = D.beer ? D.foam * smooth(clamp((k - 0.55) / 0.45, 0, 1)) * 1.4 : 0;
+      const spout = j.tap.spout;
+      ik = V3(spout.x - 0.01, spout.y - 0.16 + (D.beer ? 0.03 * (1 - k) : 0), spout.z);
+      j.tilt = tilt;
+      ikL = V3(BAR.front - 0.43, 1.62, spout.z + 0.02);
+      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0.7, 10, dt);
+      beerStream.visible = true; beerStream.material.uniforms.uTime.value = t; beerStream.material.uniforms.uCol.value.setRGB(...D.col);
+      j.glass.group.updateWorldMatrix(true, false);
+      const surf = _v1.setFromMatrixPosition(j.glass.group.matrixWorld).y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * k;
+      const top = spout.y - 0.005, len = Math.max(0.01, top - surf);
+      beerStream.position.set(spout.x, top - len / 2, spout.z); beerStream.scale.set(1, len, 1);
+      SFX.pourUpdate(k);
+      if (Math.random() < dt * 30) dropFX.emit(V3(spout.x, surf + 0.005, spout.z), V3(rand(-.1, .1), rand(0.2, 0.5), rand(-.1, .1)), 0.004, 0.3, 0.5, [1, 0.95, 0.85]);
+      if (k >= 1) { j.phase = 'settle'; j.t = 0; SFX.pourStop(); beerStream.visible = false; }
+    } else if (j.phase === 'settle') {
+      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
+      if (j.t > 0.5) { j.phase = 'toCustomer'; j.t = 0; }
+    } else if (j.phase === 'toCustomer') {
+      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
+      if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); j.phase = 'place'; j.t = 0; } else walking = true;
+    } else if (j.phase === 'place') {
+      const spot = V3(BAR.front - 0.18, 1.115, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6));
+      ik = spot.clone().add(V3(0, 0.07, 0));
+      if (j.t > 0.6) {
+        let item;
+        if (j.glass) { j.glass.group.position.copy(spot); j.glass.group.rotation.set(0, 0, 0); item = { kind: 'drink', glass: j.glass }; SFX.glassDown(spot); }
+        else { const plate = makeFood(j.food); plate.position.copy(spot); scene.add(plate); item = { kind: 'food', food: j.food, mesh: plate }; SFX.glassDown(spot); }
+        bark(n, choice(["There ya go, love.", "Enjoy, mate.", "Cheers.", "There you are.", "Get that into ya."]));
+        j.cb && j.cb(item, spot);
+        n.job = null;
+      }
+    }
+    p = poseFor(walking ? 'walk' : 'stand', t, a);
+  }
+  if (walking) p = poseFor('walk', t, a);
+  applyPose(n.h, p, dt, 10, ik ? { rUA: 1, rEL: 1 } : {});
+  n.h.root.position.set(n.pos.x, 0, n.pos.z); n.h.root.rotation.y = n.ry;
+  n.h.root.updateMatrixWorld(true);
+  if (ik) armIK(n.h, 'r', ik, V3(0.6, -0.8, -0.6));
+  if (ikL) armIK(n.h, 'l', ikL, V3(0.6, -0.8, -0.6));
+  if (j && j.glass) {
+    const g = j.glass.group;
+    if (j.phase === 'pour' && ik) { g.position.copy(ik).add(V3(0, -0.075, 0)); g.rotation.set(0, 0, -(j.tilt || 0)); }
+    else if (j.phase === 'place' && ik) { g.position.copy(ik).add(V3(0, -0.07, 0)); g.rotation.set(0, 0, 0); }
+    else { n.h.J.rH.updateWorldMatrix(true, false); g.position.setFromMatrixPosition(n.h.J.rH.matrixWorld).add(V3(0, -0.1, 0)); g.rotation.set(0, 0, 0); }
+    j.glass.update(dt, t);
+  }
+}
+function makeFood(kind) {
+  const g = new THREE.Group();
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.015, 24), MAT.white); g.add(plate);
+  if (kind === 'parma') {
+    const sch = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 12), cm(0xb8742a, 0.8)); sch.scale.set(1.2, 1, 0.8); sch.position.set(-0.02, 0.018, 0); g.add(sch);
+    const sauce = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.006, 12), cm(0xa8200a, 0.5)); sauce.scale.set(1.2, 1, 0.8); sauce.position.set(-0.02, 0.03, 0); g.add(sauce);
+    const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.005, 12), cm(0xf2c84a, 0.4)); ch.scale.set(1.15, 1, 0.7); ch.position.set(-0.02, 0.035, 0); g.add(ch);
+  }
+  for (let i = 0; i < 16; i++) { const c = new THREE.Mesh(G.box, cm(0xe8b84a, 0.6)); c.scale.set(0.012, 0.012, 0.06); c.position.set(rand(0.03, 0.1), 0.02 + rand(0, 0.02), rand(-0.07, 0.07)); c.rotation.set(rand(0, 1), rand(0, 3), 0); g.add(c); }
+  return g;
+}

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Last Drinks — The Royal Hotel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Bungee&family=Inter:wght@400;600;800&family=Permanent+Marker&family=Rye&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+/*@CSS@*/
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+
+<div id="loading"><h1>LAST DRINKS</h1><div id="loadbar"><i></i></div><div id="loadtxt">Pulling the first beer…</div></div>
+
+<div id="title" class="hidden">
+  <div class="logo">LAST<br>DRINKS</div>
+  <div class="sub">A WEEK AT THE ROYAL HOTEL</div>
+  <div class="menu" id="mainMenu">
+    <button class="mbtn" id="btnContinue">Continue<small id="contInfo"></small></button>
+    <button class="mbtn" id="btnNew">New Week<small>Monday, 7pm. You've just knocked off.</small></button>
+    <button class="mbtn" id="btnSettings">Settings</button>
+    <button class="mbtn" id="btnControls">How to Play</button>
+  </div>
+  <div class="diffgrid hidden" id="diffMenu">
+    <div class="dcard" data-diff="easy"><h3>THE TRADIE</h3><div class="who">Sparky on good coin. Easy.</div><ul><li>Wallet <b>$220</b> · Bank <b>$1,600</b></li><li>Daily pay <b>$310</b></li><li>Rent Sunday <b>$480</b></li><li>Machines a bit looser</li></ul></div>
+    <div class="dcard" data-diff="normal"><h3>THE SHIFTIE</h3><div class="who">Warehouse night-fill. Normal.</div><ul><li>Wallet <b>$120</b> · Bank <b>$650</b></li><li>Daily pay <b>$190</b></li><li>Rent Sunday <b>$420</b></li><li>Standard returns</li></ul></div>
+    <div class="dcard" data-diff="hard"><h3>THE UNI STUDENT</h3><div class="who">Casual barista, behind on rent. Hard.</div><ul><li>Wallet <b>$55</b> · Bank <b>$140</b></li><li>Daily pay <b>$95</b></li><li>Rent Sunday <b>$330</b></li><li>Tight machines, sharp hangovers</li></ul></div>
+  </div>
+  <div class="foot">Fictional venue, fictional machines, fictional money. If gambling stops being a game for you or someone you know, free confidential help is available 24/7 at the Gambling Help service in your state.</div>
+</div>
+
+<div id="dayCard" class="screen hidden"><div class="card" id="dayCardInner"></div></div>
+<div id="summary" class="screen hidden"><div class="card" id="summaryInner"></div></div>
+
+<div id="hud" class="hidden">
+  <div class="tl"><div id="clock">7:00</div><div id="daylbl">MONDAY</div><div id="objective"></div></div>
+  <div class="tr"><div class="money"><small>WALLET</small><span id="walletv">$0</span></div><div class="money" id="bankv"><small>BANK</small><span id="bankvv">$0</span></div><div id="items"></div></div>
+  <div class="br">
+    <div class="meter" id="mDrunk"><label><span>DRUNK</span><span id="drunkTxt">Sober</span></label><div class="bar"><i></i></div></div>
+    <div class="meter" id="mMood"><label><span>MOOD</span><span id="moodTxt"></span></label><div class="bar"><i></i></div></div>
+    <div class="meter" id="mCrave"><label><span>CRAVING</span><span></span></label><div class="bar"><i></i></div></div>
+  </div>
+  <div id="cross"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toasts"></div>
+  <div id="subtitle"></div>
+  <div id="hints"><span class="kbd">WASD</span>move <span class="kbd">SHIFT</span>run <span class="kbd">E</span>interact <span class="kbd">F</span>sip <span class="kbd">C</span>smoke <span class="kbd">G</span>drop <span class="kbd">TAB</span>phone</div>
+</div>
+
+<div id="deck" class="hidden">
+  <div class="dkinfo">CREDIT<b id="dkCredit">$0.00</b></div>
+  <button class="dk grey" id="dkCash">Insert<small>Cash</small></button>
+  <button class="dk blue" id="dkBetDn">Bet −</button>
+  <div class="dkinfo">BET<b id="dkBet">$1.00</b></div>
+  <button class="dk blue" id="dkBetUp">Bet +</button>
+  <button class="dk spin" id="dkSpin">SPIN</button>
+  <button class="dk" id="dkAuto">Auto<small>off</small></button>
+  <button class="dk" id="dkCollect">Collect</button>
+  <button class="dk grey" id="dkSip">Sip<small>F</small></button>
+  <button class="dk grey" id="dkSmoke">Smoke<small>C</small></button>
+  <button class="dk red" id="dkLeave">Stand<small>Q</small></button>
+</div>
+
+<div id="panel" class="hidden"><div class="box"><h2 id="pTitle"></h2><div class="psub" id="pSub"></div><div id="pBody"></div><div class="prow" id="pBtns"></div></div></div>
+<div id="resume" class="hidden"><h2>PAUSED</h2><button class="mbtn" id="btnResume">Resume</button><button class="mbtn" id="btnPauseSettings">Settings</button><button class="mbtn" id="btnHome">Go home for the night</button><button class="mbtn" id="btnQuit">Save &amp; quit to title</button></div>
+<div id="bigwin"></div>
+<div id="fade"></div>
