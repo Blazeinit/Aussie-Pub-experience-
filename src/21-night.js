@@ -19,6 +19,7 @@ const GOALS = [
   { id: 'feed', text: 'Get a proper feed in you', cash: 5, rep: 2, test: (s, n) => n.ate },
   { id: 'water', text: 'Have a water between drinks', cash: 5, rep: 2, test: (s, n) => n.water },
   { id: 'darts', text: 'Beat someone at darts', cash: 25, rep: 5, test: (s, n) => n.dartsWon },
+  { id: 'pool', text: 'Win a frame of pool', cash: 15, rep: 4, test: (s, n) => n.poolWon },
   { id: 'tab', text: 'Back a horse at the TAB', cash: 10, rep: 2, test: (s, n) => n.horse },
   { id: 'tip', text: 'Tip the bartender', cash: 0, rep: 3, test: (s, n) => n.tipped },
   { id: 'garden', text: 'Check out the beer garden', cash: 5, rep: 2, test: (s, n) => n.visited.garden },
@@ -68,7 +69,7 @@ const Night = {
   // ---------------------------------------------------------- nightly set-up
   start() {
     const s = Game.state, n = s.night;
-    Object.assign(n, { maxDrunk: 0, talked: {}, ate: false, water: false, dartsWon: false, shouted: false, tipped: false, visited: {}, horse: false, triviaScore: 0, sang: false, log: [], relStart: Object.assign({}, s.rel), repStart: this.rep(), tabStart: this.tab(), freeUsed: false });
+    Object.assign(n, { maxDrunk: 0, talked: {}, ate: false, water: false, dartsWon: false, poolWon: false, shouted: false, tipped: false, visited: {}, horse: false, triviaScore: 0, sang: false, log: [], relStart: Object.assign({}, s.rel), repStart: this.rep(), tabStart: this.tab(), freeUsed: false });
     // three goals: one social, one skill/activity, one end-of-night
     const ok = g => !g.avail || g.avail(s);
     const pick = (list, k) => list.filter(ok).sort(() => Math.random() - 0.5).slice(0, k);

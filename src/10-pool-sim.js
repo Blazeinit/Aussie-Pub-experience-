@@ -253,7 +253,7 @@ const POOL = (() => {
       const k = 1.25 * v / BALL_R;
       c.w.x = top * k * dz; c.w.z = -top * k * dx; c.w.y = -side * k * 0.8;
       this.shotEvents = [];
-      this._acc = 0;
+      this._acc = 0; this._kicked = false;
       this._active = true;
     }
 
@@ -412,6 +412,7 @@ const POOL = (() => {
       const dt = PHYS.contactTime / 40;
       const x = new Float64Array(n), z = new Float64Array(n), vx = new Float64Array(n), vz = new Float64Array(n);
       for (let i = 0; i < n; i++) { const b = balls[list[i]]; x[i] = b.x; z[i] = b.z; vx[i] = b.vx; vz[i] = b.vz; }
+      let vin = 0; for (let i = 0; i < n; i++) vin = Math.max(vin, Math.hypot(vx[i], vz[i]));
       const touching = new Uint8Array(n * n);
       let t = 0;
       for (let step = 0; step < 1200; step++) {
@@ -436,6 +437,15 @@ const POOL = (() => {
         for (let i = 0; i < n; i++) { x[i] += vx[i] * dt; z[i] += vz[i] * dt; }
         t += dt;
         if (!active) break;
+      }
+      // breaking a full rack: an ideal frictionless rack sends nearly all the energy into the two back corners and leaves
+      // the rest sitting there.  Real racks have tiny gaps and bad contacts that scatter it, so give every racked ball a
+      // little outward kick in proportion to the hit (once per shot) and the break opens up the way it does on a real table.
+      if (n >= 10 && !this._kicked) {
+        this._kicked = true; let cx = 0, cz = 0, m = 0;
+        for (let i = 0; i < n; i++) if (balls[list[i]].id) { cx += x[i]; cz += z[i]; m++; }
+        cx /= m; cz /= m;
+        for (let i = 0; i < n; i++) { if (!balls[list[i]].id) continue; const dx = x[i] - cx, dz = z[i] - cz, d = Math.hypot(dx, dz) || 1, k = vin * (0.1 + this.rng() * 0.16); vx[i] += dx / d * k; vz[i] += dz / d * k; }
       }
       const rest = Math.max(0, s - t);
       for (let i = 0; i < n; i++) {

@@ -100,7 +100,8 @@ const PoolGame = (() => {
     const a = rest(me), b = rest(ai); cx.textAlign = 'left'; cx.fillText(a == null ? 'Table open' : a === 0 ? 'Now the black' : `${a} to go`, 24, y0 + 22); cx.textAlign = 'right'; cx.fillText(b == null ? '' : b === 0 ? 'Now the black' : `${b} to go`, W - 24, y0 + 22);
     // controls
     cx.textAlign = 'center'; cx.fillStyle = 'rgba(240,226,191,.55)'; cx.font = '500 12px "Inter", sans-serif';
-    const help = gm.phase === 'place' ? 'Move the ball · click (or SPACE) to place it' : gm.phase === 'aim' ? 'Aim with the mouse / arrows · hold click or SPACE, release to shoot · Q to forfeit' : '';
+    const help = TOUCH.on ? (gm.phase === 'place' ? 'Tap where the cue ball goes' : gm.phase === 'aim' ? 'Touch to aim, hold to pull back (drag to adjust), let go to shoot' : gm.phase === 'over' ? 'Tap to finish' : '')
+      : gm.phase === 'place' ? 'Move the ball · click (or SPACE) to place it' : gm.phase === 'aim' ? 'Aim with the mouse / arrows · hold click or SPACE, release to shoot · Q to forfeit' : gm.phase === 'over' ? 'Click or SPACE to finish' : '';
     cx.fillText(help, W / 2, H - 22);
   }
 
@@ -110,7 +111,7 @@ const PoolGame = (() => {
     cx.fillStyle = 'rgba(240,226,191,.6)'; cx.font = '600 11px "Inter", sans-serif'; cx.textAlign = 'center'; cx.fillText('POWER', x + w / 2, y - 12);
   }
   function spinDial() {
-    const r = 34, X = W - 64, Y = H - 82; gm.dial = { x: X, y: Y, r };
+    const r = 34, X = W - 64, Y = H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
     cx.fillStyle = '#f4f2ea'; cx.beginPath(); cx.arc(X, Y, r, 0, 7); cx.fill(); cx.strokeStyle = 'rgba(0,0,0,.4)'; cx.lineWidth = 2; cx.stroke();
     cx.strokeStyle = 'rgba(0,0,0,.15)'; cx.beginPath(); cx.moveTo(X - r, Y); cx.lineTo(X + r, Y); cx.moveTo(X, Y - r); cx.lineTo(X, Y + r); cx.stroke();
     cx.fillStyle = '#c7352b'; cx.beginPath(); cx.arc(X + gm.spin.side * r * 0.7, Y - gm.spin.top * r * 0.7, 6, 0, 7); cx.fill();
@@ -174,7 +175,7 @@ const PoolGame = (() => {
   }
   function finish(won) {
     const s = Game.state; gm.phase = 'over'; gm.won = won; gm.t = 0;
-    if (won) { if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; } s.mood = Math.min(100, s.mood + 10); s.stats.poolWon = (s.stats.poolWon || 0) + 1; Night.log('🎱', `Beat ${gm.opp.name} at pool${gm.stake ? ` (+$${gm.stake})` : ''}`); Night.addRep(1.5, 'Won at pool'); if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4); SFX.cheer && SFX.cheer(V3(-3, 1, -13), 1); gm.endTxt = gm.stake ? `+$${gm.stake}` : 'Bragging rights'; }
+    if (won) { if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; } s.mood = Math.min(100, s.mood + 10); s.stats.poolWon = (s.stats.poolWon || 0) + 1; achieve('pool'); if (s.stats.poolWon >= 3) achieve('shark'); Night.ev('poolWon'); Night.log('🎱', `Beat ${gm.opp.name} at pool${gm.stake ? ` (+$${gm.stake})` : ''}`); Night.addRep(1.5, 'Won at pool'); if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4); SFX.cheer && SFX.cheer(V3(-3, 1, -13), 1); gm.endTxt = gm.stake ? `+$${gm.stake}` : 'Bragging rights'; }
     else { if (gm.stake) s.night.extra -= gm.stake; s.mood = Math.max(0, s.mood - 3); Night.log('🎱', `Lost at pool to ${gm.opp.name}${gm.stake ? ` (−$${gm.stake})` : ''}`); gm.endTxt = gm.stake ? `−$${gm.stake}` : 'Better luck next time'; }
     gm.msg = gm.match.lastMessage;
   }
@@ -186,10 +187,10 @@ const PoolGame = (() => {
     toTable(e); ptr.down = true; ptr.on = true; if (e.pointerType === 'touch' || e.pointerType === 'pen') cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
     if (gm.phase === 'over' && gm.t > 0.8) return PoolGame.close();
     const d = gm.dial; if (d && Math.hypot(ptr.x - d.x, ptr.y - d.y) < d.r + 6) { spinDrag = true; setSpin(); return; }
-    if (gm.phase === 'place') { place(); return; }
+    if (gm.phase === 'place') { if (e.pointerType !== 'mouse') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } place(); return; }
     if (gm.phase === 'aim') { updateAimFromPointer(); gm.charging = true; gm.power = 0.02; gm.pdir = 1; }
   }
-  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && !gm.charging) updateAimFromPointer(); }
+  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && (!gm.charging || (e.pointerType === 'touch' && ptr.down))) updateAimFromPointer(); }
   function onUp() { ptr.down = false; spinDrag = false; release(); }
   function setSpin() { const d = gm.dial; gm.spin.side = clamp((ptr.x - d.x) / (d.r * 0.7), -1, 1); gm.spin.top = clamp(-(ptr.y - d.y) / (d.r * 0.7), -1, 1); const l = Math.hypot(gm.spin.side, gm.spin.top); if (l > 1) { gm.spin.side /= l; gm.spin.top /= l; } }
   function place() { if (gm.sim.placeCue(gm.px, gm.pz, gm.match.kitchen)) { SFX.click(); gm.phase = 'aim'; gm.match.lastMessage = gm.match.lastMessage; aimAtNearest(); } else SFX.tone(160, 0.12, { gain: 0.05, type: 'sawtooth' }); }
