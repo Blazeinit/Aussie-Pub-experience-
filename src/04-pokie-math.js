@@ -65,14 +65,30 @@ const GAMES = {
   }
 };
 
-// ---- FORTUNE LINK series: hold & spin link games (6+ fireballs, 3 respins, fill all 15 for the Grand) ----
-const LINK_BASE = (hi) => ({ '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, [hi[0]]: 6, [hi[1]]: 5, [hi[2]]: 4.5, [hi[3]]: 3.5, WILD: 2.2, COIN: 11.3 });
-const LINK_PAYS = (hi) => Object.assign({}, ROYAL_PAYS, { [hi[0]]: [0,0,0,12,40,150], [hi[1]]: [0,0,0,15,50,200], [hi[2]]: [0,0,0,20,75,300], [hi[3]]: [0,0,0,30,120,600], WILD: [0,0,0,30,120,800] });
-for (const [id, name, hi, theme] of [
-  ['moon', 'MOON FESTIVAL', ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], { bg1: '#0a0a3a', bg2: '#3a2a8a', frame: '#f6c445', accent: '#ff4a6a', glow: '#ffe9a0', text: '#fff3cf', scene: 'moon' }],
-  ['dynasty', 'GOLDEN DYNASTY', ['FAN', 'VASE', 'WALL', 'EMPEROR'], { bg1: '#3a1204', bg2: '#d8780a', frame: '#ffd84a', accent: '#c0141a', glow: '#fff0a0', text: '#fff3cf', scene: 'sunset' }],
-  ['panda', 'BAMBOO PANDA', ['LOTUS', 'JUNK', 'LANTERN', 'PANDA'], { bg1: '#06280a', bg2: '#2a8a2a', frame: '#f6c445', accent: '#e8201a', glow: '#eaffb0', text: '#f3ffe0', scene: 'bamboo' }],
-]) GAMES[id] = { id, name, sub: 'FORTUNE LINK', feature: 'holdspin', link: true, payScale: 5.5, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND', syms: ['9', '10', 'J', 'Q', 'K', 'A', ...hi, 'WILD', 'COIN'], pays: LINK_PAYS(hi), base: LINK_BASE(hi), noWild: [0], wild: 'WILD', bonusSym: 'COIN' };
+// ---- LICENSED SKIN GAMES: the supplied machine screens, played with this engine --------------------
+// Each one is a hold & spin "link" game (6+ fireballs start it, 3 respins, fill all 15 for the Grand). The art, symbols and layout come
+// from assets/slots (see tools/slots/extract.py); the sym names here must match the keys in each skin's sprite atlas.
+const ROYAL_W = { '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9 };
+const THEMED_W = [6, 5, 4.5, 3.5, 3, 2.6], THEMED_P = [[12, 40, 150], [15, 50, 200], [20, 75, 300], [30, 120, 600], [40, 150, 800], [50, 200, 1000]];
+function skinGame(id, name, sub, royals, themed, theme, extra = {}) {
+  const base = {}, pays = Object.assign({}, ROYAL_PAYS);
+  royals.forEach(r => base[r] = ROYAL_W[r]);
+  themed.forEach((t, i) => { base[t] = THEMED_W[i]; pays[t] = [0, 0, 0, ...THEMED_P[i]]; });
+  const T = Object.values(base).reduce((a, b) => a + b, 0);   // fireballs and wilds keep the same share of the reel whatever the symbol count, so every game triggers hold & spin about as often
+  base.WILD = 0.0289 * T; base.COIN = 0.1481 * T; pays.WILD = [0, 0, 0, 30, 120, 800];
+  GAMES[id] = Object.assign({ id, name, sub, skin: true, feature: 'holdspin', link: true, payScale: 3.67, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND',
+    syms: [...royals, ...themed, 'WILD', 'COIN'], pays, base, noWild: [0], wild: 'WILD', bonusSym: 'COIN' }, extra);
+}
+const TH_DL = { bg1: '#2a0408', bg2: '#8a1a10', frame: '#f6c445', accent: '#ff3a1a', glow: '#ffd36b', text: '#fff3cf' };
+skinGame('am', 'AUTUMN MOON', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], Object.assign({}, TH_DL, { bg2: '#3a2a8a', led: [0.4, 0.5, 1] }));
+skinGame('pm', 'PANDA MAGIC', 'DRAGON LINK', ['9', '10', 'J', 'K'], ['LOTUS', 'JUNK', 'LANTERN'], Object.assign({}, TH_DL, { bg2: '#2a8a2a', led: [1, 0.2, 0.2] }), { payScale: 2.42 });
+skinGame('gc', 'GOLDEN CENTURY', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['WALL', 'SUN', 'CROWN', 'EMPEROR'], Object.assign({}, TH_DL, { bg2: '#d8780a', led: [1, 0.6, 0.1] }));
+skinGame('hp', 'HAPPY & PROSPEROUS', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['LOTUS', 'JUNK', 'LANTERN', 'INGOT'], Object.assign({}, TH_DL, { led: [1, 0.35, 0.1] }));
+skinGame('fm', 'FIRE MOUNTAIN', 'KONAMI', ['J', 'Q', 'K', 'A'], ['FAN', 'GOURD', 'CHEST', 'MALLET', 'INGOT', 'BULL'], { bg1: '#3a0505', bg2: '#d8301a', frame: '#ff8a1a', accent: '#ff4a1a', glow: '#ffd36b', text: '#fff3cf', led: [1, 0.25, 0.1] }, { payScale: 2.72 });
+const TH_LDL = { bg1: '#04103a', bg2: '#1a4ad8', frame: '#4aa8ff', accent: '#3a8aff', glow: '#bfe0ff', text: '#fff', led: [0.15, 0.4, 1] };
+for (const [id, nm] of [['ldl1', 'CHECKERED FLAG'], ['ldl2', 'CHICA BONITA'], ['ldl3', 'CORRIDA DE TOROS'], ['ldl4', 'KUNG FU MASTER']]) skinGame(id, nm, 'LIGHTNING DOLLAR LINK', ['9', '10', 'J', 'Q', 'K'], ['S2', 'S3', 'S1', 'LOGO'], TH_LDL);
+const TH_TE = { bg1: '#1a0438', bg2: '#7a1ad8', frame: '#e07aff', accent: '#c03aff', glow: '#f0c0ff', text: '#fff', led: [0.8, 0.2, 1] };
+for (const [id, nm] of [['te1', 'INCA DIAMONDS'], ['te2', 'MAGIC EMPEROR']]) skinGame(id, nm, 'THUNDER EMPIRE', ['9', '10', 'J', 'Q', 'K'], ['S2', 'S3', 'S1', 'LOGO'], TH_TE);
 
 function reelWeights(game, reel, free) {
   const w = [];
@@ -104,7 +120,7 @@ function spinGrid(game, bet, free) {
     for (let row = 0; row < 3; row++) {
       const s = wpick(game.syms, w);
       col.push(s);
-      mc.push(free && s === game.wild && game.id === 'dragon' && r > 0 && r < 4 ? wpick([1, 2, 3, 5], [40, 35, 18, 7]) : 1);
+      mc.push(free && s === game.wild && game.wildMults && r > 0 && r < 4 ? wpick([1, 2, 3, 5], game.wildMults) : 1);
       cc.push(s === 'COIN' ? coinValue(bet) : null);
     }
     grid.push(col); mults.push(mc); coins.push(cc);
@@ -112,7 +128,7 @@ function spinGrid(game, bet, free) {
   return { grid, mults, coins };
 }
 
-function evalLines(game, res, bet) {
+function evalLines(game, res, bet, free) {
   const lineBet = bet / 25 * (game.payScale || 1) * rtpMod;
   const wins = [];
   let total = 0;
@@ -137,6 +153,7 @@ function evalLines(game, res, bet) {
       }
     }
     if (best && best.pay > 0) {
+      if (free && game.freeMult) best.pay *= game.freeMult;   // Queen of the Nile: every free game win is tripled
       best.line = li; best.mult = 1;
       wins.push(best); total += best.pay;
     }
@@ -213,7 +230,7 @@ function playPick(bet, mystery) {
 // the same pieces but replays features visually.
 function fullSpin(game, bet, jpValues, free) {
   const res = spinGrid(game, bet, free);
-  const lw = evalLines(game, res, bet);
+  const lw = evalLines(game, res, bet, free);
   const out = { res, lw, win: lw.total, feature: null };
   if (game.feature === 'holdspin') {
     const c = countSym(res, 'COIN');

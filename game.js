@@ -63,11 +63,20 @@ function loadTexture(p, srgb = true) {
     if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
   }, undefined, () => res(null)));
 }
+function loadImage(p) { return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = assetURL(p); }); }
+const SLOTSKIN = {};   // licensed machine skins (assets/slots): exact screen art + symbol sprites, filled in by loadAssets
 async function loadAssets(progress) {
   const work = (async () => {
     const [man, bodies, lm] = await Promise.all([fetchJSON('tex/manifest.json'), fetchJSON('char/bodies.json'), fetchJSON('light/lightmaps.json')]);
     ASSETS.manifest = man; ASSETS.bodies = bodies; ASSETS.lightmaps = lm;
     const jobs = [];
+    const skins = await fetchJSON('slots/skins.json');
+    if (skins) for (const id in skins) {
+      const S = SLOTSKIN[id] = skins[id]; S.k = Math.min(1, 1100 / Math.max(S.mw, S.mh));
+      jobs.push(loadImage(S.main).then(i => S.imgMain = i)); if (S.top) jobs.push(loadImage(S.top).then(i => S.imgTop = i));
+      if (S.front) jobs.push(loadImage(S.front).then(i => S.imgFront = i)); if (S.sprites) jobs.push(loadImage(S.sprites.img).then(i => S.imgSprites = i));
+    }
+    if (skins) { jobs.push(loadImage('slots/hs_bg.jpg').then(i => SLOTSKIN.hsImg = i)); jobs.push(loadImage('slots/ldl_banner.jpg').then(i => SLOTSKIN.bannerImg = i)); }
     if (man) for (const k in man) for (const ch of ['c', 'n', 'r']) if (man[k][ch]) jobs.push(loadTexture('tex/' + man[k][ch], ch === 'c').then(t => { (ASSETS.tex[k] = ASSETS.tex[k] || {})[ch] = t; }));
     if (lm) for (const k in lm.maps || {}) jobs.push(loadTexture('light/' + lm.maps[k].file, false).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.channel = 1; t.flipY = false; lm.maps[k].tex = t; } }));
     let done = 0; jobs.forEach(j => j.then(() => progress && progress(++done / jobs.length)));
@@ -1582,10 +1591,11 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  const link = ['moon', 'dynasty', 'panda'];
-  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: link[i % 3], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
-  for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false });
-  for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false });
+  // back wall: a Dragon Link bank (Autumn Moon, Golden Century, Panda Magic, Happy & Prosperous) beside a Lightning Dollar Link bank
+  ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
+  // island: Konami Fire Mountain and the Thunder Empire pair on the front, the house classics on the back
+  ['fm', 'te1', 'te2'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
+  ['qotn', 'bigred', 'buffalo'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
   addColBox(5.0, 8.2, -12.75, -11.25);
   SB.add(G.box, MAT.blackPlastic, 6.7, 1.0, -12, 0, 0, 0, 3.4, 2.0, 0.12);
   // jackpot LED board above island
@@ -2097,14 +2107,30 @@ const GAMES = {
   }
 };
 
-// ---- FORTUNE LINK series: hold & spin link games (6+ fireballs, 3 respins, fill all 15 for the Grand) ----
-const LINK_BASE = (hi) => ({ '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, [hi[0]]: 6, [hi[1]]: 5, [hi[2]]: 4.5, [hi[3]]: 3.5, WILD: 2.2, COIN: 11.3 });
-const LINK_PAYS = (hi) => Object.assign({}, ROYAL_PAYS, { [hi[0]]: [0,0,0,12,40,150], [hi[1]]: [0,0,0,15,50,200], [hi[2]]: [0,0,0,20,75,300], [hi[3]]: [0,0,0,30,120,600], WILD: [0,0,0,30,120,800] });
-for (const [id, name, hi, theme] of [
-  ['moon', 'MOON FESTIVAL', ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], { bg1: '#0a0a3a', bg2: '#3a2a8a', frame: '#f6c445', accent: '#ff4a6a', glow: '#ffe9a0', text: '#fff3cf', scene: 'moon' }],
-  ['dynasty', 'GOLDEN DYNASTY', ['FAN', 'VASE', 'WALL', 'EMPEROR'], { bg1: '#3a1204', bg2: '#d8780a', frame: '#ffd84a', accent: '#c0141a', glow: '#fff0a0', text: '#fff3cf', scene: 'sunset' }],
-  ['panda', 'BAMBOO PANDA', ['LOTUS', 'JUNK', 'LANTERN', 'PANDA'], { bg1: '#06280a', bg2: '#2a8a2a', frame: '#f6c445', accent: '#e8201a', glow: '#eaffb0', text: '#f3ffe0', scene: 'bamboo' }],
-]) GAMES[id] = { id, name, sub: 'FORTUNE LINK', feature: 'holdspin', link: true, payScale: 5.5, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND', syms: ['9', '10', 'J', 'Q', 'K', 'A', ...hi, 'WILD', 'COIN'], pays: LINK_PAYS(hi), base: LINK_BASE(hi), noWild: [0], wild: 'WILD', bonusSym: 'COIN' };
+// ---- LICENSED SKIN GAMES: the supplied machine screens, played with this engine --------------------
+// Each one is a hold & spin "link" game (6+ fireballs start it, 3 respins, fill all 15 for the Grand). The art, symbols and layout come
+// from assets/slots (see tools/slots/extract.py); the sym names here must match the keys in each skin's sprite atlas.
+const ROYAL_W = { '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9 };
+const THEMED_W = [6, 5, 4.5, 3.5, 3, 2.6], THEMED_P = [[12, 40, 150], [15, 50, 200], [20, 75, 300], [30, 120, 600], [40, 150, 800], [50, 200, 1000]];
+function skinGame(id, name, sub, royals, themed, theme, extra = {}) {
+  const base = {}, pays = Object.assign({}, ROYAL_PAYS);
+  royals.forEach(r => base[r] = ROYAL_W[r]);
+  themed.forEach((t, i) => { base[t] = THEMED_W[i]; pays[t] = [0, 0, 0, ...THEMED_P[i]]; });
+  const T = Object.values(base).reduce((a, b) => a + b, 0);   // fireballs and wilds keep the same share of the reel whatever the symbol count, so every game triggers hold & spin about as often
+  base.WILD = 0.0289 * T; base.COIN = 0.1481 * T; pays.WILD = [0, 0, 0, 30, 120, 800];
+  GAMES[id] = Object.assign({ id, name, sub, skin: true, feature: 'holdspin', link: true, payScale: 3.67, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND',
+    syms: [...royals, ...themed, 'WILD', 'COIN'], pays, base, noWild: [0], wild: 'WILD', bonusSym: 'COIN' }, extra);
+}
+const TH_DL = { bg1: '#2a0408', bg2: '#8a1a10', frame: '#f6c445', accent: '#ff3a1a', glow: '#ffd36b', text: '#fff3cf' };
+skinGame('am', 'AUTUMN MOON', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], Object.assign({}, TH_DL, { bg2: '#3a2a8a', led: [0.4, 0.5, 1] }));
+skinGame('pm', 'PANDA MAGIC', 'DRAGON LINK', ['9', '10', 'J', 'K'], ['LOTUS', 'JUNK', 'LANTERN'], Object.assign({}, TH_DL, { bg2: '#2a8a2a', led: [1, 0.2, 0.2] }), { payScale: 2.42 });
+skinGame('gc', 'GOLDEN CENTURY', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['WALL', 'SUN', 'CROWN', 'EMPEROR'], Object.assign({}, TH_DL, { bg2: '#d8780a', led: [1, 0.6, 0.1] }));
+skinGame('hp', 'HAPPY & PROSPEROUS', 'DRAGON LINK', ['9', '10', 'J', 'Q', 'K'], ['LOTUS', 'JUNK', 'LANTERN', 'INGOT'], Object.assign({}, TH_DL, { led: [1, 0.35, 0.1] }));
+skinGame('fm', 'FIRE MOUNTAIN', 'KONAMI', ['J', 'Q', 'K', 'A'], ['FAN', 'GOURD', 'CHEST', 'MALLET', 'INGOT', 'BULL'], { bg1: '#3a0505', bg2: '#d8301a', frame: '#ff8a1a', accent: '#ff4a1a', glow: '#ffd36b', text: '#fff3cf', led: [1, 0.25, 0.1] }, { payScale: 2.72 });
+const TH_LDL = { bg1: '#04103a', bg2: '#1a4ad8', frame: '#4aa8ff', accent: '#3a8aff', glow: '#bfe0ff', text: '#fff', led: [0.15, 0.4, 1] };
+for (const [id, nm] of [['ldl1', 'CHECKERED FLAG'], ['ldl2', 'CHICA BONITA'], ['ldl3', 'CORRIDA DE TOROS'], ['ldl4', 'KUNG FU MASTER']]) skinGame(id, nm, 'LIGHTNING DOLLAR LINK', ['9', '10', 'J', 'Q', 'K'], ['S2', 'S3', 'S1', 'LOGO'], TH_LDL);
+const TH_TE = { bg1: '#1a0438', bg2: '#7a1ad8', frame: '#e07aff', accent: '#c03aff', glow: '#f0c0ff', text: '#fff', led: [0.8, 0.2, 1] };
+for (const [id, nm] of [['te1', 'INCA DIAMONDS'], ['te2', 'MAGIC EMPEROR']]) skinGame(id, nm, 'THUNDER EMPIRE', ['9', '10', 'J', 'Q', 'K'], ['S2', 'S3', 'S1', 'LOGO'], TH_TE);
 
 function reelWeights(game, reel, free) {
   const w = [];
@@ -2136,7 +2162,7 @@ function spinGrid(game, bet, free) {
     for (let row = 0; row < 3; row++) {
       const s = wpick(game.syms, w);
       col.push(s);
-      mc.push(free && s === game.wild && game.id === 'dragon' && r > 0 && r < 4 ? wpick([1, 2, 3, 5], [40, 35, 18, 7]) : 1);
+      mc.push(free && s === game.wild && game.wildMults && r > 0 && r < 4 ? wpick([1, 2, 3, 5], game.wildMults) : 1);
       cc.push(s === 'COIN' ? coinValue(bet) : null);
     }
     grid.push(col); mults.push(mc); coins.push(cc);
@@ -2144,7 +2170,7 @@ function spinGrid(game, bet, free) {
   return { grid, mults, coins };
 }
 
-function evalLines(game, res, bet) {
+function evalLines(game, res, bet, free) {
   const lineBet = bet / 25 * (game.payScale || 1) * rtpMod;
   const wins = [];
   let total = 0;
@@ -2169,6 +2195,7 @@ function evalLines(game, res, bet) {
       }
     }
     if (best && best.pay > 0) {
+      if (free && game.freeMult) best.pay *= game.freeMult;   // Queen of the Nile: every free game win is tripled
       best.line = li; best.mult = 1;
       wins.push(best); total += best.pay;
     }
@@ -2245,7 +2272,7 @@ function playPick(bet, mystery) {
 // the same pieces but replays features visually.
 function fullSpin(game, bet, jpValues, free) {
   const res = spinGrid(game, bet, free);
-  const lw = evalLines(game, res, bet);
+  const lw = evalLines(game, res, bet, free);
   const out = { res, lw, win: lw.total, feature: null };
   if (game.feature === 'holdspin') {
     const c = countSym(res, 'COIN');
@@ -2554,11 +2581,16 @@ const ART = {
   },
 };
 function buildSymbolCache(g) {
-  const out = {};
+  const out = {}, S = g.skin ? SLOTSKIN[g.id] : null;
   for (const s of g.syms) {
     const c = mkCanvas(CW, CH), x = c.getContext('2d');
-    x.translate(CW / 2, CH / 2);
-    if (ROYAL_COL[s]) ART.royal(x, s); else if (s === 'WILD') ART.WILD(x, g); else ART[s](x, g);
+    const m = S && S.sprites.map[s];
+    if (m) x.drawImage(S.imgSprites, m[0], m[1], m[2], m[3], 0, 0, CW, CH);   // the supplied artwork, cut out of the screenshot
+    else {
+      x.translate(CW / 2, CH / 2);
+      if (ROYAL_COL[s]) ART.royal(x, s); else if (s === 'WILD') ART.WILD(x, g); else if (ART[s]) ART[s](x, g);
+      else { x.fillStyle = g.theme.accent; x.beginPath(); x.arc(0, 0, 56, 0, 7); x.fill(); outlineText(x, String(s).slice(0, 4), 0, 4, 36, '#fff', '#000', 6); }
+    }
     const b = mkCanvas(CW, CH), bx = b.getContext('2d');
     for (let k = -5; k <= 5; k++) { bx.globalAlpha = 0.16; bx.drawImage(c, 0, k * 7); }
     out[s] = { sharp: c, blur: b };
@@ -2611,13 +2643,16 @@ function drawJackpotBar(x, g, bet, t, y = 104) {
   });
 }
 function buildShared() {
+  skinInit();
   for (const id in GAMES) {
     const g = GAMES[id]; buildSymbolCache(g);
-    const ac = mkCanvas(512, 384), tc = mkCanvas(512, 256);
+    const S = g.skin && SLOTSKIN[id];
+    const ac = S ? mkCanvas(Math.round(S.mw * S.k * 0.5), Math.round(S.mh * S.k * 0.5)) : mkCanvas(512, 384), tc = S ? mkCanvas(S.imgTop ? Math.round(S.tw * 0.75) : 64, S.imgTop ? Math.round(S.th * 0.75) : 64) : mkCanvas(512, 256);
     shared[id] = { attract: ac, at: canvasTex(ac, 1, 1), topper: tc, tt: canvasTex(tc, 1, 1), t: Math.random() * 10 };
   }
 }
 function drawAttract(id, dt) {
+  if (GAMES[id].skin) return skinAttract(id, dt);
   const s = shared[id], g = GAMES[id], x = s.attract.getContext('2d'); s.t += dt;
   x.setTransform(0.5, 0, 0, 0.5, 0, 0);
   drawBG(x, g, s.t); drawLogo(x, g, SW / 2, 54, 0.85, s.t); drawJackpotBar(x, g, 0, s.t, 140);
@@ -2631,6 +2666,7 @@ function drawAttract(id, dt) {
   s.at.needsUpdate = true;
 }
 function drawTopper(id) {
+  if (GAMES[id].skin) return skinTopper(id);
   const s = shared[id], g = GAMES[id], x = s.topper.getContext('2d');
   x.setTransform(0.5, 0, 0, 0.5, 0, 0);
   x.fillStyle = rg(x, SW / 2, 256, 30, 700, [g.theme.bg2, g.theme.bg1, '#000']); x.fillRect(0, 0, SW, 512);
@@ -2734,8 +2770,10 @@ function buildMachineMesh(def, idx) {
   const add = (geo, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx; root.add(o); return o; };
   // static parts go into the shared static batch (merged per material across ALL machines)
   const addS = (geo, m, x, y, z, rx = 0) => { const lm = new THREE.Matrix4().compose(V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0)), V3(1, 1, 1)); SB.addM(geo, m, new THREE.Matrix4().multiplyMatrices(root.matrixWorld, lm)); };
+  const S = g.skin ? SLOTSKIN[def.game] : null, D = S ? S.dims : _STD_DIMS;
   addS(MGEO.body, cab, 0, 0.46, 0);
   addS(MGEO.deckBox, cab, 0, 0.98, 0.16, -0.25);
+  if (S) skinHead(addS, S, gm); else {
   addS(MGEO.head, cab, 0, 1.42, -0.12);
   addS(MGEO.top, cab, 0, 2.08, -0.15);
   for (const sx of [-0.335, 0.335]) addS(MGEO.strip, gm.accent, sx, 1.45, 0.03);
@@ -2744,6 +2782,7 @@ function buildMachineMesh(def, idx) {
   addS(MGEO.belly, gm.belly, 0, 0.6, 0.312);
   addS(MGEO.plate, gm.plate, 0, 1.148, 0.0315);
   for (const [x, y, k] of [[0, 1.664, 'bezH'], [0, 1.216, 'bezH'], [-0.299, 1.44, 'bezV'], [0.299, 1.44, 'bezV'], [0, 0.75, 'bezB'], [0, 0.45, 'bezB']]) addS(MGEO[k], gm.bez, x, y, y < 1 ? 0.312 : 0.044);
+  }
   addS(MGEO.note, MAT.chrome, 0.2, 0.86, 0.32);
   addS(MGEO.ledge, MAT.darkWood, -0.45, 0.98, 0.18);
   if (def.smoke) { addS(MGEO.ashtray, MAT.chrome, 0.45, 0.99, 0.18); addS(MGEO.ledge, MAT.darkWood, 0.45, 0.965, 0.18); }
@@ -2753,7 +2792,7 @@ function buildMachineMesh(def, idx) {
   { const bm = new THREE.Matrix4().compose(V3(0, 0.005, 0.25), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), V3(1.0, 1.7, 1)); SB.addM(G.plane, MAT.blob, new THREE.Matrix4().multiplyMatrices(root.matrixWorld, bm)); }
   // live parts: the screen, the clickable deck and the pressable SPIN button
   const scrMat = new THREE.MeshBasicMaterial({ map: shared[def.game].at }); scrMat.color.setScalar(1.12);
-  const scr = add(MGEO.screen, scrMat, 0, 1.44, 0.04, 0);
+  const scr = S ? skinScreen(add, S) : add(MGEO.screen, scrMat, 0, 1.44, 0.04, 0);
   const deck = add(MGEO.deck, deckMat(), 0, 1.0295, 0.1476, -Math.PI / 2 - 0.25);
   const spinB = new THREE.Mesh(MGEO.spin, spinMat()); spinB.position.set(0.241, 0, 0.012); deck.add(spinB);
   const btns = [deck, deck, deck, deck, deck, spinB];
@@ -2762,7 +2801,7 @@ function buildMachineMesh(def, idx) {
   const fw = toW(0, 0, 1).sub(def.pos);
   addColBox(...(() => { const c = toW(0, 0, -0.02); const w = Math.abs(fw.x) > 0.5 ? 0.7 : 0.72, d = Math.abs(fw.x) > 0.5 ? 0.72 : 0.7; return [c.x - w / 2, c.x + w / 2, c.z - d / 2, c.z + d / 2]; })());
   const seatW = toW(0, 0, 0.82);
-  const m = new Machine(def, idx, { root, scr, btns, deck, seatW, fw, ledge: toW(-0.45, 0.995, 0.18), ash: toW(0.45, 1.01, 0.18), screenW: toW(0, 1.44, 0.04), ashLocal: V3(0.45, 1.01, 0.18) });
+  const m = new Machine(def, idx, { root, scr, btns, deck, seatW, fw, ledge: toW(-0.45, 0.995, 0.18), ash: toW(0.45, 1.01, 0.18), screenW: toW(0, D.cy, 0.04), dims: D, ashLocal: V3(0.45, 1.01, 0.18) });
   MACHINES.push(m);
   addSpot({ kind: 'pokie', pos: seatW.clone(), ry: def.ry + Math.PI, sitH: 0.7, area: def.smoke ? 'terrace' : 'gaming', machine: m, smoke: def.smoke });
   addInteract({ id: 'machine' + idx, pos: toW(0, 1.3, 0.3), r: 1.7, label: () => m.occupiedBy ? `${g.name} ${g.sub} — in use` : `Sit at ${g.name} ${g.sub}${def.smoke ? '  (smoking area)' : ''}`, enabled: () => !m.occupiedBy, action: () => Game.sitAt(m) });
@@ -2773,7 +2812,7 @@ function buildMachineMesh(def, idx) {
 class Machine {
   constructor(def, idx, parts) {
     Object.assign(this, parts);
-    this.def = def; this.idx = idx; this.game = GAMES[def.game]; this.mode = 'idle'; this.occupiedBy = null;
+    this.def = def; this.idx = idx; this.game = GAMES[def.game]; this.skin = this.game.skin ? SLOTSKIN[def.game] : null; this.mode = 'idle'; this.occupiedBy = null;
     this.credit = 0; this.betIdx = 1; this.state = 'ready'; this.t = 0; this.st = 0;
     this.reels = [0, 1, 2, 3, 4].map(() => ({ pos: 0, v: 0, strip: {}, phase: 'idle', t0: 0, p0: 0, P: 0, dur: 0, stopAt: 0 }));
     this.grid = null; this.wins = []; this.win = 0; this.shownWin = 0; this.msg = ''; this.particles = [];
@@ -2789,7 +2828,7 @@ class Machine {
     if (mode === 'idle') { this.scr.material.map = shared[this.def.game].at; }
     else {
       const res = mode === 'player' ? 1 : 0.5;
-      if (!this.canvas || this.res_ !== res) { this.canvas = mkCanvas(SW * res, SH * res); this.ctx = this.canvas.getContext('2d'); this.tex = canvasTex(this.canvas, 1, 1); this.res_ = res; }
+      if (!this.canvas || this.res_ !== res) { const S = this.skin; this.canvas = S ? mkCanvas(Math.round(S.mw * S.k * res), Math.round(S.mh * S.k * res)) : mkCanvas(SW * res, SH * res); this.ctx = this.canvas.getContext('2d'); this.tex = canvasTex(this.canvas, 1, 1); this.res_ = res; }
       this.scr.material.map = this.tex;
     }
     this.scr.material.needsUpdate = true;
@@ -2809,7 +2848,7 @@ class Machine {
     }
     this.free = free;
     this.res = spinGrid(this.game, bet, free);
-    this.lw = evalLines(this.game, this.res, bet);
+    this.lw = evalLines(this.game, this.res, bet, free);
     this.wins = this.lw.wins; this.win = this.lw.total; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
     // decide anticipation
     const trig = this.game.scatter || this.game.bonusSym;
@@ -3038,6 +3077,7 @@ class Machine {
   // =================== RENDER ===================
   draw() {
     if (this.mode === 'idle') return;
+    if (this.skin) return this.drawSkin();
     const x = this.ctx, sc = this.res_;
     x.setTransform(sc, 0, 0, sc, 0, 0);
     const g = this.game, t = this.t, bet = this.bet;
@@ -3080,15 +3120,14 @@ class Machine {
   drawReels(x) {
     const g = this.game, cache = symCache[g.id];
     // reel window
-    rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill();
-    rr(x, RX - 6, RY - 4, CW * 5 + 12, CH * 3 + 8, 12); x.fillStyle = '#000'; x.fill();
+    if (!this.skin) { rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill(); rr(x, RX - 6, RY - 4, CW * 5 + 12, CH * 3 + 8, 12); x.fillStyle = '#000'; x.fill(); }
     const showing = this.state === 'showWin' && this.win > 0 && this.wins.length;
     const cur = showing && this.winLineI >= 0 ? this.wins[this.winLineI] : null;
     const hot = new Set();
     if (showing) { const list = cur ? [cur] : this.wins; for (const w of list) for (let r = 0; r < w.n; r++) hot.add(r * 3 + LINES[w.line][r]); }
     for (let r = 0; r < 5; r++) {
       const R = this.reels[r], X = RX + r * CW;
-      x.fillStyle = lg(x, 0, RY, 0, RY + CH * 3, ['#1a1a24', '#2c2c3a', '#1a1a24']); x.fillRect(X, RY, CW - 4, CH * 3);
+      x.fillStyle = this.skin ? lg(x, 0, RY, 0, RY + CH * 3, [this.skin.strip[0], this.skin.strip[1], this.skin.strip[0]]) : lg(x, 0, RY, 0, RY + CH * 3, ['#1a1a24', '#2c2c3a', '#1a1a24']); x.fillRect(X, RY, CW - 4, CH * 3);
       if (R.ant && R.phase !== 'idle') { x.fillStyle = `rgba(255,200,40,${0.25 + 0.2 * Math.sin(this.t * 20)})`; x.fillRect(X, RY, CW - 4, CH * 3); }
       x.save(); x.beginPath(); x.rect(X, RY, CW - 4, CH * 3); x.clip();
       const fast = R.phase === 'spin' && R.v > 8;
@@ -3111,7 +3150,8 @@ class Machine {
         // coin values (hold & spin game) on nuggets
         if (s === 'COIN' && R.phase === 'idle' && this.res && row >= 0 && row < 3 && this.res.coins[r][row]) {
           const c = this.res.coins[r][row];
-          outlineText(x, c.jp || fmt$(c.m * this.bet), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 30, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+          if (this.skin) outlineText(x, c.jp || String(Math.round(c.m * this.bet * 100)), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 54, c.jp ? '#ff4a6a' : '#1b0b04', '#ffd84a', 3, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+          else outlineText(x, c.jp || fmt$(c.m * this.bet), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 30, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
         }
         if (s === 'WILD' && this.free && this.res && row >= 0 && row < 3 && this.res.mults[r][row] > 1 && R.phase === 'idle') {
           rr(x, X + CW - 70, y + 6, 60, 40, 10); x.fillStyle = '#c00'; x.fill(); outlineText(x, 'x' + this.res.mults[r][row], X + CW - 40, y + 27, 28, '#fff', '#000', 5);
@@ -3144,7 +3184,7 @@ class Machine {
   }
   drawHold(x) {
     const g = this.game, h = this.hs, cache = symCache[g.id];
-    rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill();
+    if (!this.skin) { rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill(); } else { x.fillStyle = '#2a1004'; x.fillRect(RX - 8, RY - 6, CW * 5 + 12, CH * 3 + 12); }
     for (let i = 0; i < 15; i++) {
       const r = Math.floor(i / 3), row = i % 3, X = RX + r * CW, Y = RY + row * CH, c = h.shown[i];
       x.fillStyle = c ? '#3a1a04' : '#0a0a12'; x.fillRect(X, Y, CW - 4, CH - 4);
@@ -3154,16 +3194,18 @@ class Machine {
         const col = h.collect >= 0 && i < h.collect;
         x.save(); x.translate(X + CW / 2 - 2, Y + CH / 2); x.scale(sc, sc); x.globalAlpha = col ? 0.35 : 1;
         x.shadowColor = '#ffd84a'; x.shadowBlur = 20; x.drawImage(cache.COIN.sharp, -CW / 2, -CH / 2); x.shadowBlur = 0;
-        outlineText(x, c.jp || fmt$(c.m * this.bet), 0, 4, c.jp ? 28 : 34, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+        if (this.skin) outlineText(x, c.jp || String(Math.round(c.m * this.bet * 100)), 0, 4, c.jp ? 28 : 56, c.jp ? '#ff4a6a' : '#1b0b04', '#ffd84a', 3, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+        else outlineText(x, c.jp || fmt$(c.m * this.bet), 0, 4, c.jp ? 28 : 34, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
         x.restore();
       } else if (h.collect < 0) {
         // spinning blank cells
         const s = cache[choice(['COIN', 'COIN', g.syms[0]])].blur; x.globalAlpha = 0.25 + 0.15 * Math.sin(this.t * 30 + i); x.drawImage(s, X - 2, Y + ((this.t * 900 + i * 50) % CH) - CH / 2); x.globalAlpha = 1;
       }
     }
-    const bw = g.link ? 820 : 400; rr(x, SW / 2 - bw / 2, RY + CH * 3 + 14, bw, 50, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
-    if (h.collect < 0) outlineText(x, g.link ? `${h.shown.filter(Boolean).length} COLLECTED · 15 WINS THE GRAND · RESPINS ${h.respins}` : `RESPINS: ${h.respins}`, SW / 2, RY + CH * 3 + 40, g.link ? 22 : 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
-    else outlineText(x, `COLLECTING: ${fmt$(h.acc || 0)}`, SW / 2, RY + CH * 3 + 40, 30, '#ffe27a', '#000', 5);
+    const bw = g.link ? 820 : 400; if (!this.skin) rr(x, SW / 2 - bw / 2, RY + CH * 3 + 14, bw, 50, 12); else rr(x, SW / 2 - bw / 2, RY + CH * 3 - 40, bw, 38, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
+    const ty = this.skin ? RY + CH * 3 - 21 : RY + CH * 3 + 40;
+    if (h.collect < 0) outlineText(x, g.link ? `${this.skin ? '' : h.shown.filter(Boolean).length + ' COLLECTED · 15 WINS THE GRAND · '}RESPINS ${h.respins}` : `RESPINS: ${h.respins}`, SW / 2, ty, g.link ? 24 : 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
+    else outlineText(x, `COLLECTING: ${fmt$(h.acc || 0)}`, SW / 2, ty, 30, '#ffe27a', '#000', 5);
   }
   drawWheel(x) {
     const g = this.game, w = this.wh, cx = SW / 2, cy = RY + 250, R = 230;
@@ -4530,8 +4572,9 @@ function standUp() {
 }
 function seatCam() {
   const m = player.seated;
-  const eye = m.seatW.clone().add(V3(0, 1.37, 0)).addScaledVector(m.fw, 0.06);
-  const look = m.screenW.clone().add(V3(0, -0.19, 0));
+  const D = m.dims || _STD_DIMS;
+  const eye = m.seatW.clone().add(V3(0, D.eyeY, 0)).addScaledVector(m.fw, 0.06 + D.eyeBack);
+  const look = m.screenW.clone().add(V3(0, D.lookY != null ? D.lookY - m.screenW.y : -0.19, 0));
   const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, look, V3(0, 1, 0)));
   return { pos: eye, q };
 }
@@ -4550,7 +4593,7 @@ function updatePlayer(dt, t) {
   vm.lagV.x += -vm.lag.x * 150 * dt; vm.lagV.y += -vm.lag.y * 150 * dt; vm.lagV.multiplyScalar(Math.exp(-12 * dt));
   vm.lag.addScaledVector(vm.lagV, dt); vm.lag.clampLength(0, 0.04);
   let moving = false;
-  const wantFov = player.seated ? 55 : settings.fov;
+  const wantFov = player.seated ? (player.seated.dims ? player.seated.dims.fov : 55) : settings.fov;
   if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = damp(camera.fov, wantFov, 5, dt); camera.updateProjectionMatrix(); }
   bloom.strength = damp(bloom.strength, player.seated ? Math.min(0.22, settings.bloomStr) : settings.bloomStr, 4, dt);
   if (player.seated) {
@@ -8491,11 +8534,12 @@ const PokieFX = {
     this.ledMat.uniforms.uA.value.set(th.glow); this.ledMat.uniforms.uB.value.set(th.accent);
     // LED light bars hugging the screen and down the cabinet sides, plus an arc over the topper
     const bar = (w, h, x, y, z, rz = 0) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.ledMat); p.position.set(x, y, z); p.rotation.z = rz; p.renderOrder = 4; g.add(p); return p; };
-    for (const s of [-1, 1]) { bar(0.03, 0.62, s * 0.322, 1.44, 0.05); bar(0.026, 0.9, s * 0.338, 0.62, 0.315); }
-    bar(0.03, 0.66, 0, 1.69, 0.05, Math.PI / 2); bar(0.03, 0.66, 0, 1.19, 0.05, Math.PI / 2);
+    const D = m.dims || _STD_DIMS;
+    for (const s of [-1, 1]) { bar(0.03, D.h + 0.18, s * (D.w / 2 + 0.032), D.cy, 0.05); bar(0.026, 0.9, s * 0.338, 0.62, 0.315); }
+    bar(0.03, D.w + 0.08, 0, D.cy + D.h / 2 + 0.05, 0.05, Math.PI / 2); bar(0.03, D.w + 0.08, 0, D.cy - D.h / 2 - 0.05, 0.05, Math.PI / 2);
     // glass + glare over the screen
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glassMat); glass.position.set(0, 1.44, 0.047); glass.renderOrder = 3; g.add(glass);
-    const glare = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glareMat); glare.position.set(0, 1.44, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(D.w + 0.02, D.h + 0.02), this.glassMat); glass.position.set(0, D.cy, 0.047); glass.renderOrder = 3; g.add(glass);
+    const glare = new THREE.Mesh(new THREE.PlaneGeometry(D.w + 0.02, D.h + 0.02), this.glareMat); glare.position.set(0, D.cy, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
     // real illuminated push-buttons on the deck: a chrome bezel, a solid lit cap and its printed legend
     this.caps = [];
     for (const b of DECK_BTNS) {
@@ -9036,6 +9080,326 @@ const Moments = {
 };
 ACH_LIST.push(['skull', 'Skull! Skull! Skull!', 'Win the bucks party skull dare.']);
 
+// ---- src/23-skins.js ----
+
+// =====================================================================
+//  LICENSED MACHINE SKINS
+//  The supplied machine screenshots (Dragon Link family, Konami Fire Mountain, Lightning Dollar Link,
+//  Thunder Empire) are used as-is: the exact screen art is the machine's display, the symbols on the
+//  reels are cut out of those screens, and the game only paints live values (credit / bet / win /
+//  jackpots) over the numbers that were baked into the pictures.  Assets: assets/slots, tools/slots/extract.py
+// =====================================================================
+const SKIN_STRIP = { am: ['#140a2e', '#2a1a5a'], pm: ['#1a0505', '#3a0a0a'], gc: ['#1a0505', '#3a0a0a'], hp: ['#0a0000', '#3a0808'], fm: ['#0a1030', '#1a2a5a'] };
+const JP_COL = { GRAND: ['#ff1a1a', '#4a0000'], MAJOR: ['#1ad81a', '#003a00'], MINOR: ['#2a7aff', '#001050'], MINI: ['#ff8a1a', '#4a1c00'], MEGA: ['#ff2a2a', '#400000'] };
+function skinOK(id) { const S = SLOTSKIN[id]; return !!(S && S.imgMain && S.imgSprites); }
+// prepare every skin: sample the background behind each HUD value so the live numbers blend in, build the belly decal
+function skinInit() {
+  for (const id in GAMES) {
+    const g = GAMES[id]; if (!g.skin) continue;
+    if (!skinOK(id)) { g.skin = false; continue; }
+    const S = SLOTSKIN[id]; S.id = id; S.hudBg = {};
+    const c = mkCanvas(S.mw, S.mh), x = c.getContext('2d'); x.drawImage(S.imgMain, 0, 0, S.mw, S.mh);
+    const px = (X, Y) => x.getImageData(clamp(Math.round(X), 0, S.mw - 1), clamp(Math.round(Y), 0, S.mh - 1), 1, 1).data;
+    for (const k in S.hud) { const r = S.hud[k], a = px(r[0] - 3, r[1] + r[3] / 2), b = px(r[0] + r[2] + 3, r[1] + r[3] / 2); S.hudBg[k] = `rgb(${(a[0] + b[0]) >> 1},${(a[1] + b[1]) >> 1},${(a[2] + b[2]) >> 1})`; }
+    S.strip = SKIN_STRIP[id] || ['#0a1030', '#1a2a5a'];
+    // the belly decal on the front of the cabinet: the Konami front panel, or the logo strip from the top screen
+    const bc = mkCanvas(512, 256), bx = bc.getContext('2d'); bx.fillStyle = '#0a0a10'; bx.fillRect(0, 0, 512, 256);
+    if (S.imgFront) bx.drawImage(S.imgFront, 0, 0, 512, 256);
+    else if (S.imgTop) { const lh = S.th * 0.30; bx.drawImage(S.imgTop, 0, 0, S.tw, lh, 20, 60, 472, 472 * lh / S.tw); }
+    S.belly = canvasTex(bc, 1, 1);
+    S.dims = skinDims(S); S.useHS = ['am', 'pm', 'gc', 'hp'].includes(id);
+  }
+}
+// physical size of the screens (metres) and how the player's eye frames them
+function skinDims(S) {
+  let h = 0.9, w = h * S.mw / S.mh; if (w > 0.6) { w = 0.6; h = w * S.mh / S.mw; }
+  const th = S.imgTop ? 0.58 * S.th / S.tw : 0, tw = 0.58;
+  const headH = h + 0.1, headCy = 1.045 + headH / 2, top = headCy + headH / 2;
+  return { w, h, cy: 1.05 + 0.05 + h / 2, headH, headCy, tw, th, topCy: top + 0.03 + th / 2, portrait: true, eyeY: 1.3, eyeBack: 0.14, fov: 62 + (h > 0.8 ? 3 : 0), lookY: Math.min(1.58, (1.03 + 1.1 + h) / 2 + 0.02) };
+}
+const _STD_DIMS = { w: 0.58, h: 0.435, cy: 1.44, portrait: false, eyeY: 1.37, eyeBack: 0, fov: 55, lookY: null };
+
+// ---------------------------------------------------------------- painting the live numbers over the baked ones
+function skinText(x, txt, cx, cy, size, fill, stroke, maxW, font = "'Bebas Neue', Impact, sans-serif") {
+  x.font = `bold ${size}px ${font}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  let s = size; while (s > 8 && x.measureText(txt).width > maxW) { s -= 2; x.font = `bold ${s}px ${font}`; }
+  if (stroke) { x.lineJoin = 'round'; x.lineWidth = Math.max(3, s * 0.14); x.strokeStyle = stroke; x.strokeText(txt, cx, cy + s * 0.04); }
+  x.fillStyle = fill; x.fillText(txt, cx, cy + s * 0.04);
+}
+function skinJP(x, S, rects, bet) {
+  for (const name in rects) {
+    const r = rects[name], key = name === 'MEGA' ? 'MAJOR' : name, col = JP_COL[name] || JP_COL.GRAND;
+    x.fillStyle = '#000'; x.fillRect(r[0], r[1], r[2], r[3]);
+    const v = bet ? jpVal(key, bet) : JP[key];
+    skinText(x, fmt$(v), r[0] + r[2] / 2, r[1] + r[3] / 2, Math.round(r[3] * 0.98), S.id === 'fm' && name === 'GRAND' ? '#ffe27a' : col[0], col[1], r[2] - 8);
+  }
+}
+function skinHUD(x, S, m, hud = S.hud) {
+  const credits = { credit: m.credit * 100, bet: m.bet * 100, win: (m.state === 'gamble' ? m.gambleAmt : (m.shownWin || 0)) * 100 };
+  for (const k in hud) {
+    const r = hud[k]; x.fillStyle = S.hudBg[k] || '#000'; x.fillRect(r[0] - 4, r[1] - 1, r[2] + 8, r[3] + 2);
+    skinText(x, String(Math.round(credits[k])), r[0] + r[2] / 2, r[1] + r[3] / 2, Math.round(r[3] * 1.0), '#fff', '#000', r[2] + 4);
+  }
+}
+
+// Happy & Prosperous: the supplied screen is its hold & spin screen, so the big gold coin carries the game's name between features
+function skinTitle(x, S) {
+  if (S.id !== 'hp' || !S.medal) return;
+  const cx = S.medal[0] + S.medal[2] / 2, cy = S.medal[1] + S.medal[3] / 2;
+  skinText(x, 'HAPPY &', cx, cy - 40, 92, '#1a0a00', '#ffd84a', 400, "Bungee, Impact, sans-serif");
+  skinText(x, 'PROSPEROUS', cx, cy + 48, 74, '#1a0a00', '#ffd84a', 420, "Bungee, Impact, sans-serif");
+  skinText(x, 'DRAGON LINK', cx, cy + 128, 34, '#8a1a00', null, 380, "Bungee, Impact, sans-serif");
+}
+
+// ---------------------------------------------------------------- Machine: draw with the skin
+Machine.prototype.drawSkin = function () {
+  const S = this.skin, x = this.ctx, sc = this.res_ * S.k, g = this.game, st = this.state, W = S.mw, H = S.mh;
+  x.setTransform(sc, 0, 0, sc, 0, 0);
+  const hs = st === 'holdspin' && S.useHS && SLOTSKIN.hsImg;
+  const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
+  x.drawImage(hs ? SLOTSKIN.hsImg : S.imgMain, 0, 0, W, H);
+  skinHUD(x, S, this, hs ? SLOTSKIN.hp.hud : S.hud);
+  if (!hs) skinTitle(x, S);
+  if (S.jpm) skinJP(x, S, { GRAND: S.jpm.GRAND, MEGA: S.jpm.MEGA }, 0);
+  // the reel stage: the engine's normal reel / hold & spin / gamble drawing, squeezed into the screen's own reel window
+  x.save(); x.beginPath(); x.rect(win[0] - 3, win[1] - 3, win[2] + 6, win[3] + 6); x.clip();
+  x.translate(win[0], win[1]); x.scale(win[2] / (5 * CW), win[3] / (3 * CH)); x.translate(-RX, -RY);
+  if (st === 'holdspin') this.drawHold(x); else if (st === 'gamble') this.drawGamble(x); else this.drawReels(x);
+  if (st === 'featIntro') {
+    const k = clamp(this.st / 0.4, 0, 1);
+    x.fillStyle = `rgba(0,0,0,${0.6 * k})`; x.fillRect(0, RY, SW, CH * 3);
+    x.save(); x.translate(SW / 2, RY + CH * 1.5); x.scale(0.5 + easeOutBack(k) * 0.5, 0.5 + easeOutBack(k) * 0.5);
+    x.shadowColor = g.theme.glow; x.shadowBlur = 40; outlineText(x, 'HOLD & SPIN', 0, -20, 96, lg(x, 0, -60, 0, 40, ['#fff', g.theme.glow, g.theme.accent]), '#1a0802', 14); x.shadowBlur = 0;
+    outlineText(x, 'TRIGGERED!', 0, 70, 50, '#fff', '#000', 8); x.restore();
+  }
+  if (st === 'featOutro') {
+    x.fillStyle = 'rgba(0,0,0,.72)'; x.fillRect(0, RY, SW, CH * 3);
+    outlineText(x, 'FEATURE COMPLETE', SW / 2, RY + 120, 60, g.theme.glow, '#000', 10);
+    x.shadowColor = '#ffb000'; x.shadowBlur = 30; outlineText(x, fmt$(this.shownWin), SW / 2, RY + 260, 110, lg(x, 0, RY + 200, 0, RY + 320, ['#fff', '#ffe27a', '#ff9d00']), '#3a1a00', 12, 'Bebas Neue, Impact'); x.shadowBlur = 0;
+  }
+  if (this.free && st !== 'featOutro') { outlineText(x, `FREE GAME ${this.freeN} OF ${this.freeN + this.freeLeft}`, SW / 2, RY + 17, 26, '#fff', '#000', 5); }
+  const showMsg = this.msg && (st === 'ready' || st === 'gamble' || (st === 'showWin' && !(this.win > 0 && this.wins.length && this.winLineI >= 0)));
+  if (showMsg && !this.free && st !== 'holdspin') { rr(x, SW / 2 - 210, RY + CH * 3 - 50, 420, 40, 10); x.fillStyle = 'rgba(0,0,0,.72)'; x.fill(); outlineText(x, this.msg, SW / 2, RY + CH * 3 - 30, 24, '#8aff9a', '#000', 4); }
+  x.restore();
+  // hold & spin medal: the live count in the big gold coin
+  if (hs) {
+    const h = this.hs, n = h.shown.filter(Boolean).length, M = SLOTSKIN.hp.medal, cx = (M[0] + M[2] / 2) * W / SLOTSKIN.hp.mw, cy = (M[1] + M[3] / 2) * H / SLOTSKIN.hp.mh;
+    const ink = '#1a0a00', gold = '#ffd84a';
+    skinText(x, String(h.collect >= 0 ? Math.min(15, n) : n), cx, cy - 36, 190, ink, gold, 300, "Bungee, Impact, sans-serif");
+    skinText(x, h.collect >= 0 ? 'COLLECTING' : 'COLLECTED', cx, cy + 70, 46, ink, gold, 360, "Bungee, Impact, sans-serif");
+    skinText(x, h.collect >= 0 ? fmt$(h.acc || 0) : '15 WIN GRAND JACKPOT', cx, cy + 135, 32, ink, null, 330, "Bungee, Impact, sans-serif");
+  }
+  // big win / jackpot text and the coin shower, in screen space
+  x.save(); x.scale(W / SW, H / SH);
+  if (this.flashT > 0) {
+    const k = 1 - this.flashT / this.flashT0, s = k < 0.15 ? easeOutBack(k / 0.15) : 1, a = this.flashT < 0.4 ? this.flashT / 0.4 : 1;
+    x.save(); x.globalAlpha = a; x.translate(SW / 2, SH * 0.38); x.scale(s, s); x.rotate(Math.sin(this.t * 6) * 0.03);
+    x.shadowColor = '#ff9d00'; x.shadowBlur = 50; outlineText(x, this.flashTxt, 0, 0, 120, lg(x, 0, -60, 0, 60, ['#fff', '#ffe27a', '#ff7a00']), '#3a1000', 16); x.restore();
+  }
+  for (const p of this.particles) { x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.scale(Math.cos(p.r * 2), 1); x.fillStyle = rg(x, -4, -4, 1, p.s, ['#fffbe0', '#ffd84a', '#a86a08']); x.beginPath(); x.arc(0, 0, p.s / 2, 0, 7); x.fill(); x.strokeStyle = '#6a4004'; x.lineWidth = 2; x.stroke(); x.restore(); }
+  x.restore();
+  this.tex.needsUpdate = true;
+};
+
+// ---------------------------------------------------------------- attract (idle) screen and top screen, shared per game
+function skinAttract(id, dt) {
+  const s = shared[id]; s.acc = (s.acc || 0) + dt; if (s.acc < 0.45) return; dt = s.acc; s.acc = 0;   // the idle screens only need a refresh now and then
+  const S = SLOTSKIN[id], g = GAMES[id], x = s.attract.getContext('2d'); s.t += dt;
+  const sc = s.attract.width / S.mw; x.setTransform(sc, 0, 0, sc, 0, 0);
+  x.drawImage(S.imgMain, 0, 0, S.mw, S.mh);
+  skinHUD(x, S, { credit: 0, bet: 0.5, shownWin: 0, state: 'ready' }); skinTitle(x, S);
+  if (S.jpm) skinJP(x, S, { GRAND: S.jpm.GRAND, MEGA: S.jpm.MEGA }, 0);
+  // a soft sheen sweeps the glass now and then
+  const k = (s.t % 6) / 6; if (k < 0.35) { const X = (k / 0.35) * (S.mw + 400) - 200; const gr = x.createLinearGradient(X - 120, 0, X + 120, S.mh); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,.10)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, S.mw, S.mh); }
+  s.at.needsUpdate = true;
+}
+function skinTopper(id) {
+  const s = shared[id], S = SLOTSKIN[id]; if (!S.imgTop) return;
+  const x = s.topper.getContext('2d'), sc = s.topper.width / S.tw; x.setTransform(sc, 0, 0, sc, 0, 0);
+  x.drawImage(S.imgTop, 0, 0, S.tw, S.th);
+  if (S.jp) skinJP(x, S, S.jp, 0);
+  s.tt.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------- the cabinet: portrait screen, top box, LED bezel
+const _skinGeo = {};
+function skinHead(addS, S, gm) {
+  const D = S.dims, th = GAMES[S.id].theme, hw = Math.max(0.66, D.w + 0.08), cab = cabMat();
+  const led = S.led || (S.led = new THREE.MeshBasicMaterial({ color: new THREE.Color(...(th.led || [1, 0.3, 0.1])).multiplyScalar(1.4) }));
+  addS(new THREE.BoxGeometry(hw, D.headH, 0.3), cab, 0, D.headCy, -0.12);
+  addS(new THREE.BoxGeometry(D.w + 0.04, 0.012, 0.012), led, 0, D.cy + D.h / 2 + 0.01, 0.047); addS(new THREE.BoxGeometry(D.w + 0.04, 0.012, 0.012), led, 0, D.cy - D.h / 2 - 0.01, 0.047);
+  for (const sx of [-1, 1]) { addS(new THREE.BoxGeometry(0.012, D.h + 0.04, 0.012), led, sx * (D.w / 2 + 0.01), D.cy, 0.047); addS(new THREE.BoxGeometry(0.016, D.headH, 0.03), led, sx * hw / 2, D.headCy, 0.03); }
+  if (S.imgTop) {
+    addS(new THREE.BoxGeometry(hw, D.th + 0.07, 0.22), cab, 0, D.topCy, -0.15);
+    addS(new THREE.PlaneGeometry(D.tw, D.th), gm.topper, 0, D.topCy, -0.035);
+    addS(new THREE.BoxGeometry(hw, 0.03, 0.2), led, 0, D.topCy + D.th / 2 + 0.05, -0.15);
+  } else addS(new THREE.BoxGeometry(hw, 0.05, 0.2), led, 0, D.headCy + D.headH / 2 + 0.03, -0.12);
+  const bm = S.bellyMat || (S.bellyMat = new THREE.MeshBasicMaterial({ map: S.belly })); bm.color.setScalar(0.85);
+  addS(new THREE.PlaneGeometry(0.58, 0.29), bm, 0, 0.6, 0.312);
+}
+function skinScreen(add, S) {
+  const D = S.dims, mat = new THREE.MeshBasicMaterial({ map: shared[S.id].at }); mat.color.setScalar(1.12);
+  return add(new THREE.PlaneGeometry(D.w, D.h), mat, 0, D.cy, 0.04, 0);
+}
+
+// the Lightning Dollar Link header sign over the four-machine bank (the supplied banner, as is)
+function buildSkinSigns() {
+  const img = SLOTSKIN.bannerImg; if (!img) return;
+  const t = new THREE.Texture(img); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true;
+  const w = 4.36, h = w * img.height / img.width;
+  signPlane(t, w, h, 10.44, 2.8, -17.82, 0, { toneMapped: false, intensity: 1.1 });
+  addBoxS(SB, MAT.blackPlastic, 10.44, 2.8, -17.86, w + 0.08, h + 0.08, 0.04);
+}
+
+// ---- src/24-classics.js ----
+
+// =====================================================================
+//  PUB CLASSICS: the machines that have been in Aussie pubs and clubs for decades.
+//  Queen of the Nile (the free-games-times-three original), Big Red, Buffalo, plus 5 Dragons /
+//  Where's the Gold re-titles of the house games.  Original art, same engine.
+// =====================================================================
+Object.assign(GAMES, {
+  qotn: {
+    id: 'qotn', name: 'QUEEN OF THE NILE', sub: 'CLASSIC', feature: 'freegames', payScale: 4.7, freeMult: 3,
+    theme: { bg1: '#06143a', bg2: '#1a5aa8', frame: '#f6c445', accent: '#e8a020', glow: '#ffe9a0', text: '#fff3cf', scene: 'nile' },
+    tag: '3 PYRAMIDS = FREE GAMES · EVERY FREE GAME WIN PAYS TRIPLE', syms: ['9', '10', 'J', 'Q', 'K', 'A', 'ANKH', 'SCARAB', 'EYE', 'PHARAOH', 'WILD', 'PYRAMID'],
+    pays: Object.assign({}, ROYAL_PAYS, { ANKH: [0, 0, 0, 12, 40, 150], SCARAB: [0, 0, 0, 15, 50, 200], EYE: [0, 0, 0, 20, 75, 300], PHARAOH: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
+    base: { '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, ANKH: 6, SCARAB: 5, EYE: 4.5, PHARAOH: 3.5, WILD: 2.4, PYRAMID: 2.2 }, noWild: [0], wild: 'WILD', scatter: 'PYRAMID',
+    wildArt(x, g) { // Cleopatra
+      rr(x, -78, -48, 156, 96, 18); x.fillStyle = lg(x, 0, -48, 0, 48, ['#1a5aa8', '#06143a']); x.fill(); x.lineWidth = 7; x.strokeStyle = g.theme.frame; x.stroke();
+      x.fillStyle = '#1a1a22'; x.beginPath(); x.moveTo(-30, -30); x.lineTo(30, -30); x.lineTo(38, 40); x.lineTo(-38, 40); x.closePath(); x.fill();
+      x.fillStyle = '#e8b890'; x.beginPath(); x.ellipse(0, -2, 20, 26, 0, 0, 7); x.fill();
+      x.fillStyle = lg(x, 0, -40, 0, -20, ['#ffe27a', '#c08a10']); x.fillRect(-32, -36, 64, 12);
+      x.fillStyle = '#0a1a3a'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 8, -4, 5, 3, 0, 0, 7); x.fill(); } x.fillStyle = '#c0282d'; x.beginPath(); x.ellipse(0, 12, 7, 3, 0, 0, 7); x.fill();
+      outlineText(x, 'WILD', 0, 36, 30, lg(x, 0, 20, 0, 44, ['#fffbe0', g.theme.glow, g.theme.accent]), '#1a0802', 7);
+    }
+  },
+  bigred: {
+    id: 'bigred', name: 'BIG RED', sub: 'CLASSIC', feature: 'freegames', payScale: 4.5, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
+    theme: { bg1: '#3a0d05', bg2: '#c8421a', frame: '#f6c445', accent: '#ff7a18', glow: '#ffd36b', text: '#fff3cf', scene: 'outback' },
+    tag: '3 ULURU = FREE GAMES · WILD ROOS MULTIPLY x2 x3 x5', syms: ['9', '10', 'J', 'Q', 'K', 'A', 'BOOM', 'KOALA', 'EMU', 'ROO', 'WILD', 'ULURU'],
+    pays: Object.assign({}, ROYAL_PAYS, { BOOM: [0, 0, 0, 12, 40, 150], KOALA: [0, 0, 0, 15, 50, 200], EMU: [0, 0, 0, 20, 75, 300], ROO: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
+    base: { '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, BOOM: 6, KOALA: 5, EMU: 4.5, ROO: 3.5, WILD: 2.4, ULURU: 2.2 }, noWild: [0], wild: 'WILD', scatter: 'ULURU'
+  },
+  buffalo: {
+    id: 'buffalo', name: 'BUFFALO', sub: 'GOLD', feature: 'freegames', payScale: 4.55, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
+    theme: { bg1: '#2a0a14', bg2: '#d8601a', frame: '#e8c060', accent: '#c8301a', glow: '#ffd890', text: '#fff0d8', scene: 'prairie' },
+    tag: '3 GOLD PAWS = FREE GAMES · WILD SUNSETS MULTIPLY x2 x3 x5', syms: ['9', '10', 'J', 'Q', 'K', 'A', 'COUGAR', 'WOLF', 'EAGLE', 'BUFFALO', 'WILD', 'PAW'],
+    pays: Object.assign({}, ROYAL_PAYS, { COUGAR: [0, 0, 0, 12, 40, 150], WOLF: [0, 0, 0, 15, 50, 200], EAGLE: [0, 0, 0, 20, 75, 300], BUFFALO: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
+    base: { '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, COUGAR: 6, WOLF: 5, EAGLE: 4.5, BUFFALO: 3.5, WILD: 2.4, PAW: 2.2 }, noWild: [0], wild: 'WILD', scatter: 'PAW',
+    wildArt(x, g) {
+      rr(x, -78, -48, 156, 96, 18); x.fillStyle = lg(x, 0, -48, 0, 48, ['#ff9a3a', '#7a1a0a']); x.fill(); x.lineWidth = 7; x.strokeStyle = g.theme.frame; x.stroke();
+      x.fillStyle = rg(x, 0, 14, 4, 52, ['#fff6a0', '#ffb02a', '#e0501a']); x.beginPath(); x.arc(0, 14, 44, Math.PI, 0); x.fill();
+      x.fillStyle = '#3a0a10'; x.beginPath(); x.moveTo(-78, 30); x.lineTo(-40, 6); x.lineTo(-20, 22); x.lineTo(10, 0); x.lineTo(40, 24); x.lineTo(78, 8); x.lineTo(78, 48); x.lineTo(-78, 48); x.fill();
+      outlineText(x, 'WILD', 0, -18, 38, lg(x, 0, -34, 0, -2, ['#fffbe0', g.theme.glow, g.theme.accent]), '#1a0802', 8);
+    }
+  }
+});
+// the house games under their pub names
+Object.assign(GAMES.dragon, { name: '5 DRAGONS', sub: 'CLASSIC', wildMults: [40, 35, 18, 7], payScale: 3.75 });
+Object.assign(GAMES.outback, { name: "WHERE'S THE GOLD", sub: 'LINK', payScale: 6.1 });
+
+// wild art can be game-specific
+const _wildArt = ART.WILD; ART.WILD = (x, g) => g.wildArt ? g.wildArt(x, g) : _wildArt(x, g);
+
+Object.assign(ART, {
+  ANKH(x) {
+    x.fillStyle = lg(x, 0, -60, 0, 60, ['#fff0a0', '#e8b020', '#8a5a08']); x.strokeStyle = '#2a1604'; x.lineWidth = 5;
+    x.beginPath(); x.ellipse(0, -30, 20, 28, 0, 0, 7); x.ellipse(0, -30, 9, 17, 0, 0, 7, true); x.fill('evenodd'); x.stroke();
+    rr(x, -9, -4, 18, 70, 5); x.fill(); x.stroke(); rr(x, -40, 6, 80, 17, 6); x.fill(); x.stroke();
+  },
+  SCARAB(x) {
+    x.fillStyle = rg(x, 0, 0, 4, 70, ['#4ad8d0', '#1a8a9a', '#0a3a5a']); x.beginPath(); x.ellipse(0, 6, 42, 52, 0, 0, 7); x.fill(); x.lineWidth = 5; x.strokeStyle = '#06203a'; x.stroke();
+    x.strokeStyle = '#06203a'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -46); x.lineTo(0, 58); x.stroke();
+    x.fillStyle = '#e8b020'; x.beginPath(); x.ellipse(0, -46, 20, 12, 0, 0, 7); x.fill(); x.stroke();
+    x.strokeStyle = '#e8b020'; x.lineWidth = 5; for (const s of [-1, 1]) for (const dy of [-18, 8, 34]) { x.beginPath(); x.moveTo(s * 40, dy); x.lineTo(s * 62, dy + 10); x.stroke(); }
+  },
+  EYE(x) {
+    x.fillStyle = '#f4f0e0'; x.strokeStyle = '#06203a'; x.lineWidth = 6;
+    x.beginPath(); x.moveTo(-64, 0); x.quadraticCurveTo(0, -56, 64, 0); x.quadraticCurveTo(0, 44, -64, 0); x.fill(); x.stroke();
+    x.fillStyle = rg(x, 0, 0, 2, 22, ['#101010', '#1a4a9a', '#e8b020']); x.beginPath(); x.arc(0, -2, 20, 0, 7); x.fill(); x.stroke();
+    x.fillStyle = '#fff'; x.beginPath(); x.arc(6, -10, 5, 0, 7); x.fill();
+    x.strokeStyle = '#e8b020'; x.lineWidth = 6; x.beginPath(); x.moveTo(-60, 4); x.quadraticCurveTo(-70, 30, -40, 56); x.stroke(); x.beginPath(); x.moveTo(20, 24); x.quadraticCurveTo(40, 40, 36, 62); x.stroke();
+  },
+  PHARAOH(x) {
+    x.fillStyle = lg(x, 0, -64, 0, 64, ['#2a60c8', '#f6d040', '#2a60c8', '#f6d040']);
+    x.beginPath(); x.moveTo(-44, -56); x.lineTo(44, -56); x.lineTo(56, 56); x.lineTo(-56, 56); x.closePath(); x.fill(); x.lineWidth = 5; x.strokeStyle = '#1a0a02'; x.stroke();
+    x.fillStyle = '#d8a070'; x.beginPath(); x.ellipse(0, -4, 26, 34, 0, 0, 7); x.fill(); x.stroke();
+    x.fillStyle = '#0a0a14'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 10, -10, 6, 3.5, 0, 0, 7); x.fill(); } x.fillRect(-9, 12, 18, 4);
+    x.fillStyle = '#d8a020'; x.beginPath(); x.moveTo(-10, 34); x.lineTo(10, 34); x.lineTo(6, 56); x.lineTo(-6, 56); x.fill();
+  },
+  PYRAMID(x) {
+    x.save(); x.beginPath(); x.arc(0, 0, 64, 0, 7); x.clip();
+    x.fillStyle = lg(x, 0, -64, 0, 64, ['#1a2a6a', '#ff9a3a', '#ffe08a']); x.fillRect(-64, -64, 128, 128);
+    x.fillStyle = '#fff6b0'; x.beginPath(); x.arc(30, -18, 15, 0, 7); x.fill();
+    x.fillStyle = lg(x, -40, 0, 40, 40, ['#e8b050', '#a8721a']); x.beginPath(); x.moveTo(-58, 40); x.lineTo(0, -34); x.lineTo(58, 40); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(80,40,0,.5)'; x.beginPath(); x.moveTo(0, -34); x.lineTo(58, 40); x.lineTo(14, 40); x.closePath(); x.fill();
+    x.fillStyle = '#c8943a'; x.fillRect(-64, 38, 128, 30); x.restore();
+    x.lineWidth = 5; x.strokeStyle = '#f6c445'; x.beginPath(); x.arc(0, 0, 64, 0, 7); x.stroke();
+  },
+  EMU(x) {
+    x.fillStyle = rg(x, 0, 0, 10, 64, ['#fff6a0', '#d8b070', '#8a5a2a']); x.beginPath(); x.arc(0, 0, 62, 0, 7); x.fill();
+    x.fillStyle = '#4a3a2a'; x.beginPath(); x.ellipse(-8, 24, 36, 24, 0, 0, 7); x.fill();
+    x.strokeStyle = '#4a3a2a'; x.lineWidth = 9; x.lineCap = 'round'; x.beginPath(); x.moveTo(16, 14); x.quadraticCurveTo(40, -6, 26, -34); x.stroke();
+    x.fillStyle = '#4a3a2a'; x.beginPath(); x.ellipse(28, -38, 15, 10, -0.4, 0, 7); x.fill(); x.fillStyle = '#fff'; x.beginPath(); x.arc(32, -42, 4, 0, 7); x.fill(); x.fillStyle = '#111'; x.beginPath(); x.arc(33, -42, 2, 0, 7); x.fill();
+    x.fillStyle = '#e8a020'; x.beginPath(); x.moveTo(40, -36); x.lineTo(54, -34); x.lineTo(40, -30); x.fill();
+    x.strokeStyle = '#6a4a22'; x.lineWidth = 5; for (const dx of [-16, 0]) { x.beginPath(); x.moveTo(dx, 44); x.lineTo(dx + 4, 66); x.stroke(); }
+    x.lineWidth = 5; x.strokeStyle = '#7a2a08'; x.beginPath(); x.arc(0, 0, 62, 0, 7); x.stroke();
+  },
+  BUFFALO(x) {
+    x.fillStyle = rg(x, -6, -6, 6, 70, ['#8a5a3a', '#4a2a16', '#1a0c06']); x.beginPath(); x.ellipse(0, 6, 56, 54, 0, 0, 7); x.fill(); x.lineWidth = 5; x.strokeStyle = '#0a0402'; x.stroke();
+    x.strokeStyle = '#eadcc0'; x.lineWidth = 11; x.lineCap = 'round'; for (const s of [-1, 1]) { x.beginPath(); x.moveTo(s * 44, -22); x.quadraticCurveTo(s * 70, -34, s * 62, -62); x.stroke(); }
+    x.fillStyle = '#2a1608'; x.beginPath(); x.ellipse(0, 30, 24, 20, 0, 0, 7); x.fill(); x.fillStyle = '#0a0402'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 9, 32, 4, 6, 0, 0, 7); x.fill(); }
+    x.fillStyle = '#f6d040'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 24, -4, 7, 5, 0, 0, 7); x.fill(); } x.fillStyle = '#000'; for (const s of [-1, 1]) { x.beginPath(); x.arc(s * 24, -4, 2.5, 0, 7); x.fill(); }
+  },
+  WOLF(x) {
+    x.fillStyle = rg(x, 0, 0, 4, 64, ['#e0e4ea', '#8a909c', '#3a3e48']); x.beginPath(); x.moveTo(-50, -54); x.lineTo(-28, -30); x.lineTo(28, -30); x.lineTo(50, -54); x.lineTo(54, 4); x.lineTo(14, 56); x.lineTo(-14, 56); x.lineTo(-54, 4); x.closePath(); x.fill(); x.lineWidth = 5; x.strokeStyle = '#14161a'; x.stroke();
+    x.fillStyle = '#f2f4f8'; x.beginPath(); x.moveTo(-14, 26); x.lineTo(14, 26); x.lineTo(8, 56); x.lineTo(-8, 56); x.fill();
+    x.fillStyle = '#f6c820'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 20, -6, 8, 5, s * 0.3, 0, 7); x.fill(); } x.fillStyle = '#000'; for (const s of [-1, 1]) { x.beginPath(); x.arc(s * 20, -6, 3, 0, 7); x.fill(); }
+    x.fillStyle = '#111'; x.beginPath(); x.ellipse(0, 36, 9, 6, 0, 0, 7); x.fill();
+  },
+  EAGLE(x) {
+    x.fillStyle = rg(x, 0, 0, 4, 64, ['#f6f2e8', '#c8b898', '#6a4a22']); x.beginPath(); x.ellipse(0, -4, 34, 44, 0, 0, 7); x.fill(); x.lineWidth = 5; x.strokeStyle = '#1a0e06'; x.stroke();
+    x.fillStyle = '#4a2a10'; for (const s of [-1, 1]) { x.beginPath(); x.moveTo(s * 30, 0); x.quadraticCurveTo(s * 80, -10, s * 74, 54); x.quadraticCurveTo(s * 50, 30, s * 30, 40); x.fill(); x.stroke(); }
+    x.fillStyle = '#f6b81a'; x.beginPath(); x.moveTo(-9, -4); x.lineTo(9, -4); x.lineTo(0, 22); x.fill(); x.stroke();
+    x.fillStyle = '#fff'; for (const s of [-1, 1]) { x.beginPath(); x.arc(s * 14, -16, 6, 0, 7); x.fill(); x.fillStyle = '#000'; x.beginPath(); x.arc(s * 14, -16, 3, 0, 7); x.fill(); x.fillStyle = '#fff'; }
+  },
+  COUGAR(x) {
+    x.fillStyle = rg(x, 0, 0, 4, 64, ['#f0d098', '#c89858', '#7a4a1a']); x.beginPath(); x.ellipse(0, 4, 50, 48, 0, 0, 7); x.fill(); x.lineWidth = 5; x.strokeStyle = '#2a1608'; x.stroke();
+    for (const s of [-1, 1]) { x.fillStyle = '#c89858'; x.beginPath(); x.moveTo(s * 30, -34); x.lineTo(s * 46, -62); x.lineTo(s * 52, -20); x.fill(); x.stroke(); }
+    x.fillStyle = '#f2e6c8'; x.beginPath(); x.ellipse(0, 28, 22, 16, 0, 0, 7); x.fill();
+    x.fillStyle = '#9ad040'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 20, -6, 8, 5, 0, 0, 7); x.fill(); } x.fillStyle = '#000'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(s * 20, -6, 2, 5, 0, 0, 7); x.fill(); }
+    x.fillStyle = '#c05a4a'; x.beginPath(); x.moveTo(-7, 16); x.lineTo(7, 16); x.lineTo(0, 26); x.fill();
+  },
+  PAW(x) {
+    x.fillStyle = rg(x, -10, -10, 4, 66, ['#fff6a0', '#f0b020', '#a86a08']); x.beginPath(); x.arc(0, 0, 62, 0, 7); x.fill(); x.lineWidth = 6; x.strokeStyle = '#6a3a04'; x.stroke();
+    x.fillStyle = '#3a1a04'; x.beginPath(); x.ellipse(0, 16, 24, 20, 0, 0, 7); x.fill();
+    for (const [dx, dy] of [[-30, -10], [-12, -30], [12, -30], [30, -10]]) { x.beginPath(); x.ellipse(dx, dy, 9, 12, dx * 0.02, 0, 7); x.fill(); }
+  }
+});
+
+// backdrops
+const _drawScene = drawScene;
+drawScene = function (x, scene, t) {
+  if (scene === 'nile') {
+    x.fillStyle = lg(x, 0, 0, 0, SH, ['#0a1a4a', '#2a6ac8', '#f6c070']); x.fillRect(0, 0, SW, SH);
+    x.fillStyle = '#fff'; for (let i = 0; i < 40; i++) { x.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + i); x.fillRect((i * 151) % SW, (i * 67) % 260, 2, 2); } x.globalAlpha = 1;
+    x.fillStyle = rg(x, 800, 250, 10, 120, ['#fff6b0', 'rgba(255,230,140,.4)', 'rgba(255,200,100,0)']); x.beginPath(); x.arc(800, 250, 120, 0, 7); x.fill();
+    for (const [px, s] of [[160, 1.2], [420, 0.9], [650, 1.6]]) { x.fillStyle = '#c8943a'; x.beginPath(); x.moveTo(px - 110 * s, 470); x.lineTo(px, 470 - 150 * s); x.lineTo(px + 110 * s, 470); x.fill(); x.fillStyle = 'rgba(90,50,0,.45)'; x.beginPath(); x.moveTo(px, 470 - 150 * s); x.lineTo(px + 110 * s, 470); x.lineTo(px + 20 * s, 470); x.fill(); }
+    x.fillStyle = '#d8b060'; x.fillRect(0, 470, SW, 300);
+  } else if (scene === 'prairie') {
+    x.fillStyle = lg(x, 0, 0, 0, SH, ['#2a0a2a', '#d8501a', '#ffc860']); x.fillRect(0, 0, SW, SH);
+    x.fillStyle = rg(x, 520, 330, 10, 200, ['#fff6a0', 'rgba(255,200,80,.5)', 'rgba(255,160,40,0)']); x.beginPath(); x.arc(520, 330, 200, 0, 7); x.fill();
+    x.fillStyle = '#3a1020'; x.beginPath(); x.moveTo(0, 470); for (let i = 0; i <= 8; i++) x.lineTo(i * SW / 8, 340 + ((i * 53) % 90)); x.lineTo(SW, 470); x.fill();
+    x.fillStyle = '#1a0610'; x.fillRect(0, 470, SW, 300);
+  } else if (scene === 'outback') {
+    x.fillStyle = lg(x, 0, 0, 0, SH, ['#4a1a3a', '#ff6a3a', '#ffcf5a']); x.fillRect(0, 0, SW, SH);
+    x.fillStyle = '#fff3a0'; x.beginPath(); x.arc(760, 260, 70, 0, 7); x.fill();
+    x.fillStyle = '#a0361a'; x.beginPath(); x.moveTo(0, 470); x.bezierCurveTo(120, 380, 260, 350, 420, 360); x.lineTo(640, 360); x.bezierCurveTo(780, 360, 900, 400, SW, 470); x.fill();
+    x.fillStyle = '#5a2a10'; x.fillRect(0, 470, SW, 300);
+  } else _drawScene(x, scene, t);
+};
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -9059,7 +9423,7 @@ async function boot() {
     buildShared(); buildInterior(); buildBarService(); buildDartboard();
     buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build(); Juke.build();
     setLoad(0.7, 'Wiring up the pokies…'); await tick();
-    MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
+    MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i)); buildSkinSigns();
     buildAtmosphere();
     SB.flush(scene, true, true); SBX.flush(scene, true, true);
     setLoad(0.8, 'Hiring the locals…'); await tick();
@@ -9089,4 +9453,7 @@ async function boot() {
 requestAnimationFrame(frame);
 boot();
 window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__music = Music; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
+window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
+window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
+window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
 window.__game = { colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

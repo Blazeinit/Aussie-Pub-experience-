@@ -1,0 +1,10 @@
+boot ok
+goals [{"id":"garden","done":false,"failed":false},{"id":"feed","done":false,"failed":false},{"id":"early","done":false,"failed":false}]
+shot 01_hud_goals
+shot 02_goal_done
+rep 20 Local limit 40
+tab 6.5 wallet 120
+shot 03_lastcall_banner
+shot 04_lastcall_panel
+shot 05_summary
+errors 

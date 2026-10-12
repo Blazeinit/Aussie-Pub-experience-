@@ -349,8 +349,9 @@ function standUp() {
 }
 function seatCam() {
   const m = player.seated;
-  const eye = m.seatW.clone().add(V3(0, 1.37, 0)).addScaledVector(m.fw, 0.06);
-  const look = m.screenW.clone().add(V3(0, -0.19, 0));
+  const D = m.dims || _STD_DIMS;
+  const eye = m.seatW.clone().add(V3(0, D.eyeY, 0)).addScaledVector(m.fw, 0.06 + D.eyeBack);
+  const look = m.screenW.clone().add(V3(0, D.lookY != null ? D.lookY - m.screenW.y : -0.19, 0));
   const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, look, V3(0, 1, 0)));
   return { pos: eye, q };
 }
@@ -369,7 +370,7 @@ function updatePlayer(dt, t) {
   vm.lagV.x += -vm.lag.x * 150 * dt; vm.lagV.y += -vm.lag.y * 150 * dt; vm.lagV.multiplyScalar(Math.exp(-12 * dt));
   vm.lag.addScaledVector(vm.lagV, dt); vm.lag.clampLength(0, 0.04);
   let moving = false;
-  const wantFov = player.seated ? 55 : settings.fov;
+  const wantFov = player.seated ? (player.seated.dims ? player.seated.dims.fov : 55) : settings.fov;
   if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = damp(camera.fov, wantFov, 5, dt); camera.updateProjectionMatrix(); }
   bloom.strength = damp(bloom.strength, player.seated ? Math.min(0.22, settings.bloomStr) : settings.bloomStr, 4, dt);
   if (player.seated) {

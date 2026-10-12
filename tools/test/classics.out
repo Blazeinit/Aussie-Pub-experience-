@@ -1,0 +1,17 @@
+boot ok
+shot qotn_a_idle
+shot qotn_b_stopped
+qotn state spinning free true left 7
+shot qotn_c_free
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+page.evaluate: Target page, context or browser has been closed
+    at Object.ev (/home/user/Aussie-Pub-experience-/tools/test/harness.mjs:40:24)
+    at /home/user/Aussie-Pub-experience-/tools/test/classics.mjs:19:11 {
+  log: []
+}
+
+Node.js v22.22.0
+DONE

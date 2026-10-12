@@ -44,11 +44,12 @@ const PokieFX = {
     this.ledMat.uniforms.uA.value.set(th.glow); this.ledMat.uniforms.uB.value.set(th.accent);
     // LED light bars hugging the screen and down the cabinet sides, plus an arc over the topper
     const bar = (w, h, x, y, z, rz = 0) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.ledMat); p.position.set(x, y, z); p.rotation.z = rz; p.renderOrder = 4; g.add(p); return p; };
-    for (const s of [-1, 1]) { bar(0.03, 0.62, s * 0.322, 1.44, 0.05); bar(0.026, 0.9, s * 0.338, 0.62, 0.315); }
-    bar(0.03, 0.66, 0, 1.69, 0.05, Math.PI / 2); bar(0.03, 0.66, 0, 1.19, 0.05, Math.PI / 2);
+    const D = m.dims || _STD_DIMS;
+    for (const s of [-1, 1]) { bar(0.03, D.h + 0.18, s * (D.w / 2 + 0.032), D.cy, 0.05); bar(0.026, 0.9, s * 0.338, 0.62, 0.315); }
+    bar(0.03, D.w + 0.08, 0, D.cy + D.h / 2 + 0.05, 0.05, Math.PI / 2); bar(0.03, D.w + 0.08, 0, D.cy - D.h / 2 - 0.05, 0.05, Math.PI / 2);
     // glass + glare over the screen
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glassMat); glass.position.set(0, 1.44, 0.047); glass.renderOrder = 3; g.add(glass);
-    const glare = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glareMat); glare.position.set(0, 1.44, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(D.w + 0.02, D.h + 0.02), this.glassMat); glass.position.set(0, D.cy, 0.047); glass.renderOrder = 3; g.add(glass);
+    const glare = new THREE.Mesh(new THREE.PlaneGeometry(D.w + 0.02, D.h + 0.02), this.glareMat); glare.position.set(0, D.cy, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
     // real illuminated push-buttons on the deck: a chrome bezel, a solid lit cap and its printed legend
     this.caps = [];
     for (const b of DECK_BTNS) {

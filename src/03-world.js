@@ -812,10 +812,11 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  const link = ['moon', 'dynasty', 'panda'];
-  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: link[i % 3], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
-  for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false });
-  for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false });
+  // back wall: a Dragon Link bank (Autumn Moon, Golden Century, Panda Magic, Happy & Prosperous) beside a Lightning Dollar Link bank
+  ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
+  // island: Konami Fire Mountain and the Thunder Empire pair on the front, the house classics on the back
+  ['fm', 'te1', 'te2'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
+  ['qotn', 'bigred', 'buffalo'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
   addColBox(5.0, 8.2, -12.75, -11.25);
   SB.add(G.box, MAT.blackPlastic, 6.7, 1.0, -12, 0, 0, 0, 3.4, 2.0, 0.12);
   // jackpot LED board above island

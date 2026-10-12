@@ -1,0 +1,9 @@
+boot ok
+shot bucks_a
+bucks ticker=  cur= true npcs= 22
+shot bucks_dare
+after pickup {"state":"go","stake":20,"t":24.433333333333305,"tick":2.4666666666666686}
+shot bucks_result
+wallet 160 log ["A bucks party rolled in","A bucks party rolled in","Skulled a schooner for the bucks party (+$40 net)"]
+skull state null items 0
+errors 

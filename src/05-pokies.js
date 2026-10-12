@@ -278,11 +278,16 @@ const ART = {
   },
 };
 function buildSymbolCache(g) {
-  const out = {};
+  const out = {}, S = g.skin ? SLOTSKIN[g.id] : null;
   for (const s of g.syms) {
     const c = mkCanvas(CW, CH), x = c.getContext('2d');
-    x.translate(CW / 2, CH / 2);
-    if (ROYAL_COL[s]) ART.royal(x, s); else if (s === 'WILD') ART.WILD(x, g); else ART[s](x, g);
+    const m = S && S.sprites.map[s];
+    if (m) x.drawImage(S.imgSprites, m[0], m[1], m[2], m[3], 0, 0, CW, CH);   // the supplied artwork, cut out of the screenshot
+    else {
+      x.translate(CW / 2, CH / 2);
+      if (ROYAL_COL[s]) ART.royal(x, s); else if (s === 'WILD') ART.WILD(x, g); else if (ART[s]) ART[s](x, g);
+      else { x.fillStyle = g.theme.accent; x.beginPath(); x.arc(0, 0, 56, 0, 7); x.fill(); outlineText(x, String(s).slice(0, 4), 0, 4, 36, '#fff', '#000', 6); }
+    }
     const b = mkCanvas(CW, CH), bx = b.getContext('2d');
     for (let k = -5; k <= 5; k++) { bx.globalAlpha = 0.16; bx.drawImage(c, 0, k * 7); }
     out[s] = { sharp: c, blur: b };
@@ -335,13 +340,16 @@ function drawJackpotBar(x, g, bet, t, y = 104) {
   });
 }
 function buildShared() {
+  skinInit();
   for (const id in GAMES) {
     const g = GAMES[id]; buildSymbolCache(g);
-    const ac = mkCanvas(512, 384), tc = mkCanvas(512, 256);
+    const S = g.skin && SLOTSKIN[id];
+    const ac = S ? mkCanvas(Math.round(S.mw * S.k * 0.5), Math.round(S.mh * S.k * 0.5)) : mkCanvas(512, 384), tc = S ? mkCanvas(S.imgTop ? Math.round(S.tw * 0.75) : 64, S.imgTop ? Math.round(S.th * 0.75) : 64) : mkCanvas(512, 256);
     shared[id] = { attract: ac, at: canvasTex(ac, 1, 1), topper: tc, tt: canvasTex(tc, 1, 1), t: Math.random() * 10 };
   }
 }
 function drawAttract(id, dt) {
+  if (GAMES[id].skin) return skinAttract(id, dt);
   const s = shared[id], g = GAMES[id], x = s.attract.getContext('2d'); s.t += dt;
   x.setTransform(0.5, 0, 0, 0.5, 0, 0);
   drawBG(x, g, s.t); drawLogo(x, g, SW / 2, 54, 0.85, s.t); drawJackpotBar(x, g, 0, s.t, 140);
@@ -355,6 +363,7 @@ function drawAttract(id, dt) {
   s.at.needsUpdate = true;
 }
 function drawTopper(id) {
+  if (GAMES[id].skin) return skinTopper(id);
   const s = shared[id], g = GAMES[id], x = s.topper.getContext('2d');
   x.setTransform(0.5, 0, 0, 0.5, 0, 0);
   x.fillStyle = rg(x, SW / 2, 256, 30, 700, [g.theme.bg2, g.theme.bg1, '#000']); x.fillRect(0, 0, SW, 512);
@@ -458,8 +467,10 @@ function buildMachineMesh(def, idx) {
   const add = (geo, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx; root.add(o); return o; };
   // static parts go into the shared static batch (merged per material across ALL machines)
   const addS = (geo, m, x, y, z, rx = 0) => { const lm = new THREE.Matrix4().compose(V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0)), V3(1, 1, 1)); SB.addM(geo, m, new THREE.Matrix4().multiplyMatrices(root.matrixWorld, lm)); };
+  const S = g.skin ? SLOTSKIN[def.game] : null, D = S ? S.dims : _STD_DIMS;
   addS(MGEO.body, cab, 0, 0.46, 0);
   addS(MGEO.deckBox, cab, 0, 0.98, 0.16, -0.25);
+  if (S) skinHead(addS, S, gm); else {
   addS(MGEO.head, cab, 0, 1.42, -0.12);
   addS(MGEO.top, cab, 0, 2.08, -0.15);
   for (const sx of [-0.335, 0.335]) addS(MGEO.strip, gm.accent, sx, 1.45, 0.03);
@@ -468,6 +479,7 @@ function buildMachineMesh(def, idx) {
   addS(MGEO.belly, gm.belly, 0, 0.6, 0.312);
   addS(MGEO.plate, gm.plate, 0, 1.148, 0.0315);
   for (const [x, y, k] of [[0, 1.664, 'bezH'], [0, 1.216, 'bezH'], [-0.299, 1.44, 'bezV'], [0.299, 1.44, 'bezV'], [0, 0.75, 'bezB'], [0, 0.45, 'bezB']]) addS(MGEO[k], gm.bez, x, y, y < 1 ? 0.312 : 0.044);
+  }
   addS(MGEO.note, MAT.chrome, 0.2, 0.86, 0.32);
   addS(MGEO.ledge, MAT.darkWood, -0.45, 0.98, 0.18);
   if (def.smoke) { addS(MGEO.ashtray, MAT.chrome, 0.45, 0.99, 0.18); addS(MGEO.ledge, MAT.darkWood, 0.45, 0.965, 0.18); }
@@ -477,7 +489,7 @@ function buildMachineMesh(def, idx) {
   { const bm = new THREE.Matrix4().compose(V3(0, 0.005, 0.25), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), V3(1.0, 1.7, 1)); SB.addM(G.plane, MAT.blob, new THREE.Matrix4().multiplyMatrices(root.matrixWorld, bm)); }
   // live parts: the screen, the clickable deck and the pressable SPIN button
   const scrMat = new THREE.MeshBasicMaterial({ map: shared[def.game].at }); scrMat.color.setScalar(1.12);
-  const scr = add(MGEO.screen, scrMat, 0, 1.44, 0.04, 0);
+  const scr = S ? skinScreen(add, S) : add(MGEO.screen, scrMat, 0, 1.44, 0.04, 0);
   const deck = add(MGEO.deck, deckMat(), 0, 1.0295, 0.1476, -Math.PI / 2 - 0.25);
   const spinB = new THREE.Mesh(MGEO.spin, spinMat()); spinB.position.set(0.241, 0, 0.012); deck.add(spinB);
   const btns = [deck, deck, deck, deck, deck, spinB];
@@ -486,7 +498,7 @@ function buildMachineMesh(def, idx) {
   const fw = toW(0, 0, 1).sub(def.pos);
   addColBox(...(() => { const c = toW(0, 0, -0.02); const w = Math.abs(fw.x) > 0.5 ? 0.7 : 0.72, d = Math.abs(fw.x) > 0.5 ? 0.72 : 0.7; return [c.x - w / 2, c.x + w / 2, c.z - d / 2, c.z + d / 2]; })());
   const seatW = toW(0, 0, 0.82);
-  const m = new Machine(def, idx, { root, scr, btns, deck, seatW, fw, ledge: toW(-0.45, 0.995, 0.18), ash: toW(0.45, 1.01, 0.18), screenW: toW(0, 1.44, 0.04), ashLocal: V3(0.45, 1.01, 0.18) });
+  const m = new Machine(def, idx, { root, scr, btns, deck, seatW, fw, ledge: toW(-0.45, 0.995, 0.18), ash: toW(0.45, 1.01, 0.18), screenW: toW(0, D.cy, 0.04), dims: D, ashLocal: V3(0.45, 1.01, 0.18) });
   MACHINES.push(m);
   addSpot({ kind: 'pokie', pos: seatW.clone(), ry: def.ry + Math.PI, sitH: 0.7, area: def.smoke ? 'terrace' : 'gaming', machine: m, smoke: def.smoke });
   addInteract({ id: 'machine' + idx, pos: toW(0, 1.3, 0.3), r: 1.7, label: () => m.occupiedBy ? `${g.name} ${g.sub} — in use` : `Sit at ${g.name} ${g.sub}${def.smoke ? '  (smoking area)' : ''}`, enabled: () => !m.occupiedBy, action: () => Game.sitAt(m) });
@@ -497,7 +509,7 @@ function buildMachineMesh(def, idx) {
 class Machine {
   constructor(def, idx, parts) {
     Object.assign(this, parts);
-    this.def = def; this.idx = idx; this.game = GAMES[def.game]; this.mode = 'idle'; this.occupiedBy = null;
+    this.def = def; this.idx = idx; this.game = GAMES[def.game]; this.skin = this.game.skin ? SLOTSKIN[def.game] : null; this.mode = 'idle'; this.occupiedBy = null;
     this.credit = 0; this.betIdx = 1; this.state = 'ready'; this.t = 0; this.st = 0;
     this.reels = [0, 1, 2, 3, 4].map(() => ({ pos: 0, v: 0, strip: {}, phase: 'idle', t0: 0, p0: 0, P: 0, dur: 0, stopAt: 0 }));
     this.grid = null; this.wins = []; this.win = 0; this.shownWin = 0; this.msg = ''; this.particles = [];
@@ -513,7 +525,7 @@ class Machine {
     if (mode === 'idle') { this.scr.material.map = shared[this.def.game].at; }
     else {
       const res = mode === 'player' ? 1 : 0.5;
-      if (!this.canvas || this.res_ !== res) { this.canvas = mkCanvas(SW * res, SH * res); this.ctx = this.canvas.getContext('2d'); this.tex = canvasTex(this.canvas, 1, 1); this.res_ = res; }
+      if (!this.canvas || this.res_ !== res) { const S = this.skin; this.canvas = S ? mkCanvas(Math.round(S.mw * S.k * res), Math.round(S.mh * S.k * res)) : mkCanvas(SW * res, SH * res); this.ctx = this.canvas.getContext('2d'); this.tex = canvasTex(this.canvas, 1, 1); this.res_ = res; }
       this.scr.material.map = this.tex;
     }
     this.scr.material.needsUpdate = true;
@@ -533,7 +545,7 @@ class Machine {
     }
     this.free = free;
     this.res = spinGrid(this.game, bet, free);
-    this.lw = evalLines(this.game, this.res, bet);
+    this.lw = evalLines(this.game, this.res, bet, free);
     this.wins = this.lw.wins; this.win = this.lw.total; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
     // decide anticipation
     const trig = this.game.scatter || this.game.bonusSym;
@@ -762,6 +774,7 @@ class Machine {
   // =================== RENDER ===================
   draw() {
     if (this.mode === 'idle') return;
+    if (this.skin) return this.drawSkin();
     const x = this.ctx, sc = this.res_;
     x.setTransform(sc, 0, 0, sc, 0, 0);
     const g = this.game, t = this.t, bet = this.bet;
@@ -804,15 +817,14 @@ class Machine {
   drawReels(x) {
     const g = this.game, cache = symCache[g.id];
     // reel window
-    rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill();
-    rr(x, RX - 6, RY - 4, CW * 5 + 12, CH * 3 + 8, 12); x.fillStyle = '#000'; x.fill();
+    if (!this.skin) { rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill(); rr(x, RX - 6, RY - 4, CW * 5 + 12, CH * 3 + 8, 12); x.fillStyle = '#000'; x.fill(); }
     const showing = this.state === 'showWin' && this.win > 0 && this.wins.length;
     const cur = showing && this.winLineI >= 0 ? this.wins[this.winLineI] : null;
     const hot = new Set();
     if (showing) { const list = cur ? [cur] : this.wins; for (const w of list) for (let r = 0; r < w.n; r++) hot.add(r * 3 + LINES[w.line][r]); }
     for (let r = 0; r < 5; r++) {
       const R = this.reels[r], X = RX + r * CW;
-      x.fillStyle = lg(x, 0, RY, 0, RY + CH * 3, ['#1a1a24', '#2c2c3a', '#1a1a24']); x.fillRect(X, RY, CW - 4, CH * 3);
+      x.fillStyle = this.skin ? lg(x, 0, RY, 0, RY + CH * 3, [this.skin.strip[0], this.skin.strip[1], this.skin.strip[0]]) : lg(x, 0, RY, 0, RY + CH * 3, ['#1a1a24', '#2c2c3a', '#1a1a24']); x.fillRect(X, RY, CW - 4, CH * 3);
       if (R.ant && R.phase !== 'idle') { x.fillStyle = `rgba(255,200,40,${0.25 + 0.2 * Math.sin(this.t * 20)})`; x.fillRect(X, RY, CW - 4, CH * 3); }
       x.save(); x.beginPath(); x.rect(X, RY, CW - 4, CH * 3); x.clip();
       const fast = R.phase === 'spin' && R.v > 8;
@@ -835,7 +847,8 @@ class Machine {
         // coin values (hold & spin game) on nuggets
         if (s === 'COIN' && R.phase === 'idle' && this.res && row >= 0 && row < 3 && this.res.coins[r][row]) {
           const c = this.res.coins[r][row];
-          outlineText(x, c.jp || fmt$(c.m * this.bet), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 30, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+          if (this.skin) outlineText(x, c.jp || String(Math.round(c.m * this.bet * 100)), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 54, c.jp ? '#ff4a6a' : '#1b0b04', '#ffd84a', 3, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+          else outlineText(x, c.jp || fmt$(c.m * this.bet), X + CW / 2 - 2, y + CH / 2 + 4, c.jp ? 28 : 30, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
         }
         if (s === 'WILD' && this.free && this.res && row >= 0 && row < 3 && this.res.mults[r][row] > 1 && R.phase === 'idle') {
           rr(x, X + CW - 70, y + 6, 60, 40, 10); x.fillStyle = '#c00'; x.fill(); outlineText(x, 'x' + this.res.mults[r][row], X + CW - 40, y + 27, 28, '#fff', '#000', 5);
@@ -868,7 +881,7 @@ class Machine {
   }
   drawHold(x) {
     const g = this.game, h = this.hs, cache = symCache[g.id];
-    rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill();
+    if (!this.skin) { rr(x, RX - 14, RY - 10, CW * 5 + 28, CH * 3 + 20, 18); x.fillStyle = g.theme.frame; x.fill(); } else { x.fillStyle = '#2a1004'; x.fillRect(RX - 8, RY - 6, CW * 5 + 12, CH * 3 + 12); }
     for (let i = 0; i < 15; i++) {
       const r = Math.floor(i / 3), row = i % 3, X = RX + r * CW, Y = RY + row * CH, c = h.shown[i];
       x.fillStyle = c ? '#3a1a04' : '#0a0a12'; x.fillRect(X, Y, CW - 4, CH - 4);
@@ -878,16 +891,18 @@ class Machine {
         const col = h.collect >= 0 && i < h.collect;
         x.save(); x.translate(X + CW / 2 - 2, Y + CH / 2); x.scale(sc, sc); x.globalAlpha = col ? 0.35 : 1;
         x.shadowColor = '#ffd84a'; x.shadowBlur = 20; x.drawImage(cache.COIN.sharp, -CW / 2, -CH / 2); x.shadowBlur = 0;
-        outlineText(x, c.jp || fmt$(c.m * this.bet), 0, 4, c.jp ? 28 : 34, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+        if (this.skin) outlineText(x, c.jp || String(Math.round(c.m * this.bet * 100)), 0, 4, c.jp ? 28 : 56, c.jp ? '#ff4a6a' : '#1b0b04', '#ffd84a', 3, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
+        else outlineText(x, c.jp || fmt$(c.m * this.bet), 0, 4, c.jp ? 28 : 34, c.jp ? '#ff4a6a' : '#fff', '#3a1a00', 6, c.jp ? 'Bungee, Impact' : 'Bebas Neue, Impact');
         x.restore();
       } else if (h.collect < 0) {
         // spinning blank cells
         const s = cache[choice(['COIN', 'COIN', g.syms[0]])].blur; x.globalAlpha = 0.25 + 0.15 * Math.sin(this.t * 30 + i); x.drawImage(s, X - 2, Y + ((this.t * 900 + i * 50) % CH) - CH / 2); x.globalAlpha = 1;
       }
     }
-    const bw = g.link ? 820 : 400; rr(x, SW / 2 - bw / 2, RY + CH * 3 + 14, bw, 50, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
-    if (h.collect < 0) outlineText(x, g.link ? `${h.shown.filter(Boolean).length} COLLECTED · 15 WINS THE GRAND · RESPINS ${h.respins}` : `RESPINS: ${h.respins}`, SW / 2, RY + CH * 3 + 40, g.link ? 22 : 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
-    else outlineText(x, `COLLECTING: ${fmt$(h.acc || 0)}`, SW / 2, RY + CH * 3 + 40, 30, '#ffe27a', '#000', 5);
+    const bw = g.link ? 820 : 400; if (!this.skin) rr(x, SW / 2 - bw / 2, RY + CH * 3 + 14, bw, 50, 12); else rr(x, SW / 2 - bw / 2, RY + CH * 3 - 40, bw, 38, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
+    const ty = this.skin ? RY + CH * 3 - 21 : RY + CH * 3 + 40;
+    if (h.collect < 0) outlineText(x, g.link ? `${this.skin ? '' : h.shown.filter(Boolean).length + ' COLLECTED · 15 WINS THE GRAND · '}RESPINS ${h.respins}` : `RESPINS: ${h.respins}`, SW / 2, ty, g.link ? 24 : 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
+    else outlineText(x, `COLLECTING: ${fmt$(h.acc || 0)}`, SW / 2, ty, 30, '#ffe27a', '#000', 5);
   }
   drawWheel(x) {
     const g = this.game, w = this.wh, cx = SW / 2, cy = RY + 250, R = 230;

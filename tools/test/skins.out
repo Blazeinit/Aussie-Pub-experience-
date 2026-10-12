@@ -1,0 +1,14 @@
+boot ok
+[[0,"am",1],[1,"gc",1],[2,"pm",1],[3,"hp",1],[4,"ldl1",1],[5,"ldl2",1],[6,"ldl3",1],[7,"ldl4",1],[8,"fm",1],[9,"te1",1],[10,"te2",1],[11,"qotn",0],[12,"bigred",0],[13,"buffalo",0],[14,"dragon",0],[15,"outback",0],[16,"reef",0],[17,"sevens",0]]
+shot 00_bank_left
+shot 00_bank_right
+shot fm_a_idle
+shot fm_b_spin
+shot fm_c_stopped
+shot fm_d_hold
+errors warning Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+warning Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+warning Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+warning Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+warning Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently
+DONE
