@@ -37,7 +37,7 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- day card / summary ---------- */
 .screen{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,6,3,.78),rgba(0,0,0,.96));padding:16px}
 .card{width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--paper);color:#2a1d10;padding:34px 38px;border-radius:3px;box-shadow:0 30px 80px rgba(0,0,0,.7);position:relative;transform:rotate(-.6deg)}
-.card:before{content:"";position:absolute;inset:8px;border:1px dashed rgba(60,40,20,.25);pointer-events:none}
+.card{outline:1px dashed rgba(60,40,20,.25);outline-offset:-8px}
 .card .dname{font-family:'Bebas Neue';font-size:64px;line-height:.9;color:#7a1f14}
 .card .dtime{font-family:'Bebas Neue';font-size:26px;letter-spacing:3px;opacity:.75}
 .card .event{display:inline-block;margin:14px 0 6px;background:#7a1f14;color:#fff;font-family:'Bebas Neue';letter-spacing:2px;padding:4px 10px;font-size:20px}
