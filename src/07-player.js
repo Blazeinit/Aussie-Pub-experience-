@@ -335,14 +335,14 @@ function dropHeld() {
 function sitAt(m) {
   player.seated = m; player.seatT = 0;
   player.camFrom = { pos: camera.position.clone(), q: camera.quaternion.clone() };
-  m.occupiedBy = 'player'; m.setMode('player');
+  m.occupiedBy = 'player'; m.setMode('player'); PokieFX.attach(m);
   if (player.drink && !player.drink.onLedge) placeOnLedge();
 }
 function standUp() {
   const m = player.seated; if (!m) return;
   if (player.drink && player.drink.onLedge) takeFromLedge();
   if (player.drink) player.drink.wasLedge = false;
-  m.occupiedBy = null; m.setMode('idle');
+  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach();
   player.seated = null;
   player.pos.copy(m.seatW).addScaledVector(m.fw, 0.45);
   player.yaw = Math.atan2(m.fw.x, m.fw.z); player.pitch = -0.1;
@@ -379,6 +379,7 @@ function updatePlayer(dt, t) {
     camera.quaternion.slerpQuaternions(player.camFrom.q, sc.q, k);
     // drunk sway even when seated
     const swayK = settings.reduceMotion ? 0 : settings.drunkFx; camera.rotateZ(Math.sin(t * 0.6) * 0.03 * drunk * swayK); camera.rotateX(Math.sin(t * 0.43) * 0.02 * drunk * swayK);
+    if (k >= 1) PokieFX.cam(dt, t);
     player.pos.copy(player.seated.seatW);
   } else {
     const fw = V3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)), rt = V3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));

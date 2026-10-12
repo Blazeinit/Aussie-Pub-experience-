@@ -598,7 +598,7 @@ class Machine {
   bigWin() {
     const lvl = this.winLevel >= 100 ? 'EPIC WIN' : this.winLevel >= 50 ? 'MEGA WIN' : 'BIG WIN';
     this.flash(lvl, 3.5); SFX.fanfare(); this.coinShower(80);
-    Game.onBigWin(this, lvl);
+    Game.onBigWin(this, lvl); if (this.mode === 'player') PokieFX.celebrate(this.winLevel || 20);
   }
   coinShower(n) { for (let i = 0; i < n; i++) this.particles.push({ x: rand(0, SW), y: rand(-400, -20), vx: rand(-80, 80), vy: rand(0, 200), r: rand(0, 6), vr: rand(-8, 8), s: rand(18, 34) }); }
   flash(txt, dur) { this.flashTxt = txt; this.flashT = dur; this.flashT0 = dur; }

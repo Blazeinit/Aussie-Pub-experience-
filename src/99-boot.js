@@ -24,7 +24,7 @@ async function boot() {
     buildAtmosphere();
     SB.flush(scene, true, true); SBX.flush(scene, true, true);
     setLoad(0.8, 'Hiring the locals…'); await tick();
-    initFX(); buildViewmodel(); CashFX.build(); makeBartender(); buildPlayerBody();
+    initFX(); buildViewmodel(); CashFX.build(); PokieFX.build(); makeBartender(); buildPlayerBody();
     { // the back mirror re-renders the room: do it every other frame and only when you're near enough to see it
       const mob = backMirror.onBeforeRender;
       backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };

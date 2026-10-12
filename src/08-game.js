@@ -563,7 +563,7 @@ const Game = {
         if (id === 'spin') this.deckSpin(); else if (id === 'betup') this.betUp(); else if (id === 'betdn') this.betDn();
         else if (id === 'cash') this.insertCash(); else if (id === 'gamble') m.startGamble();
         else if (id === 'collect') { if (m.state === 'gamble') m.takeGamble(); else this.collect(); }
-        if (id) SFX.button();
+        if (id) { SFX.button(); PokieFX.press(id); }
       }
       return;
     }
@@ -712,7 +712,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt); TOUCH.update(); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
+    updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
