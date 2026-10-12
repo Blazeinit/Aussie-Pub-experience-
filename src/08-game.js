@@ -108,7 +108,7 @@ const Game = {
     NPCS.length = 0; NPCS.push(bartender); bartender.queue = []; bartender.job = null; bartender.pos.copy(BAR.tender.home);
     for (const it of this.items) { scene.remove(it.glass ? it.glass.group : it.mesh); }
     this.items = []; interactables.splice(0, interactables.length, ...interactables.filter(i => !i.temp));
-    MACHINES.forEach(m => { m.setMode('idle'); m.occupiedBy = null; m.state = 'ready'; m.credit = 0; m.free = false; });
+    MACHINES.forEach(m => { m.resetPlay(); m.setMode('idle'); m.occupiedBy = null; m.credit = 0; });
     SPOTS.forEach(sp => sp.occ = null);
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
@@ -134,7 +134,7 @@ const Game = {
     if (this.mode !== 'play') return;
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
     if (MG.active) MG.stop(true);
-    if (player.seated) this.collect(true), standUp();
+    if (player.seated) { player.seated.settle(); this.collect(true); standUp(); }   // a feature still running at closing time is paid out, not lost
     Moments.cleanup(); this.mode = 'ending'; this.fade(0, 1); document.exitPointerLock && document.exitPointerLock();
     setTimeout(() => {
       $('hud').classList.add('hidden'); $('deck').classList.add('hidden'); this.closePanel();
@@ -422,7 +422,7 @@ const Game = {
   onBigWin(m, lvl) { Night.log('🎰', `${lvl} on ${m.game.name} (${fmt$(m.win || 0)})`); $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
   onJackpot(m, name, amt) {
     const who = m.mode === 'player' ? 'You' : (m.occupiedBy && m.occupiedBy.name) || 'Someone';
-    if (m.mode === 'player' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
+    if (m.mode === 'player' && !m._settling && this.mode === 'play' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
     if (m.mode === 'player') { this.state.stats.jackpots++; Night.log('🔔', `${name} jackpot: ${fmt$(amt)}`); SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
     else if (name !== 'MINI') { SFX.jackpotBell(); this.toast(`🔔 ${who} just hit the ${name} — ${fmt$(amt)} on ${m.game.name}!`, name === 'GRAND' || name === 'MAJOR'); SFX.cheer(m.screenW, 2); }
   },

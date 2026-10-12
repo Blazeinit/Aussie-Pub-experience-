@@ -70,12 +70,23 @@ function skinTitle(x, S) {
 
 // ---------------------------------------------------------------- Machine: draw with the skin
 Machine.prototype.drawSkin = function () {
+  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only when something on it changed.
+  // The key covers the canvas itself (a mode change makes a fresh one), the state and every value painted in 'ready',
+  // so a frame left over from a feature can never stay on screen.
+  const key = this.state === 'ready' && !(this.flashT > 0) && !this.particles.length ? [this.canvas.width, this.credit, this.bet, this.msg].join('|') : null;
+  if (key && key === this._paintKey && this._paintCanvas === this.canvas) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10) return; }
+  this._paintKey = key; this._paintCanvas = this.canvas;
+  try { this._paintSkin(); } catch (e) {
+    // never leave a half-painted frame or a dangling clip behind: resetting the size wipes the canvas and its state stack
+    this.canvas.width = this.canvas.width; this._paintKey = null;
+    if (!this._paintErr) { this._paintErr = true; console.warn('skin paint failed', this.def.game, this.state, e); }
+  }
+};
+Machine.prototype._paintSkin = function () {
   const S = this.skin, x = this.ctx, sc = this.res_ * S.k, g = this.game, st = this.state, W = S.mw, H = S.mh;
-  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only a few times a second
-  if (st === 'ready' && !(this.flashT > 0) && !this.particles.length) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10 !== 1 && this._lastCredit === this.credit && this._lastBet === this.bet) return; }
-  this._lastCredit = this.credit; this._lastBet = this.bet;
-  x.setTransform(sc, 0, 0, sc, 0, 0);
-  const hs = st === 'holdspin' && S.useHS && SLOTSKIN.hsImg;
+  x.setTransform(sc, 0, 0, sc, 0, 0); x.globalAlpha = 1; x.shadowBlur = 0;
+  // the hold & spin screen (and its medal) only while a hold & spin is actually being played
+  const hs = st === 'holdspin' && !!this.hs && S.useHS && !!SLOTSKIN.hsImg;
   const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
   x.drawImage(hs ? SLOTSKIN.hsImg : S.imgMain, 0, 0, W, H);
   skinHUD(x, S, this, hs ? SLOTSKIN.hp.hud : S.hud);
@@ -84,7 +95,7 @@ Machine.prototype.drawSkin = function () {
   // the reel stage: the engine's normal reel / hold & spin / gamble drawing, squeezed into the screen's own reel window
   x.save(); x.beginPath(); x.rect(win[0] - 3, win[1] - 3, win[2] + 6, win[3] + 6); x.clip();
   x.translate(win[0], win[1]); x.scale(win[2] / (5 * CW), win[3] / (3 * CH)); x.translate(-RX, -RY);
-  if (st === 'holdspin') this.drawHold(x); else if (st === 'gamble') this.drawGamble(x); else this.drawReels(x);
+  if (st === 'holdspin' && this.hs) this.drawHold(x); else if (st === 'gamble') this.drawGamble(x); else this.drawReels(x);
   if (st === 'featIntro') {
     const k = clamp(this.st / 0.4, 0, 1);
     x.fillStyle = `rgba(0,0,0,${0.6 * k})`; x.fillRect(0, RY, SW, CH * 3);

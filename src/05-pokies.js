@@ -544,6 +544,7 @@ class Machine {
       if (this.mode === 'player') Game.onPlayerBet(bet);
     }
     this.free = free;
+    if (!free) { this.flashT = 0; this.particles.length = 0; }   // a new paid spin clears the last big-win banner
     this.res = spinGrid(this.game, bet, free);
     this.lw = evalLines(this.game, this.res, bet, free);
     this.wins = this.lw.wins; this.win = this.lw.total; if (this.hotTip && this.mode === 'player' && this.win > 0 && (this.hotN = (this.hotN || 0) + 1) <= 25) this.win = Math.round(this.win * 1.1 * 100) / 100; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
@@ -762,6 +763,30 @@ class Machine {
   }
   takeGamble() { if (this.state !== 'gamble' || this.gambleRes) return; this.credit += this.gambleAmt; Game.onPlayerWin(this.gambleAmt, false, true); this.msg = 'COLLECTED ' + fmt$(this.gambleAmt); this.lastWin = 0; this.gambleAmt = 0; this.state = 'ready'; SFX.coin(); }
 
+  // ---------------- hand-over between players ----------------
+  // play out whatever is running (a spin, free games, hold & spin, pick, wheel, gamble) at once, crediting the machine
+  settle() {
+    this._settling = true;
+    try {
+      for (let i = 0; i < 4000 && !(this.state === 'ready' || (this.state === 'showWin' && !this.free)); i++) {
+        if (this.state === 'gamble' && !this.gambleRes) this.takeGamble();
+        if (this.state === 'pick' && this.pk && !this.pk.done) this.pk.autoT = 0;
+        if (this.state === 'spinning') this.slam();
+        this.update(0.25);
+      }
+      if (this.state === 'showWin') this.endShowWin();
+    } finally { this._settling = false; }
+  }
+  // wipe every trace of the last session (feature state, win display, big-win flash) so the next player starts clean
+  resetPlay() {
+    this.state = 'ready'; this.st = 0; this.hs = null; this.wh = null; this.pk = null; this.pendingFeat = null;
+    this.free = false; this.freeLeft = 0; this.freeN = 0; this.featWin = 0; this.featTotal = 0; this.featBaseWin = 0;
+    this.wins = []; this.win = 0; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.credited = false;
+    this.gambleAmt = 0; this.gambleOK = false; this.gambleRes = null; this.flashT = 0; this.particles = []; this.msg = '';
+    for (const R of this.reels) { if (R.phase !== 'idle') { R.phase = 'idle'; R.pos = Math.round(R.pos); } R.ant = false; }
+    this._paintKey = null;
+  }
+
   // ---------------- NPC autoplay ----------------
   npcTick(dt) {
     this.update(dt);
@@ -781,9 +806,9 @@ class Machine {
     drawBG(x, g, t);
     drawLogo(x, g, SW / 2, 42, 0.7, t);
     drawJackpotBar(x, g, bet, t);
-    if (this.state === 'holdspin') this.drawHold(x);
-    else if (this.state === 'wheel') this.drawWheel(x);
-    else if (this.state === 'pick') this.drawPick(x);
+    if (this.state === 'holdspin' && this.hs) this.drawHold(x);
+    else if (this.state === 'wheel' && this.wh) this.drawWheel(x);
+    else if (this.state === 'pick' && this.pk) this.drawPick(x);
     else if (this.state === 'gamble') this.drawGamble(x);
     else this.drawReels(x);
     if (this.state === 'featIntro') {

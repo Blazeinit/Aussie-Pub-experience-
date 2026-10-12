@@ -344,7 +344,7 @@ function standUp() {
   const m = player.seated; if (!m) return;
   if (player.drink && player.drink.onLedge) takeFromLedge();
   if (player.drink) player.drink.wasLedge = false;
-  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
+  m.occupiedBy = null; m.resetPlay(); m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
   player.seated = null;
   player.pos.copy(m.seatW).addScaledVector(m.fw, 0.45);
   player.yaw = Math.atan2(m.fw.x, m.fw.z); player.pitch = -0.1;

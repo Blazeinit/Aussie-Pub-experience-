@@ -556,9 +556,18 @@ function mkNPC(o = {}) {
   NPCS.push(n);
   return n;
 }
-function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && filter(s)); }
+// a pokie seat is taken when somebody (an NPC or the player) is on its machine, even if the spot itself is free
+function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && !(s.machine && s.machine.occupiedBy) && filter(s)); }
 function claim(n, s) { if (n.spot) n.spot.occ = null; n.spot = s; s.occ = n; if (s.machine) s.machine.occupiedBy = n; }
-function release(n) { if (n.spot) { if (n.spot.machine && n.spot.machine.occupiedBy === n) { n.spot.machine.occupiedBy = null; n.spot.machine.setMode('idle'); } n.spot.occ = null; } n.spot = null; }
+// leaving a machine: the punter plays out whatever feature is running and takes their money, so the next player starts clean
+function release(n) {
+  if (n.spot) {
+    const m = n.spot.machine;
+    if (m && m.occupiedBy === n) { if (m.mode === 'npc') m.settle(); m.credit = 0; m.resetPlay(); m.occupiedBy = null; m.setMode('idle'); }
+    n.spot.occ = null;
+  }
+  n.spot = null;
+}
 function chooseNextSpot(n) {
   const ev = Game.state.event;
   const w = [];
@@ -597,7 +606,7 @@ function seatNPC(n) {
   n.timer = s.kind === 'pokie' ? rand(60, 200) : rand(40, 160);
   n.a.smoking = n.smoker && !!s.smoke; n.cig.visible = n.a.smoking;
   n.a.holdDrink = n.kind !== 'pokie' && n.kind !== 'pool' && n.kind !== 'darts' && Math.random() < 0.8; n.glass.group.visible = n.a.holdDrink || n.kind === 'pokie';
-  if (n.kind === 'pokie') { s.machine.occupiedBy = n; s.machine.setMode('npc'); s.machine.betIdx = choice([0, 1, 1, 2, 3]); s.machine.credit = choice([20, 50, 50, 100]);
+  if (n.kind === 'pokie') { s.machine.occupiedBy = n; s.machine.resetPlay(); s.machine.setMode('npc'); s.machine.betIdx = choice([0, 1, 1, 2, 3]); s.machine.credit = choice([20, 50, 50, 100]);
     // glass sits on the ledge
     n.h.root.attach(n.glass.group); n.glass.group.position.copy(s.machine.ledge).sub(n.pos).applyAxisAngle(V3(0, 1, 0), -n.ry); n.glass.group.position.y = s.machine.ledge.y; n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = true;
   } else if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
@@ -656,6 +665,7 @@ function updateNPC(n, dt, t, player) {
     if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
     if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
       if (a.dragT > 0 && a.dragT < 0.3 && Math.random() < dt * 30) { n.h.J.head.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.head.matrixWorld).add(V3(0, 0.08, 0)); const fw = V3(Math.sin(n.ry), 0.15, Math.cos(n.ry)); smokeFX.emit(hp.addScaledVector(fw, 0.12), fw.multiplyScalar(0.5), 0.05, 3, 0.18, [0.9, 0.9, 0.92], 0.18); } }
+    if (n.timer <= 0 && n.kind === 'pokie' && s && s.machine && s.machine.occupiedBy === n && !s.machine.canSpin()) n.timer = 1.5;   // nobody walks off mid-feature
     if (n.timer <= 0) {
       const ns = Math.random() < 0.1 ? SPOTS.find(s => s.kind === 'toilet') : chooseNextSpot(n);
       if (ns && ns !== n.spot && !ns.occ) { release(n); sendTo(n, ns); }

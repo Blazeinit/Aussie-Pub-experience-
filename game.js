@@ -2933,6 +2933,7 @@ class Machine {
       if (this.mode === 'player') Game.onPlayerBet(bet);
     }
     this.free = free;
+    if (!free) { this.flashT = 0; this.particles.length = 0; }   // a new paid spin clears the last big-win banner
     this.res = spinGrid(this.game, bet, free);
     this.lw = evalLines(this.game, this.res, bet, free);
     this.wins = this.lw.wins; this.win = this.lw.total; if (this.hotTip && this.mode === 'player' && this.win > 0 && (this.hotN = (this.hotN || 0) + 1) <= 25) this.win = Math.round(this.win * 1.1 * 100) / 100; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
@@ -3151,6 +3152,30 @@ class Machine {
   }
   takeGamble() { if (this.state !== 'gamble' || this.gambleRes) return; this.credit += this.gambleAmt; Game.onPlayerWin(this.gambleAmt, false, true); this.msg = 'COLLECTED ' + fmt$(this.gambleAmt); this.lastWin = 0; this.gambleAmt = 0; this.state = 'ready'; SFX.coin(); }
 
+  // ---------------- hand-over between players ----------------
+  // play out whatever is running (a spin, free games, hold & spin, pick, wheel, gamble) at once, crediting the machine
+  settle() {
+    this._settling = true;
+    try {
+      for (let i = 0; i < 4000 && !(this.state === 'ready' || (this.state === 'showWin' && !this.free)); i++) {
+        if (this.state === 'gamble' && !this.gambleRes) this.takeGamble();
+        if (this.state === 'pick' && this.pk && !this.pk.done) this.pk.autoT = 0;
+        if (this.state === 'spinning') this.slam();
+        this.update(0.25);
+      }
+      if (this.state === 'showWin') this.endShowWin();
+    } finally { this._settling = false; }
+  }
+  // wipe every trace of the last session (feature state, win display, big-win flash) so the next player starts clean
+  resetPlay() {
+    this.state = 'ready'; this.st = 0; this.hs = null; this.wh = null; this.pk = null; this.pendingFeat = null;
+    this.free = false; this.freeLeft = 0; this.freeN = 0; this.featWin = 0; this.featTotal = 0; this.featBaseWin = 0;
+    this.wins = []; this.win = 0; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.credited = false;
+    this.gambleAmt = 0; this.gambleOK = false; this.gambleRes = null; this.flashT = 0; this.particles = []; this.msg = '';
+    for (const R of this.reels) { if (R.phase !== 'idle') { R.phase = 'idle'; R.pos = Math.round(R.pos); } R.ant = false; }
+    this._paintKey = null;
+  }
+
   // ---------------- NPC autoplay ----------------
   npcTick(dt) {
     this.update(dt);
@@ -3170,9 +3195,9 @@ class Machine {
     drawBG(x, g, t);
     drawLogo(x, g, SW / 2, 42, 0.7, t);
     drawJackpotBar(x, g, bet, t);
-    if (this.state === 'holdspin') this.drawHold(x);
-    else if (this.state === 'wheel') this.drawWheel(x);
-    else if (this.state === 'pick') this.drawPick(x);
+    if (this.state === 'holdspin' && this.hs) this.drawHold(x);
+    else if (this.state === 'wheel' && this.wh) this.drawWheel(x);
+    else if (this.state === 'pick' && this.pk) this.drawPick(x);
     else if (this.state === 'gamble') this.drawGamble(x);
     else this.drawReels(x);
     if (this.state === 'featIntro') {
@@ -3923,9 +3948,18 @@ function mkNPC(o = {}) {
   NPCS.push(n);
   return n;
 }
-function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && filter(s)); }
+// a pokie seat is taken when somebody (an NPC or the player) is on its machine, even if the spot itself is free
+function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && !(s.machine && s.machine.occupiedBy) && filter(s)); }
 function claim(n, s) { if (n.spot) n.spot.occ = null; n.spot = s; s.occ = n; if (s.machine) s.machine.occupiedBy = n; }
-function release(n) { if (n.spot) { if (n.spot.machine && n.spot.machine.occupiedBy === n) { n.spot.machine.occupiedBy = null; n.spot.machine.setMode('idle'); } n.spot.occ = null; } n.spot = null; }
+// leaving a machine: the punter plays out whatever feature is running and takes their money, so the next player starts clean
+function release(n) {
+  if (n.spot) {
+    const m = n.spot.machine;
+    if (m && m.occupiedBy === n) { if (m.mode === 'npc') m.settle(); m.credit = 0; m.resetPlay(); m.occupiedBy = null; m.setMode('idle'); }
+    n.spot.occ = null;
+  }
+  n.spot = null;
+}
 function chooseNextSpot(n) {
   const ev = Game.state.event;
   const w = [];
@@ -3964,7 +3998,7 @@ function seatNPC(n) {
   n.timer = s.kind === 'pokie' ? rand(60, 200) : rand(40, 160);
   n.a.smoking = n.smoker && !!s.smoke; n.cig.visible = n.a.smoking;
   n.a.holdDrink = n.kind !== 'pokie' && n.kind !== 'pool' && n.kind !== 'darts' && Math.random() < 0.8; n.glass.group.visible = n.a.holdDrink || n.kind === 'pokie';
-  if (n.kind === 'pokie') { s.machine.occupiedBy = n; s.machine.setMode('npc'); s.machine.betIdx = choice([0, 1, 1, 2, 3]); s.machine.credit = choice([20, 50, 50, 100]);
+  if (n.kind === 'pokie') { s.machine.occupiedBy = n; s.machine.resetPlay(); s.machine.setMode('npc'); s.machine.betIdx = choice([0, 1, 1, 2, 3]); s.machine.credit = choice([20, 50, 50, 100]);
     // glass sits on the ledge
     n.h.root.attach(n.glass.group); n.glass.group.position.copy(s.machine.ledge).sub(n.pos).applyAxisAngle(V3(0, 1, 0), -n.ry); n.glass.group.position.y = s.machine.ledge.y; n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = true;
   } else if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
@@ -4023,6 +4057,7 @@ function updateNPC(n, dt, t, player) {
     if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
     if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
       if (a.dragT > 0 && a.dragT < 0.3 && Math.random() < dt * 30) { n.h.J.head.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.head.matrixWorld).add(V3(0, 0.08, 0)); const fw = V3(Math.sin(n.ry), 0.15, Math.cos(n.ry)); smokeFX.emit(hp.addScaledVector(fw, 0.12), fw.multiplyScalar(0.5), 0.05, 3, 0.18, [0.9, 0.9, 0.92], 0.18); } }
+    if (n.timer <= 0 && n.kind === 'pokie' && s && s.machine && s.machine.occupiedBy === n && !s.machine.canSpin()) n.timer = 1.5;   // nobody walks off mid-feature
     if (n.timer <= 0) {
       const ns = Math.random() < 0.1 ? SPOTS.find(s => s.kind === 'toilet') : chooseNextSpot(n);
       if (ns && ns !== n.spot && !ns.occ) { release(n); sendTo(n, ns); }
@@ -4665,7 +4700,7 @@ function standUp() {
   const m = player.seated; if (!m) return;
   if (player.drink && player.drink.onLedge) takeFromLedge();
   if (player.drink) player.drink.wasLedge = false;
-  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
+  m.occupiedBy = null; m.resetPlay(); m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
   player.seated = null;
   player.pos.copy(m.seatW).addScaledVector(m.fw, 0.45);
   player.yaw = Math.atan2(m.fw.x, m.fw.z); player.pitch = -0.1;
@@ -4870,7 +4905,7 @@ const Game = {
     NPCS.length = 0; NPCS.push(bartender); bartender.queue = []; bartender.job = null; bartender.pos.copy(BAR.tender.home);
     for (const it of this.items) { scene.remove(it.glass ? it.glass.group : it.mesh); }
     this.items = []; interactables.splice(0, interactables.length, ...interactables.filter(i => !i.temp));
-    MACHINES.forEach(m => { m.setMode('idle'); m.occupiedBy = null; m.state = 'ready'; m.credit = 0; m.free = false; });
+    MACHINES.forEach(m => { m.resetPlay(); m.setMode('idle'); m.occupiedBy = null; m.credit = 0; });
     SPOTS.forEach(sp => sp.occ = null);
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
@@ -4896,7 +4931,7 @@ const Game = {
     if (this.mode !== 'play') return;
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
     if (MG.active) MG.stop(true);
-    if (player.seated) this.collect(true), standUp();
+    if (player.seated) { player.seated.settle(); this.collect(true); standUp(); }   // a feature still running at closing time is paid out, not lost
     Moments.cleanup(); this.mode = 'ending'; this.fade(0, 1); document.exitPointerLock && document.exitPointerLock();
     setTimeout(() => {
       $('hud').classList.add('hidden'); $('deck').classList.add('hidden'); this.closePanel();
@@ -5184,7 +5219,7 @@ const Game = {
   onBigWin(m, lvl) { Night.log('🎰', `${lvl} on ${m.game.name} (${fmt$(m.win || 0)})`); $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
   onJackpot(m, name, amt) {
     const who = m.mode === 'player' ? 'You' : (m.occupiedBy && m.occupiedBy.name) || 'Someone';
-    if (m.mode === 'player' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
+    if (m.mode === 'player' && !m._settling && this.mode === 'play' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
     if (m.mode === 'player') { this.state.stats.jackpots++; Night.log('🔔', `${name} jackpot: ${fmt$(amt)}`); SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
     else if (name !== 'MINI') { SFX.jackpotBell(); this.toast(`🔔 ${who} just hit the ${name} — ${fmt$(amt)} on ${m.game.name}!`, name === 'GRAND' || name === 'MAJOR'); SFX.cheer(m.screenW, 2); }
   },
@@ -9329,12 +9364,23 @@ function skinTitle(x, S) {
 
 // ---------------------------------------------------------------- Machine: draw with the skin
 Machine.prototype.drawSkin = function () {
+  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only when something on it changed.
+  // The key covers the canvas itself (a mode change makes a fresh one), the state and every value painted in 'ready',
+  // so a frame left over from a feature can never stay on screen.
+  const key = this.state === 'ready' && !(this.flashT > 0) && !this.particles.length ? [this.canvas.width, this.credit, this.bet, this.msg].join('|') : null;
+  if (key && key === this._paintKey && this._paintCanvas === this.canvas) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10) return; }
+  this._paintKey = key; this._paintCanvas = this.canvas;
+  try { this._paintSkin(); } catch (e) {
+    // never leave a half-painted frame or a dangling clip behind: resetting the size wipes the canvas and its state stack
+    this.canvas.width = this.canvas.width; this._paintKey = null;
+    if (!this._paintErr) { this._paintErr = true; console.warn('skin paint failed', this.def.game, this.state, e); }
+  }
+};
+Machine.prototype._paintSkin = function () {
   const S = this.skin, x = this.ctx, sc = this.res_ * S.k, g = this.game, st = this.state, W = S.mw, H = S.mh;
-  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only a few times a second
-  if (st === 'ready' && !(this.flashT > 0) && !this.particles.length) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10 !== 1 && this._lastCredit === this.credit && this._lastBet === this.bet) return; }
-  this._lastCredit = this.credit; this._lastBet = this.bet;
-  x.setTransform(sc, 0, 0, sc, 0, 0);
-  const hs = st === 'holdspin' && S.useHS && SLOTSKIN.hsImg;
+  x.setTransform(sc, 0, 0, sc, 0, 0); x.globalAlpha = 1; x.shadowBlur = 0;
+  // the hold & spin screen (and its medal) only while a hold & spin is actually being played
+  const hs = st === 'holdspin' && !!this.hs && S.useHS && !!SLOTSKIN.hsImg;
   const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
   x.drawImage(hs ? SLOTSKIN.hsImg : S.imgMain, 0, 0, W, H);
   skinHUD(x, S, this, hs ? SLOTSKIN.hp.hud : S.hud);
@@ -9343,7 +9389,7 @@ Machine.prototype.drawSkin = function () {
   // the reel stage: the engine's normal reel / hold & spin / gamble drawing, squeezed into the screen's own reel window
   x.save(); x.beginPath(); x.rect(win[0] - 3, win[1] - 3, win[2] + 6, win[3] + 6); x.clip();
   x.translate(win[0], win[1]); x.scale(win[2] / (5 * CW), win[3] / (3 * CH)); x.translate(-RX, -RY);
-  if (st === 'holdspin') this.drawHold(x); else if (st === 'gamble') this.drawGamble(x); else this.drawReels(x);
+  if (st === 'holdspin' && this.hs) this.drawHold(x); else if (st === 'gamble') this.drawGamble(x); else this.drawReels(x);
   if (st === 'featIntro') {
     const k = clamp(this.st / 0.4, 0, 1);
     x.fillStyle = `rgba(0,0,0,${0.6 * k})`; x.fillRect(0, RY, SW, CH * 3);
@@ -10902,4 +10948,4 @@ window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__m
 window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
 window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
 window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
-window.__game = { FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
+window.__game = { SPOTS, claim, release, seatNPC, FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
