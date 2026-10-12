@@ -114,6 +114,12 @@ let shadowDirty = 3;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x1a1f2a, 0.018);
 const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.03, 1200);
+// camera.fov is the vertical FOV as designed for a landscape screen.  On a narrow screen (a phone held upright) keep the
+// horizontal view instead, so the bar, a pokie screen or a conversation partner isn't cropped off the sides.
+{ const upd = camera.updateProjectionMatrix.bind(camera); camera.updateProjectionMatrix = function () {
+  const ref = 1.25, f = this.fov; if (this.aspect >= ref) return upd();
+  this.fov = Math.min(100, 2 * Math.atan(Math.tan(f * Math.PI / 360) * ref / this.aspect) * 180 / Math.PI); upd(); this.fov = f;
+}; camera.updateProjectionMatrix(); }
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
@@ -8439,6 +8445,11 @@ const TOUCH = {
       if (!this.on || Game.mode !== 'play' || player.seated || (MG.active && MG.active.cursor)) return;
       const t = e.changedTouches[0]; this.lookId = t.identifier; this.lx = t.clientX; this.ly = t.clientY; e.preventDefault();
     }, { passive: false });
+    $('tPhone').addEventListener('touchstart', e => { e.preventDefault(); AudioSys.init(); Game.onKey('Tab'); }, { passive: false });
+    // tap the prompt itself to do it; tap the objective to read all of it
+    $('prompt').addEventListener('click', () => { if (this.on && Game.canMove()) Game.onKey('KeyE'); });
+    $('objective').addEventListener('click', () => { if (this.on) $('objective').classList.toggle('open'); });
+    addEventListener('resize', () => { if (this.on) this.layout(); });
     $('tMenu').onclick = () => { if (Game.mode !== 'play') return; if (!$('panel').classList.contains('hidden')) { Game.closePanel(); return; } Game.paused = true; $('resume').classList.remove('hidden'); };
   },
   // buttons change with what you're doing
@@ -8454,31 +8465,52 @@ const TOUCH = {
     const btn = (label, cls, down, up) => { const b = document.createElement('button'); b.innerHTML = label; b.className = cls || ''; b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); AudioSys.init(); down && down(); }, { passive: false }); b.addEventListener('touchend', e => { e.preventDefault(); b.classList.remove('on'); up && up(); }, { passive: false }); b.onclick = () => { if (!('ontouchstart' in window)) { down && down(); up && up(); } }; B.appendChild(b); return b; };
     const key = code => () => Game.onKey(code);
     $('tStick').style.display = mode === 'walk' ? '' : 'none';
+    $('tPhone').style.display = mode === 'walk' ? '' : 'none';
     if (mode === 'walk') {
-      btn('USE<small>E</small>', 'big', key('KeyE'));
-      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('DROP', '', key('KeyG'));
+      btn('USE', 'big', key('KeyE'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('DROP<small>glass</small>', '', key('KeyG'));
       const r = btn('RUN', 'tog', () => { this.run = !this.run; r.classList.toggle('lit', this.run); });
-      btn('📱', '', key('Tab'));
     } else if (mode === 'darts') {
-      btn('THROW<small>hold, release in the gold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
+      btn('THROW<small>hold · let go in the gold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
       btn('STEADY', '', () => { keys.ShiftLeft = true; }, () => { keys.ShiftLeft = false; });
-      btn('QUIT', '', key('KeyQ'));
+      btn('QUIT', 'quit', key('KeyQ'));
     } else if (mode === 'shift') {
       btn('POUR<small>hold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
-      btn('POT', '', key('Digit1')); btn('SCHOONER', '', key('Digit2')); btn('PINT', '', key('Digit3'));
-      btn('SERVE', '', key('Space')); btn('CLOCK OFF', '', key('KeyQ'));
+      btn('SERVE', '', key('Space')); btn('POT', '', key('Digit1')); btn('SCHOO-<br>NER', '', key('Digit2')); btn('PINT', '', key('Digit3'));
+      btn('CLOCK<br>OFF', 'quit', key('KeyQ'));
     } else if (mode === 'karaoke') {
-      btn('SING!', 'big huge', key('Space')); btn('QUIT', '', key('KeyQ'));
+      btn('SING!', 'big huge', key('Space')); btn('QUIT', 'quit', key('KeyQ'));
     } else if (mode === 'eat') {
-      btn('PUT IT DOWN', '', key('KeyQ'));
+      btn('PUT IT<br>DOWN', '', key('KeyQ'));
     } else if (mode === 'mg') {
-      btn('DONE', '', key('KeyQ'));
+      btn('DONE', 'quit', key('KeyQ'));
     }
+    this.layout();
+  },
+  // a thumb cluster: the main action in the bottom-right corner, the rest on arcs around it
+  layout() {
+    const B = $('tBtns'), all = [...B.children]; if (!all.length) return;
+    const u = clamp(Math.min(innerWidth, innerHeight) / 420, 0.78, 1.1), big = all.find(b => b.classList.contains('big')), ring = all.filter(b => b !== big);
+    const huge = big && big.classList.contains('huge'), bs = Math.round((huge ? 128 : 92) * u), ss = Math.round(56 * u), R0 = 14, B0 = 16;
+    const place = (b, right, bottom, size) => { Object.assign(b.style, { width: size + 'px', height: size + 'px', right: `calc(${Math.round(right)}px + env(safe-area-inset-right))`, bottom: `calc(${Math.round(bottom)}px + env(safe-area-inset-bottom))` }); };
+    if (big) place(big, R0, B0, bs);
+    const cr = R0 + bs / 2, cb = B0 + bs / 2;
+    let r = bs / 2 + ss / 2 + 10 * u, step = (ss + 8 * u) / r, a = 200 * Math.PI / 180, i = 0;
+    for (const b of ring) {
+      if (!big) { place(b, R0 + i * (ss + 10), B0, ss); i++; continue; }
+      if (a < 72 * Math.PI / 180) { r += ss + 10 * u; step = (ss + 8 * u) / r; a = 196 * Math.PI / 180; }
+      place(b, cr - Math.cos(a) * r - ss / 2, cb + Math.sin(a) * r - ss / 2, ss); a -= step;
+    }
+  },
+  // what's in front of you decides what the screen shows: menus, conversations and minigames clear the clutter away
+  states() {
+    const ui = Game.uiOpen || Game.paused || !!(typeof DLG !== 'undefined' && DLG.active), b = document.body.classList;
+    b.toggle('tui', ui); b.toggle('inmg', !!MG.active);
   },
   update() {
     if (!this.on) return;
     $('touch').classList.toggle('hidden', Game.mode !== 'play');
-    this.buttons();
+    this.buttons(); this.states();
   },
 };
 
@@ -10762,19 +10794,21 @@ const PoolGame = (() => {
   const colOf = id => BALL_CANVAS[id > 8 ? id - 8 : id];
   const R = POOL.BALL_R, T = POOL.TABLE, HW = 0.61, HL = 1.23, RAIL = 0.13;
   const qRot = (q, v) => { const [x, y, z, w] = q, [vx, vy, vz] = v; const ix = w * vx + y * vz - z * vy, iy = w * vy + z * vx - x * vz, iz = w * vz + x * vy - y * vx, iw = -x * vx - y * vy - z * vz; return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x]; };
-  let cv, cx, W = 0, H = 0, S = 1, ox = 0, oy = 0, gm = null, ptr = { x: 0, y: 0, down: false, on: false }, spinDrag = false;
+  let cv, cx, W = 0, H = 0, VW = 0, VH = 0, rot = false, S = 1, ox = 0, oy = 0, gm = null, ptr = { x: 0, y: 0, down: false, on: false }, spinDrag = false;
 
   function layout() {
     const d = Math.min(window.devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
     cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; cx.setTransform(d, 0, 0, d, 0, 0);
-    S = Math.min(W * 0.9 / (2 * (HL + RAIL)), H * 0.68 / (2 * (HW + RAIL))); ox = W / 2; oy = H * 0.5 - H * 0.02;
+    // a phone held upright: the table stands on its end (drawn rotated a quarter turn) so it fills the screen
+    rot = H > W * 1.05; VW = rot ? H : W; VH = rot ? W : H;
+    if (rot) { S = Math.min((VW - 230) / (2 * (HL + RAIL)), (VH - 130) / (2 * (HW + RAIL))); ox = VW / 2 + 10; oy = VH / 2 + 8; }
+    else { S = Math.min(W * 0.9 / (2 * (HL + RAIL)), H * 0.68 / (2 * (HW + RAIL))); ox = W / 2; oy = H * 0.5 - H * 0.02; }
   }
   // table (x across, z along) -> canvas, and back.  The long axis runs left-right, foot (rack) on the left.
   const sx = z => ox + z * S, sy = x => oy + x * S, tz = px => (px - ox) / S, tx = py => (py - oy) / S;
 
   function drawTable() {
     const L = (HL + RAIL) * S, Wd = (HW + RAIL) * S;
-    cx.fillStyle = 'rgba(7,4,3,.95)'; cx.fillRect(0, 0, W, H);
     cx.save(); cx.shadowColor = 'rgba(0,0,0,.7)'; cx.shadowBlur = 40; cx.shadowOffsetY = 14;
     const wood = cx.createLinearGradient(0, oy - Wd, 0, oy + Wd); wood.addColorStop(0, '#5a3418'); wood.addColorStop(0.5, '#3e2210'); wood.addColorStop(1, '#2c180a');
     cx.fillStyle = wood; rr(ox - L - 14, oy - Wd - 14, 2 * L + 28, 2 * Wd + 28, 26); cx.fill(); cx.restore();
@@ -10841,12 +10875,12 @@ const PoolGame = (() => {
   }
 
   function hud() {
-    const m = gm.match, me = 0, ai = 1, y0 = 30;
+    const m = gm.match, me = 0, ai = 1, y0 = 30, my = TOUCH.on || W < 640 ? y0 + 46 : y0;
     cx.textBaseline = 'middle'; cx.textAlign = 'left'; cx.fillStyle = '#f0e2bf'; cx.font = '700 26px "Bebas Neue", Impact, sans-serif';
     const tag = (i, x, al) => { cx.textAlign = al; const g = m.groups[i]; cx.fillStyle = m.turn === i && m.winner === null ? '#ffd27a' : '#a89a78'; cx.fillText(`${i === 0 ? 'YOU' : gm.opp.name.toUpperCase()}${g ? '  ·  ' + g.toUpperCase() : ''}`, x, y0); };
     tag(me, 24, 'left'); tag(ai, W - 24, 'right');
-    cx.textAlign = 'center'; cx.fillStyle = '#f0e2bf'; cx.font = '600 15px "Inter", sans-serif'; cx.fillText(gm.msg || m.lastMessage, W / 2, y0 + 0.5);
-    if (gm.stake) { cx.fillStyle = '#9fd49a'; cx.font = '600 13px "Inter", sans-serif'; cx.fillText(`POT $${gm.stake * 2}`, W / 2, y0 + 22); }
+    cx.textAlign = 'center'; cx.fillStyle = '#f0e2bf'; cx.font = '600 15px "Inter", sans-serif'; cx.fillText(gm.msg || m.lastMessage, W / 2, my + 0.5);
+    if (gm.stake) { cx.fillStyle = '#9fd49a'; cx.font = '600 13px "Inter", sans-serif'; cx.fillText(`POT $${gm.stake * 2}`, W / 2, my + 20); }
     const rest = p => { const g = m.groups[p]; if (!g) return null; let n = 0; for (const b of gm.sim.balls) if (!b.pocketed && b.id && b.id !== 8 && POOL.groupOf(b.id) === g) n++; return n; };
     cx.font = '600 13px "Inter", sans-serif'; cx.fillStyle = '#a89a78';
     const a = rest(me), b = rest(ai); cx.textAlign = 'left'; cx.fillText(a == null ? 'Table open' : a === 0 ? 'Now the black' : `${a} to go`, 24, y0 + 22); cx.textAlign = 'right'; cx.fillText(b == null ? '' : b === 0 ? 'Now the black' : `${b} to go`, W - 24, y0 + 22);
@@ -10854,16 +10888,17 @@ const PoolGame = (() => {
     cx.textAlign = 'center'; cx.fillStyle = 'rgba(240,226,191,.55)'; cx.font = '500 12px "Inter", sans-serif';
     const help = TOUCH.on ? (gm.phase === 'place' ? 'Tap where the cue ball goes' : gm.phase === 'aim' ? 'Touch to aim, hold to pull back (drag to adjust), let go to shoot' : gm.phase === 'over' ? 'Tap to finish' : '')
       : gm.phase === 'place' ? 'Move the ball · click (or SPACE) to place it' : gm.phase === 'aim' ? 'Aim with the mouse / arrows · hold click or SPACE, release to shoot · Q to forfeit' : gm.phase === 'over' ? 'Click or SPACE to finish' : '';
-    cx.fillText(help, W / 2, H - 22);
+    if (W < 640) cx.font = '500 11px "Inter", sans-serif';
+    cx.fillText(help, W / 2, H - (rot ? 12 : 22));
   }
 
   function powerBar() {
-    const x = 34, y = H * 0.25, h = H * 0.5, w = 16; cx.fillStyle = 'rgba(0,0,0,.5)'; rr(x, y, w, h, 8); cx.fill(); cx.strokeStyle = 'rgba(240,226,191,.4)'; cx.lineWidth = 1; cx.stroke();
+    const x = rot ? 14 : 34, y = H * 0.25, h = H * 0.5, w = rot ? 14 : 16; cx.fillStyle = 'rgba(0,0,0,.5)'; rr(x, y, w, h, 8); cx.fill(); cx.strokeStyle = 'rgba(240,226,191,.4)'; cx.lineWidth = 1; cx.stroke();
     const p = gm.power; if (p > 0) { const g = cx.createLinearGradient(0, y + h, 0, y); g.addColorStop(0, '#5cc05c'); g.addColorStop(0.6, '#e8c52a'); g.addColorStop(1, '#d6382a'); cx.fillStyle = g; rr(x + 2, y + h - (h - 4) * p - 2, w - 4, (h - 4) * p, 6); cx.fill(); }
     cx.fillStyle = 'rgba(240,226,191,.6)'; cx.font = '600 11px "Inter", sans-serif'; cx.textAlign = 'center'; cx.fillText('POWER', x + w / 2, y - 12);
   }
   function spinDial() {
-    const r = 34, X = W - 64, Y = H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
+    const r = rot ? 30 : 34, X = rot ? 56 : W - 64, Y = rot ? H - 66 : H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
     cx.fillStyle = '#f4f2ea'; cx.beginPath(); cx.arc(X, Y, r, 0, 7); cx.fill(); cx.strokeStyle = 'rgba(0,0,0,.4)'; cx.lineWidth = 2; cx.stroke();
     cx.strokeStyle = 'rgba(0,0,0,.15)'; cx.beginPath(); cx.moveTo(X - r, Y); cx.lineTo(X + r, Y); cx.moveTo(X, Y - r); cx.lineTo(X, Y + r); cx.stroke();
     cx.fillStyle = '#c7352b'; cx.beginPath(); cx.arc(X + gm.spin.side * r * 0.7, Y - gm.spin.top * r * 0.7, 6, 0, 7); cx.fill();
@@ -10871,7 +10906,9 @@ const PoolGame = (() => {
   }
 
   function frame(dt) {
-    cx.clearRect(0, 0, W, H); drawTable();
+    cx.clearRect(0, 0, W, H); cx.fillStyle = 'rgba(7,4,3,.95)'; cx.fillRect(0, 0, W, H);
+    cx.save(); if (rot) { cx.translate(W / 2, H / 2); cx.rotate(Math.PI / 2); cx.translate(-VW / 2, -VH / 2); }
+    drawTable();
     const sim = gm.sim, m = gm.match;
     // aim guide for the human
     const showAim = gm.phase === 'aim' && m.turn === 0;
@@ -10887,6 +10924,7 @@ const PoolGame = (() => {
     if (gm.phase === 'place' && m.turn === 0) { const ok = sim.canPlaceCue(gm.px, gm.pz, m.kitchen); drawBall(0, gm.px, gm.pz, null, R * S, ok ? 0.95 : 0.35); if (!ok) { cx.strokeStyle = '#d6382a'; cx.lineWidth = 2; cx.beginPath(); cx.arc(sx(gm.pz), sy(gm.px), R * S + 4, 0, 7); cx.stroke(); } }
     if (showAim) drawCue(sim, gm.angle, gm.power);
     if (gm.phase === 'ai' && gm.aiShot && gm.t > gm.aiAt - 0.9) drawCue(sim, gm.aiShot.angle, clamp((gm.t - (gm.aiAt - 0.9)) / 0.5, 0, 1) * (gm.aiShot.power / 7) * 0.7 + 0.05);
+    cx.restore();
     hud(); if (showAim || gm.phase === 'roll') { powerBar(); } spinDial();
     if (gm.phase === 'over') { cx.fillStyle = 'rgba(0,0,0,.55)'; cx.fillRect(0, H * 0.4, W, H * 0.2); cx.fillStyle = gm.won ? '#ffd27a' : '#e8a08a'; cx.font = '700 54px "Bebas Neue", Impact, sans-serif'; cx.textAlign = 'center'; cx.fillText(gm.won ? 'YOU WIN' : gm.opp.name.toUpperCase() + ' WINS', W / 2, H * 0.5 - 6); cx.font = '500 15px "Inter", sans-serif'; cx.fillStyle = '#f0e2bf'; cx.fillText(gm.endTxt || '', W / 2, H * 0.5 + 34); }
   }
@@ -10934,15 +10972,17 @@ const PoolGame = (() => {
 
   // ------------------------------------------------------------ input
   function toTable(e) { const r = cv.getBoundingClientRect(); ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top; }
-  function updateAimFromPointer() { const c = gm.sim.balls[0], dx = tx(ptr.y) - c.x, dz = tz(ptr.x) - c.z; if (Math.hypot(dx, dz) > 0.03) gm.angle = Math.atan2(dx, dz); }
+  // the pointer in the table's (unrotated) drawing space
+  const vx = () => rot ? VW / 2 + (ptr.y - H / 2) : ptr.x, vy = () => rot ? VH / 2 - (ptr.x - W / 2) : ptr.y;
+  function updateAimFromPointer() { const c = gm.sim.balls[0], dx = tx(vy()) - c.x, dz = tz(vx()) - c.z; if (Math.hypot(dx, dz) > 0.03) gm.angle = Math.atan2(dx, dz); }
   function onDown(e) {
     toTable(e); ptr.down = true; ptr.on = true; if (e.pointerType === 'touch' || e.pointerType === 'pen') cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
     if (gm.phase === 'over' && gm.t > 0.8) return PoolGame.close();
     const d = gm.dial; if (d && Math.hypot(ptr.x - d.x, ptr.y - d.y) < d.r + 6) { spinDrag = true; setSpin(); return; }
-    if (gm.phase === 'place') { if (e.pointerType !== 'mouse') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } place(); return; }
+    if (gm.phase === 'place') { if (e.pointerType !== 'mouse') { gm.px = clamp(tx(vy()), -HW + R, HW - R); gm.pz = clamp(tz(vx()), -HL + R, HL - R); } place(); return; }
     if (gm.phase === 'aim') { updateAimFromPointer(); gm.charging = true; gm.power = 0.02; gm.pdir = 1; }
   }
-  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && (!gm.charging || (e.pointerType === 'touch' && ptr.down))) updateAimFromPointer(); }
+  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(vy()), -HW + R, HW - R); gm.pz = clamp(tz(vx()), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && (!gm.charging || (e.pointerType === 'touch' && ptr.down))) updateAimFromPointer(); }
   function onUp() { ptr.down = false; spinDrag = false; release(); }
   function setSpin() { const d = gm.dial; gm.spin.side = clamp((ptr.x - d.x) / (d.r * 0.7), -1, 1); gm.spin.top = clamp(-(ptr.y - d.y) / (d.r * 0.7), -1, 1); const l = Math.hypot(gm.spin.side, gm.spin.top); if (l > 1) { gm.spin.side /= l; gm.spin.top /= l; } }
   function place() { if (gm.sim.placeCue(gm.px, gm.pz, gm.match.kitchen)) { SFX.click(); gm.phase = 'aim'; gm.match.lastMessage = gm.match.lastMessage; aimAtNearest(); } else SFX.tone(160, 0.12, { gain: 0.05, type: 'sawtooth' }); }

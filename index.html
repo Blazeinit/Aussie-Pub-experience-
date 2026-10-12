@@ -222,19 +222,62 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- touch controls ---------- */
 canvas#gl{touch-action:none}
 #touch{position:fixed;inset:0;z-index:30;pointer-events:none}
-#tStick{position:absolute;left:calc(22px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:140px;height:140px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.28);pointer-events:auto;touch-action:none}
-#tStick i{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px;border-radius:50%;background:rgba(243,196,90,.55);border:2px solid rgba(255,255,255,.6)}
-#tBtns{position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(22px + env(safe-area-inset-bottom));display:flex;flex-wrap:wrap-reverse;justify-content:flex-end;gap:10px;max-width:300px;pointer-events:auto}
-#tBtns button{min-width:64px;height:58px;border-radius:14px;border:2px solid rgba(255,255,255,.35);background:rgba(18,11,6,.6);color:#fff;font:800 13px Inter;letter-spacing:1px;touch-action:none;-webkit-user-select:none}
-#tBtns button small{display:block;font-size:9px;font-weight:600;opacity:.7;letter-spacing:0}
-#tBtns button.big{min-width:96px;height:96px;border-radius:50%;background:rgba(243,196,90,.5);border-color:var(--gold);font-size:16px}
-#tBtns button.huge{min-width:150px;height:150px}
-#tBtns button.on,#tBtns button.lit{background:var(--gold);color:#120b06}
-#tMenu{position:absolute;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:46px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font-size:20px;pointer-events:auto}
+#tStick{position:absolute;left:calc(18px + env(safe-area-inset-left));bottom:calc(18px + env(safe-area-inset-bottom));width:clamp(112px,32vmin,140px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.12),rgba(0,0,0,.34));border:2px solid rgba(255,255,255,.22);pointer-events:auto;touch-action:none}
+#tStick i{position:absolute;left:50%;top:50%;width:44%;height:44%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle at 40% 35%,rgba(255,226,150,.85),rgba(243,196,90,.5));border:2px solid rgba(255,255,255,.6);box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#tBtns{position:absolute;inset:0;pointer-events:none}
+#tBtns button{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:rgba(18,11,6,.55);color:#fff;font:800 11px/1.05 Inter,sans-serif;letter-spacing:.5px;touch-action:none;-webkit-user-select:none;user-select:none;pointer-events:auto;box-shadow:0 2px 10px rgba(0,0,0,.35);backdrop-filter:blur(3px);-webkit-tap-highlight-color:transparent;transition:transform .08s,background .12s}
+#tBtns button small{display:block;font-size:8px;font-weight:600;opacity:.75;letter-spacing:0;margin-top:2px;max-width:86%}
+#tBtns button.big{background:radial-gradient(circle at 50% 35%,rgba(255,214,120,.7),rgba(190,130,40,.55));border-color:var(--gold);font-size:17px;letter-spacing:1px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#tBtns button.quit{border-color:rgba(255,140,120,.5);background:rgba(60,14,10,.55)}
+#tBtns button.on,#tBtns button.lit{background:var(--gold);color:#120b06;transform:scale(.94);text-shadow:none}
+#tMenu,#tPhone{position:absolute;top:calc(8px + env(safe-area-inset-top));left:50%;width:44px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.45);color:#fff;font-size:19px;pointer-events:auto;-webkit-tap-highlight-color:transparent}
+#tMenu{transform:translateX(calc(-100% - 4px))}#tPhone{transform:translateX(4px);font-size:17px}
 body.touchmode #hints,body.touchmode #cross{display:none!important}
-body.touchmode #prompt{bottom:180px}
-body.touchmode #deck{bottom:8px}
-@media (max-width:820px){body.touchmode .tl{transform:scale(.78);transform-origin:top left}body.touchmode .tr{transform:scale(.78);transform-origin:top right}body.touchmode .br{display:none}#panel .box{max-height:86vh;overflow:auto}}
+
+/* ---- touch HUD: smaller, out of the thumbs' way ---- */
+body.touchmode #hud .tl{top:calc(8px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left))}
+body.touchmode #clock{font-size:30px}
+body.touchmode #daylbl{font-size:9px;letter-spacing:2px}
+body.touchmode #objective{font-size:11px;line-height:1.4;max-width:min(250px,38vw);padding:5px 8px;margin-top:6px;max-height:4.4em;overflow:hidden;pointer-events:auto;cursor:pointer;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+body.touchmode #objective.open{max-height:60vh;-webkit-mask-image:none;mask-image:none;background:rgba(0,0,0,.7)}
+body.touchmode #goals{font-size:10.5px;max-width:min(240px,38vw);margin-top:5px}
+body.touchmode #goals .tick{font-size:10px}
+body.touchmode #hud .tr{top:calc(8px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right))}
+body.touchmode .money{font-size:24px}body.touchmode .money small{font-size:9px}
+body.touchmode #bankv{font-size:16px}
+body.touchmode #items{font-size:10px;margin-top:2px}
+body.touchmode #hud .br{top:calc(76px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));width:118px}
+body.touchmode .meter{margin-top:3px}body.touchmode .meter label{font-size:8px;letter-spacing:1px}body.touchmode .meter .bar{height:4px;margin-top:1px}
+body.touchmode #prompt{top:auto;bottom:calc(150px + env(safe-area-inset-bottom));font-size:13px;padding:8px 14px;border-radius:20px;pointer-events:auto;border:1px solid rgba(243,196,90,.5);background:rgba(10,6,3,.72)}
+body.touchmode #prompt kbd{font-size:0;padding:2px 7px;vertical-align:1px}body.touchmode #prompt kbd::after{content:'TAP';font-size:10px}
+body.touchmode #subtitle{bottom:calc(16px + env(safe-area-inset-bottom));max-width:calc(100vw - 2 * clamp(150px,30vmin,190px));font-size:14px}
+body.touchmode #toasts{top:calc(64px + env(safe-area-inset-top))}body.touchmode .toast{font-size:12px;padding:6px 12px}body.touchmode .toast.big{font-size:22px}
+body.touchmode #beat b{font-size:clamp(26px,7vmin,48px)}
+/* menus, conversations, pause: hide the thumb controls and the HUD clutter behind them */
+body.touchmode.tui #tStick,body.touchmode.tui #tBtns,body.touchmode.tui #tPhone,body.touchmode.tui #prompt{display:none}
+body.touchmode.tui #objective,body.touchmode.tui #goals,body.touchmode.tui #hud .br{opacity:0!important;pointer-events:none}
+/* minigames draw their own scoreboards */
+body.touchmode.inmg #hud .tl,body.touchmode.inmg #hud .br,body.touchmode.inmg #hud .tr,body.touchmode.inmg #mgHelp{opacity:0!important;pointer-events:none}
+/* sat at a pokie: the machine owns the screen */
+body.touchmode.seated #objective,body.touchmode.seated #goals,body.touchmode.seated #hud .br,body.touchmode.seated #prompt{display:none}
+body.touchmode.seated #hud .tl,body.touchmode.seated #hud .tr{opacity:.6}
+body.touchmode #deck{left:0;right:0;transform:none;bottom:0;border-radius:14px 14px 0 0;border-width:1px 0 0;justify-content:center;flex-wrap:nowrap;gap:5px;padding:6px calc(124px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(8,8,12,.86)}
+body.touchmode .dk{min-width:0;flex:0 1 66px;padding:7px 4px;font-size:10px;letter-spacing:.5px}
+body.touchmode .dk small{font-size:8px}
+body.touchmode .dkinfo{min-width:0;flex:0 0 auto;padding:0 3px;font-size:8px}body.touchmode .dkinfo b{font-size:18px}
+body.touchmode .dk.spin{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom));width:104px;height:104px;border-radius:50%;font-size:20px;z-index:31;padding:0;flex:none}
+body.touchmode #dkSip small,body.touchmode #dkSmoke small,body.touchmode #dkLeave small{display:none}
+body.touchmode.seated #deck,body.touchmode.seated #deck:hover{opacity:1;background:rgba(8,8,12,.86)}
+@media (max-width:600px){
+  body.touchmode #deck{flex-wrap:wrap;padding-right:8px;row-gap:5px}
+  body.touchmode .dk{flex:1 1 64px}
+  body.touchmode .dk.spin{bottom:calc(118px + env(safe-area-inset-bottom));width:96px;height:96px}
+  body.touchmode #subtitle{max-width:92vw;bottom:calc(200px + env(safe-area-inset-bottom))}
+  body.touchmode #prompt{bottom:calc(230px + env(safe-area-inset-bottom))}
+  body.touchmode #hud .br{top:calc(70px + env(safe-area-inset-top));width:96px}
+  body.touchmode #objective,body.touchmode #goals{max-width:58vw}
+}
+#panel .box{max-height:86vh;overflow:auto}
 /* ---------- ATM ---------- */
 .atm{display:grid;grid-template-columns:1fr 210px;gap:16px;background:#2a2e36;border-radius:10px;padding:14px;border:3px solid #555c66;box-shadow:inset 0 0 20px rgba(0,0,0,.6)}
 .atmscr{background:linear-gradient(180deg,#0b3a8a,#06205a);border:4px solid #11161e;border-radius:6px;min-height:270px;color:#e8f2ff;font-family:ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column}
@@ -321,6 +364,25 @@ body.cine #hud,body.cine #deck,body.cine #touch,body.cine #goals,body.cine #obje
 #cineHint{position:fixed;right:5vw;bottom:3.4vh;z-index:61;font-size:11px;letter-spacing:.22em;opacity:.7;text-align:right;pointer-events:none}#cineHint kbd{background:rgba(255,255,255,.15);padding:1px 6px;border-radius:3px}#cineHint div{height:2px;background:rgba(255,255,255,.2);margin-top:4px}#cineHint i{display:block;height:100%;width:0;background:var(--gold)}
 body.cine #subtitle{bottom:13vh}
 
+/* ---------- short screens (a phone on its side) ---------- */
+@media (max-height:520px){
+  #title{justify-content:flex-start;padding:calc(14px + env(safe-area-inset-top)) 6vw 14px;overflow-y:auto}
+  #title .logo{font-size:clamp(34px,11vh,56px)}
+  #title .sub{font-size:14px;letter-spacing:4px;margin:4px 0 12px}
+  .menu{gap:6px}.mbtn{padding:8px 14px;font-size:14px}.mbtn small{font-size:10.5px}
+  #title .foot{position:static;margin-top:12px;font-size:10px;max-width:70vw}
+  .diffgrid{gap:8px}.dcard{padding:10px 12px}.dcard h3{font-size:21px;line-height:1}.dcard .who{font-size:11px;margin-bottom:4px}.dcard ul{font-size:11px;line-height:1.45}
+  #resume{gap:8px}#resume h2{font-size:34px}#resume .mbtn{padding:8px 16px;font-size:14px}
+  #panel{padding:8px}#panel .box{max-height:94vh;padding:14px 16px}#panel h2{font-size:28px}#panel .psub{margin:2px 0 10px}.opt{padding:8px 12px;font-size:14px}
+  #talk{padding:0 8px 6px}#talk .tcard{padding:10px 14px 8px}#tLine{font-size:15px;min-height:2.6em}.topt{padding:7px 10px;font-size:13.5px}#tName{font-size:22px}
+  .screen .card{max-height:96vh;overflow-y:auto}
+}
+@media (max-width:600px){
+  #title{padding:calc(24px + env(safe-area-inset-top)) 7vw 20px;justify-content:flex-start;overflow-y:auto;background:linear-gradient(180deg,rgba(5,3,2,.88),rgba(5,3,2,.55) 60%,rgba(5,3,2,.2))}
+  #title .foot{position:static;margin-top:16px;max-width:none}
+  .menu{width:100%}
+}
+
 </style>
 </head>
 <body>
@@ -392,7 +454,7 @@ body.cine #subtitle{bottom:13vh}
 <div id="lbT" class="lb"></div><div id="lbB" class="lb"></div><div id="cineTitle"></div><div id="cineHint" class="hidden">HOLD <kbd>E</kbd> TO SKIP<div><i id="cineSkip"></i></div></div>
 <div id="fade"></div>
 <div id="perf" class="hidden"></div>
-<div id="touch" class="hidden"><div id="tStick"><i></i></div><div id="tBtns"></div><button id="tMenu">☰</button></div>
-<script type="module" src="game.js?v=97274daaa0"></script>
+<div id="touch" class="hidden"><div id="tStick"><i></i></div><div id="tBtns"></div><button id="tMenu">☰</button><button id="tPhone">📱</button></div>
+<script type="module" src="game.js?v=be3ce5c363"></script>
 </body>
 </html>

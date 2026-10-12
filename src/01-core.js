@@ -113,6 +113,12 @@ let shadowDirty = 3;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x1a1f2a, 0.018);
 const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.03, 1200);
+// camera.fov is the vertical FOV as designed for a landscape screen.  On a narrow screen (a phone held upright) keep the
+// horizontal view instead, so the bar, a pokie screen or a conversation partner isn't cropped off the sides.
+{ const upd = camera.updateProjectionMatrix.bind(camera); camera.updateProjectionMatrix = function () {
+  const ref = 1.25, f = this.fov; if (this.aspect >= ref) return upd();
+  this.fov = Math.min(100, 2 * Math.atan(Math.tan(f * Math.PI / 360) * ref / this.aspect) * 180 / Math.PI); upd(); this.fov = f;
+}; camera.updateProjectionMatrix(); }
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
