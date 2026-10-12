@@ -297,6 +297,55 @@ const Eat = {
 
 function F_TIP(E, A) { return A.F.type === 'pick' ? 0.04 : 0.17; }
 
+// ================================================================== PATRONS EATING
+// Some patrons who sit down at a lounge table or a beer-garden bench have a feed: the plate sits on the table in front
+// of them (hand food is held), and they eat it a forkful / a bite at a time with the same chunk-per-bite models.
+// The empty plate stays until they get up.
+const NpcMeals = {
+  list: [],
+  seat(n) {
+    const s = n.spot; if (!s || s.kind !== 'chair' || (s.area !== 'lounge' && s.area !== 'garden') || n.meal || n.role !== 'patron') return;
+    const ev = Game.state.event, late = Game.state.time > 21.5;
+    if (Math.random() > (ev === 'parma' ? 0.5 : 0.22) * (late ? 0.35 : 1)) return;
+    const kind = ev === 'parma' && Math.random() < 0.6 ? 'parma' : ev === 'sunday' && Math.random() < 0.5 ? 'roast' : choice(['parma', 'schnitty', 'hsp', 'chips', 'chips', 'burger', 'pie', 'cheese', 'nuts', 'sausageroll', 'pav']);
+    n.meal = { kind, type: FOODS[kind].type, spot: s, m: null, next: rand(3, 8), bites: 0, pending: true };
+    this.list.push(n);
+  },
+  // put the food out: on the table (a plate or a bowl) or in the right hand (a pie, a burger)
+  serve(n) {
+    const M = n.meal, s = M.spot, m = makeFood(M.kind); M.m = m; M.pending = false; M.chunks = m.userData.chunks.slice();
+    if (M.type === 'hand') { n.h.J.rH.add(m); m.position.set(0, -0.07, 0.05); m.scale.setScalar(0.9); }
+    else { const fw = V3(Math.sin(s.ry), 0, Math.cos(s.ry)); m.position.copy(s.pos).addScaledVector(fw, s.area === 'garden' ? 0.3 : 0.42); m.position.y = 0.79; m.rotation.set(0, s.ry + Math.PI, 0); scene.add(m); }
+    M.hadDrink = n.a.holdDrink; n.a.holdDrink = false; n.a.phone = false; n.glass.group.visible = false; n.a.dine = M.type === 'plate' ? 'plate' : 'hand';
+  },
+  leave(n) {
+    const M = n.meal; if (!M) return; n.meal = null; if (n.a.dine && M.hadDrink) { n.a.holdDrink = true; n.glass.group.visible = true; } n.a.dine = null; n.a.eatT = 0;
+    if (M.m) { if (M.type === 'hand' || !M.m.parent) { M.m.parent && M.m.parent.remove(M.m); } else { M.left = elapsed; this.left.push(M); } }
+    const i = this.list.indexOf(n); if (i >= 0) this.list.splice(i, 1);
+  },
+  left: [],
+  clear() { for (const n of this.list.slice()) this.leave(n); for (const M of this.left) M.m.parent && M.m.parent.remove(M.m); this.left = []; },
+  update(dt) {
+    for (const n of this.list.slice()) {
+      const M = n.meal, a = n.a;
+      if (!M || n.spot !== M.spot || n.state !== 'idle' || n.mg) { this.leave(n); continue; }
+      // it arrives while nobody's looking straight at the table
+      if (M.pending) { if ((M.next -= dt) <= 0 && n.dist2 > 30) this.serve(n); continue; }
+      if (M.type === 'hand' && M.m) uprightInHand(M.m, n.ry, a.eatT > 0 ? Math.sin(clamp(a.eatT / 1.4, 0, 1) * Math.PI) * 0.9 : 0.25);
+      if (a.eatT > 0) {
+        const was = a.eatT; a.eatT = Math.max(0, a.eatT - dt);
+        if (was > 0.7 && a.eatT <= 0.7) { const c = M.chunks[M.bites++]; if (c) c.visible = false; }
+        continue;
+      }
+      if (M.bites >= M.chunks.length) { if (a.dine) { a.dine = null; if (M.type === 'hand') { M.m.parent && M.m.parent.remove(M.m); M.m = null; } n.a.holdDrink = !!M.hadDrink; n.glass.group.visible = !!M.hadDrink; } continue; }
+      if (a.talk > 0 || a.laughT > 0) continue;
+      if ((M.next -= dt) <= 0) { M.next = rand(3.5, 9); a.eatT = 1.4; }
+    }
+    // empty plates left behind are cleared once you're not right there
+    for (let i = this.left.length - 1; i >= 0; i--) { const M = this.left[i]; if (elapsed - M.left > 45 || M.m.position.distanceTo(camera.position) > 9) { M.m.parent && M.m.parent.remove(M.m); this.left.splice(i, 1); } }
+  },
+};
+
 const Food = {
   t: 0,
   // steam off hot plates sitting on the bar, only while you can see them

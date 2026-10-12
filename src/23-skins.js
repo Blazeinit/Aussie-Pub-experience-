@@ -87,9 +87,17 @@ Machine.prototype._paintSkin = function () {
   x.setTransform(sc, 0, 0, sc, 0, 0); x.globalAlpha = 1; x.shadowBlur = 0;
   // the hold & spin screen (and its medal) only while a hold & spin is actually being played
   const hs = st === 'holdspin' && !!this.hs && S.useHS && !!SLOTSKIN.hsImg;
-  const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
-  x.drawImage(hs ? SLOTSKIN.hsImg : S.imgMain, 0, 0, W, H);
-  skinHUD(x, S, this, hs ? SLOTSKIN.hp.hud : S.hud);
+  // the hold & spin screen keeps its proportions on a taller cabinet (Golden Century): it sits at the bottom and the
+  // fire background above it is carried up to the top, rather than the whole picture being stretched
+  const HP = SLOTSKIN.hp, hk = hs ? W / HP.mw : 1, hoy = hs ? Math.max(0, H - HP.mh * hk) : 0;
+  const map = r => [r[0] * hk, r[1] * hk + hoy, r[2] * hk, r[3] * hk];
+  const win = hs ? map(HP.win) : S.win;
+  if (hs) {
+    if (hoy > 1) { x.drawImage(SLOTSKIN.hsImg, 0, 0, HP.mw, 40, 0, 0, W, hoy + 2); x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, hoy); }
+    x.drawImage(SLOTSKIN.hsImg, 0, hoy, W, HP.mh * hk);
+    const hud = {}; for (const k in HP.hud) hud[k] = map(HP.hud[k]);
+    skinHUD(x, HP, this, hud);
+  } else { x.drawImage(S.imgMain, 0, 0, W, H); skinHUD(x, S, this, S.hud); }
   if (!hs) skinTitle(x, S);
   if (S.jpm) skinJP(x, S, { GRAND: S.jpm.GRAND, MEGA: S.jpm.MEGA }, 0);
   // the reel stage: the engine's normal reel / hold & spin / gamble drawing, squeezed into the screen's own reel window
@@ -114,7 +122,7 @@ Machine.prototype._paintSkin = function () {
   x.restore();
   // hold & spin medal: the live count in the big gold coin
   if (hs) {
-    const h = this.hs, n = h.shown.filter(Boolean).length, M = SLOTSKIN.hp.medal, cx = (M[0] + M[2] / 2) * W / SLOTSKIN.hp.mw, cy = (M[1] + M[3] / 2) * H / SLOTSKIN.hp.mh;
+    const h = this.hs, n = h.shown.filter(Boolean).length, M = map(HP.medal), cx = M[0] + M[2] / 2, cy = M[1] + M[3] / 2;
     const ink = '#1a0a00', gold = '#ffd84a';
     skinText(x, String(h.collect >= 0 ? Math.min(15, n) : n), cx, cy - 36, 190, ink, gold, 300, "Bungee, Impact, sans-serif");
     skinText(x, h.collect >= 0 ? 'COLLECTING' : 'COLLECTED', cx, cy + 70, 46, ink, gold, 360, "Bungee, Impact, sans-serif");

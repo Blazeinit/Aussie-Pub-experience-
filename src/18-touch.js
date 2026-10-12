@@ -36,6 +36,7 @@ const TOUCH = {
     let mode = 'walk';
     if (Game.mode !== 'play') mode = 'none';
     else if (player.seated) mode = 'pokie';
+    else if (typeof Eat !== 'undefined' && Eat.active) mode = 'eat';
     else if (MG.active) mode = MG.active === Darts ? 'darts' : MG.active === BarShift ? 'shift' : MG.active === Karaoke ? 'karaoke' : 'mg';
     if (mode === this.mode) return;
     this.mode = mode;
@@ -58,6 +59,8 @@ const TOUCH = {
       btn('SERVE', '', key('Space')); btn('CLOCK OFF', '', key('KeyQ'));
     } else if (mode === 'karaoke') {
       btn('SING!', 'big huge', key('Space')); btn('QUIT', '', key('KeyQ'));
+    } else if (mode === 'eat') {
+      btn('PUT IT DOWN', '', key('KeyQ'));
     } else if (mode === 'mg') {
       btn('DONE', '', key('KeyQ'));
     }

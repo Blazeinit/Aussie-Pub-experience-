@@ -187,7 +187,7 @@ const REG = {
       const R = REGULARS[name];
       const n = mkNPC(Object.assign({ name, smoker: name === 'Davo', gambler: name === 'Davo' }, R.look));
       n.regular = name;
-      const sp = SPOTS.find(s => !s.occ && R.spot(s));
+      const sp = SPOTS.find(s => !s.occ && !(s.machine && s.machine.occupiedBy) && R.spot(s));
       if (sp) { claim(n, sp); n.pos.copy(sp.pos); n.ry = sp.ry; seatNPC(n); }
       else { n.pos.copy(NODES.P5); n.state = 'idle'; n.kind = 'stand'; }
       n.timer = 1e9; // regulars stay put

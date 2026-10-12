@@ -105,6 +105,7 @@ const Game = {
     this.trivia = { done: false }; this.raffle = { tickets: 0, drawn: false }; this.keno.tickets = []; this.keno.next = s.time + 0.05; this.lastDrinks = false; this.entered = false; this.footyT = 0;
     // reset world
     for (const n of NPCS.slice()) if (n !== bartender) { release(n); scene.remove(n.h.root); }
+    NpcMeals.clear();
     NPCS.length = 0; NPCS.push(bartender); bartender.queue = []; bartender.job = null; bartender.pos.copy(BAR.tender.home);
     for (const it of this.items) { scene.remove(it.glass ? it.glass.group : it.mesh); }
     this.items = []; interactables.splice(0, interactables.length, ...interactables.filter(i => !i.temp));
@@ -405,7 +406,7 @@ const Game = {
     if (!m.canSpin()) return;
     if (m.state === 'showWin') m.endShowWin();
     const amt = Math.round(m.credit * 100) / 100; m.credit = 0; this.state.tickets.push(amt);
-    SFX.print(); this.toast(`Ticket printed: ${fmt$(amt)} — redeem at the cash machine in the gaming room.`);
+    SFX.print(); PokieFX.ticket(amt); this.toast(`Ticket printed: ${fmt$(amt)} — redeem at the cash machine in the gaming room.`);
   },
   redeem() {
     const s = this.state; if (!s.tickets.length) { this.toast('No tickets to redeem.'); return; }
@@ -690,7 +691,7 @@ function simulate(dt) {
   if (playing) {
     if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt);
+    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt); NpcMeals.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;

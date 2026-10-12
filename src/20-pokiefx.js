@@ -62,6 +62,10 @@ const PokieFX = {
     if (m.btns[5]) { this.spinShared = m.btns[5].material; m.btns[5].material = this.spinShared.clone(); }
     // note acceptor bezel that blinks green
     this.acceptor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2.2, 0.6), toneMapped: false })); this.acceptor.position.set(0.2, 0.89, 0.342); g.add(this.acceptor);
+    // TITO printer slot opposite the note acceptor
+    // (just under the screen, where you can see it from the seat; the ticket feeds out over the deck)
+    this.tkY = D.cy - D.h / 2 - 0.035; this.tkX = -Math.min(0.2, D.w / 2 - 0.08);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.03), MAT.blackPlastic); slot.position.set(this.tkX, this.tkY, 0.05); g.add(slot); this.tk = null;
     // the screen's own light
     m.screenW && this.light.position.copy(m.screenW).addScaledVector(m.fw, 0.45).add(V3(0, -0.1, 0));
     this.light.color.set(th.glow); this.flash = 0;
@@ -85,6 +89,23 @@ const PokieFX = {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
     return (this._legend[b.id] = t);
   },
+  // cash out: a TITO ticket feeds out of the printer slot, droops, then you take it
+  ticket(amt) {
+    if (!this.group) return;
+    const c = mkCanvas(128, 256), x = c.getContext('2d');
+    x.fillStyle = '#f7f4ec'; x.fillRect(0, 0, 128, 256); x.fillStyle = '#1a1a1a'; x.textAlign = 'center';
+    x.font = 'bold 14px Inter, sans-serif'; x.fillText('CASHOUT TICKET', 64, 24);
+    x.font = '34px "Bebas Neue", Impact, sans-serif'; x.fillText(fmt$(amt), 64, 66);
+    x.font = '10px Inter, sans-serif'; x.fillText(VENUE.name, 64, 88); x.fillText(`${Game.clockText ? Game.clockText() : ''} · MACHINE ${this.m.idx + 1}`, 64, 102);
+    for (let i = 0, X = 14; X < 114; i++) { const w = Math.random() < 0.5 ? 1 : 2.5; if (i % 2 === 0) x.fillRect(X, 120, w, 58); X += w + (Math.random() < 0.5 ? 1 : 2); }
+    x.font = '9px Inter, sans-serif'; x.fillText(String(Math.floor(Math.random() * 1e15)).padStart(15, '0').replace(/(\d{4})/g, '$1 '), 64, 192); x.fillText('VALID FOR 30 DAYS', 64, 228);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    if (this.tk) this.group.remove(this.tk.pivot);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.14), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide }));
+    mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = Math.PI;   // lying flat, text toward you as it comes out
+    const pivot = new THREE.Group(); pivot.position.set(this.tkX, this.tkY - 0.002, 0.062); pivot.add(mesh); this.group.add(pivot);
+    this.tk = { pivot, mesh, t: 0 }; mesh.position.z = -0.07;
+  },
   celebrate(level) { this.shake = Math.min(1, 0.4 + level / 60); this.flash = 1; this.burstT = 2.5 + Math.min(4, level / 20); },
   press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.004; c.userData.pressT = 0.14; } },
   update(dt) {
@@ -99,6 +120,13 @@ const PokieFX = {
     this.light.intensity = damp(this.light.intensity, base * 1.4, 10, dt);
     if (bigWin) this.light.color.setHSL((this.t * 0.8) % 1, 0.8, 0.6); else this.light.color.lerp(_c1.set(m.game.theme.glow), Math.min(1, dt * 3));
     this.acceptor.material.color.setRGB(0.2, (Math.sin(this.t * 4) > 0 ? 2.2 : 0.4), 0.6);
+    if (this.tk) {
+      const k = this.tk; k.t += dt;
+      const out = clamp(k.t / 1.3, 0, 1);                                         // feeding out of the slot
+      k.mesh.position.z = -0.07 + out * 0.13; k.pivot.rotation.x = out * out * 0.55;   // and drooping as it goes
+      if (k.t > 2.4) { const f = clamp((k.t - 2.4) / 0.5, 0, 1); k.pivot.position.y = this.tkY + f * 0.12; k.pivot.position.z = 0.062 + f * 0.3; k.mesh.material.opacity = 1 - f; k.mesh.material.transparent = true; }
+      if (k.t > 2.9) { this.group.remove(k.pivot); k.mesh.geometry.dispose(); k.mesh.material.map.dispose(); k.mesh.material.dispose(); this.tk = null; }
+    }
     // deck buttons: SPIN pulses when it's your go; gamble glows when it's on offer
     for (const c of this.caps) {
       const id = c.userData.id; if (!id) continue;

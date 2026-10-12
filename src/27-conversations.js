@@ -315,7 +315,7 @@ const VenueLocals = {
   spawn() {
     for (const L of LOCALS[VENUE.id] || []) {
       const n = mkNPC(Object.assign({ name: L.name, smoker: false, gambler: false }, L.look)); n.local = L.name;
-      const sp = SPOTS.find(s => !s.occ && L.spot(s));
+      const sp = SPOTS.find(s => !s.occ && !(s.machine && s.machine.occupiedBy) && L.spot(s));
       if (sp) { claim(n, sp); n.pos.copy(sp.pos); n.ry = sp.ry; seatNPC(n); } else { n.pos.copy(NODES.P5); n.state = 'idle'; n.kind = 'stand'; }
       n.timer = 1e9; n.eventTalk = () => { Night.ev('talk', L.name); DLG.open(L.name + '.hub', n, { key: L.name, bio: L.bio }); };
     }

@@ -517,6 +517,8 @@ class Machine {
     this.rand0();
   }
   get bet() { return BETS[this.betIdx]; }
+  // an NPC's machine within earshot: its sounds play from the cabinet (positional), the far ones stay quiet
+  near() { if (this.mode !== 'npc' || !this.screenW) return false; const c = camera.position; return (this.screenW.x - c.x) ** 2 + (this.screenW.z - c.z) ** 2 < 80; }
   rand0() { const res = spinGrid(this.game, 1, false); this.grid = res.grid; this.res = res; for (let r = 0; r < 5; r++) { const R = this.reels[r]; R.pos = 100; R.strip = {}; for (let k = 0; k < 3; k++) R.strip[100 - k] = res.grid[r][k]; } }
   symAt(r, j) { const R = this.reels[r]; if (R.strip[j] == null) R.strip[j] = wpick(this.game.syms, reelWeights(this.game, r, this.free)); return R.strip[j]; }
   setMode(mode) {
@@ -554,7 +556,7 @@ class Machine {
     if (trig) {
       let cnt = 0;
       for (let r = 0; r < 5; r++) { if (cnt >= 2 && antFrom === 9) antFrom = r; cnt += this.res.grid[r].filter(s => s === trig).length; }
-      if (this.game.bonusSym === 'COIN') { let c = 0; for (let r = 0; r < 3; r++) c += this.res.grid[r].filter(s => s === 'COIN').length; antFrom = c >= 4 ? 3 : 9; }
+      if (this.game.bonusSym === 'COIN') { let c = 0; antFrom = 9; for (let r = 0; r < 5; r++) { if (r >= 3 && c >= r + 1 && antFrom === 9) antFrom = r; c += this.res.grid[r].filter(s => s === 'COIN').length; } }
     }
     const fast = this.mode === 'npc' ? 0.7 : 1;
     let t = 0.5 * fast;
@@ -563,7 +565,7 @@ class Machine {
       R.stopAt = this.t + t; R.ant = r >= antFrom;
     });
     this.state = 'spinning'; this.msg = free ? '' : 'GOOD LUCK!';
-    if (this.mode === 'player') SFX.button();
+    if (this.mode === 'player') SFX.button(); else if (this.near()) SFX.tone(660, 0.05, { gain: 0.03, type: 'triangle', pos: this.screenW });
     return true;
   }
   slam() { if (this.state !== 'spinning') return; this.reels.forEach((R, r) => { if (R.phase === 'spin') R.stopAt = Math.min(R.stopAt, this.t + r * 0.04); }); }
@@ -579,7 +581,9 @@ class Machine {
       const R = this.reels[r];
       if (R.phase === 'spin') {
         if (this.t < R.t0) { R.pos -= dt * 1.5; continue; }
-        R.v = Math.min(R.v + dt * 90, R.ant ? 30 : 22); R.pos += R.v * dt;
+        // anticipation: the reel races, then visibly winds down over its last moments so you watch the symbols crawl in
+        const left = R.stopAt - this.t, vmax = R.ant ? (left < 0.75 ? lerp(6, 30, clamp(left / 0.75, 0, 1)) : 30) : 22;
+        R.v = R.v > vmax ? Math.max(vmax, R.v - dt * 70) : Math.min(R.v + dt * 90, vmax); R.pos += R.v * dt;
         if (this.mode === 'player' && Math.random() < dt * 14) SFX.spinTick();
         if (this.mode === 'player' && R.ant && Math.random() < dt * 4) SFX.anticip(r * 2 + Math.floor((this.t * 4) % 4));
         if (this.t >= R.stopAt) this.stopReel(r);
@@ -589,7 +593,7 @@ class Machine {
         if (k >= 1) {
           R.pos = R.P; R.phase = 'idle';
           if (this.mode === 'player') { SFX.reelStop(r); const trig = this.game.scatter || this.game.bonusSym; if (trig && this.res.grid[r].includes(trig)) SFX.tone(880 + r * 110, 0.25, { gain: 0.08, type: 'triangle' }); }
-          else if (this.mode === 'npc' && Math.random() < 0.3) SFX.tone(150, 0.08, { gain: 0.03, pos: this.screenW });
+          else if (this.near()) { SFX.tone(150 - r * 5, 0.08, { gain: 0.035, pos: this.screenW, fEnd: 70 }); const trig = this.game.scatter || this.game.bonusSym; if (trig && this.res.grid[r].includes(trig)) SFX.tone(880 + r * 110, 0.2, { gain: 0.025, type: 'triangle', pos: this.screenW }); }
         }
       }
     }
@@ -616,7 +620,7 @@ class Machine {
     this.win += scatPay;
     if (this.free) { this.featWin += this.win; }
     if (feat === 'retrigger') { this.freeLeft += 5; this.flash('+5 FREE GAMES', 1.6); if (this.mode === 'player') SFX.fanfare(); }
-    if (feat && feat !== 'retrigger') { this.pendingFeat = feat; this.state = 'featIntro'; this.st = 0; if (this.mode === 'player') { SFX.fanfare(); Game.onFeature(feat, this); } this.featBaseWin = this.win; return; }
+    if (feat && feat !== 'retrigger') { this.pendingFeat = feat; this.state = 'featIntro'; this.st = 0; if (this.mode === 'player') { SFX.fanfare(); Game.onFeature(feat, this); } else if (this.near()) SFX.chimeAt(this.screenW, 1); this.featBaseWin = this.win; return; }
     this.state = 'showWin'; this.st = 0;
     if (this.win > 0) {
       this.winLevel = this.win / bet;
@@ -691,6 +695,7 @@ class Machine {
           for (const l of s.landed) { h.shown[l.idx] = l.val; }
           h.respins = s.respins; h.lastLanded = s.landed.map(l => l.idx); h.landT = 0;
           if (this.mode === 'player') { if (s.landed.length) { s.landed.forEach((l, i) => SFX.coin()); SFX.tone(660, 0.2, { gain: 0.1, type: 'triangle' }); } else SFX.tone(200, 0.15, { gain: 0.06 }); }
+          else if (this.near() && s.landed.length) SFX.coin(this.screenW);
         } else { h.collect = 0; h.ct = 0; h.acc = 0; }
       }
       h.landT = (h.landT || 0) + dt;
@@ -765,7 +770,8 @@ class Machine {
 
   // ---------------- hand-over between players ----------------
   // play out whatever is running (a spin, free games, hold & spin, pick, wheel, gamble) at once, crediting the machine
-  settle() {
+  settle() { SFX.quiet(() => this._settle()); }
+  _settle() {
     this._settling = true;
     try {
       for (let i = 0; i < 4000 && !(this.state === 'ready' || (this.state === 'showWin' && !this.free)); i++) {

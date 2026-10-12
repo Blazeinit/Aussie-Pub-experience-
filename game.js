@@ -236,8 +236,9 @@ const AudioSys = (() => {
   function out(pan, dest) {
     const p = ctx.createStereoPanner(); p.pan.value = pan; p.connect(dest || sfx); return p;
   }
+  let hush = 0;   // SFX.quiet(): run something without a sound (fast-forwarding a feature, for one)
   function tone(f, dur, o = {}) {
-    if (!started) return;
+    if (!started || hush) return;
     const t = now() + (o.delay || 0), sp = spatial(o.pos, o.ref);
     const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t);
@@ -250,7 +251,7 @@ const AudioSys = (() => {
     return osc;
   }
   function noise(dur, o = {}) {
-    if (!started) return;
+    if (!started || hush) return;
     const t = now() + (o.delay || 0), sp = spatial(o.pos, o.ref);
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     src.playbackRate.value = o.rate || 1;
@@ -268,6 +269,7 @@ const AudioSys = (() => {
       noise(m[2], { freq: m[0] * rand(.85, 1.15), q: 1.2, gain: m[1], pos });
       if (surface === 'timber' || surface === 'deck') tone(rand(85, 110), 0.08, { gain: 0.06, pos });
     },
+    quiet(f) { hush++; try { return f(); } finally { hush--; } },
     click() { noise(0.03, { freq: 3200, q: 3, gain: 0.12 }); tone(1800, 0.03, { gain: 0.05, type: 'square' }); },
     button() { tone(660, 0.06, { gain: 0.08, type: 'triangle' }); noise(0.02, { freq: 2500, gain: 0.08 }); },
     reelStop(i) { tone(140 - i * 6, 0.12, { gain: 0.22, fEnd: 60 }); noise(0.05, { freq: 1800, q: 2, gain: 0.1 }); },
@@ -2906,6 +2908,8 @@ class Machine {
     this.rand0();
   }
   get bet() { return BETS[this.betIdx]; }
+  // an NPC's machine within earshot: its sounds play from the cabinet (positional), the far ones stay quiet
+  near() { if (this.mode !== 'npc' || !this.screenW) return false; const c = camera.position; return (this.screenW.x - c.x) ** 2 + (this.screenW.z - c.z) ** 2 < 80; }
   rand0() { const res = spinGrid(this.game, 1, false); this.grid = res.grid; this.res = res; for (let r = 0; r < 5; r++) { const R = this.reels[r]; R.pos = 100; R.strip = {}; for (let k = 0; k < 3; k++) R.strip[100 - k] = res.grid[r][k]; } }
   symAt(r, j) { const R = this.reels[r]; if (R.strip[j] == null) R.strip[j] = wpick(this.game.syms, reelWeights(this.game, r, this.free)); return R.strip[j]; }
   setMode(mode) {
@@ -2943,7 +2947,7 @@ class Machine {
     if (trig) {
       let cnt = 0;
       for (let r = 0; r < 5; r++) { if (cnt >= 2 && antFrom === 9) antFrom = r; cnt += this.res.grid[r].filter(s => s === trig).length; }
-      if (this.game.bonusSym === 'COIN') { let c = 0; for (let r = 0; r < 3; r++) c += this.res.grid[r].filter(s => s === 'COIN').length; antFrom = c >= 4 ? 3 : 9; }
+      if (this.game.bonusSym === 'COIN') { let c = 0; antFrom = 9; for (let r = 0; r < 5; r++) { if (r >= 3 && c >= r + 1 && antFrom === 9) antFrom = r; c += this.res.grid[r].filter(s => s === 'COIN').length; } }
     }
     const fast = this.mode === 'npc' ? 0.7 : 1;
     let t = 0.5 * fast;
@@ -2952,7 +2956,7 @@ class Machine {
       R.stopAt = this.t + t; R.ant = r >= antFrom;
     });
     this.state = 'spinning'; this.msg = free ? '' : 'GOOD LUCK!';
-    if (this.mode === 'player') SFX.button();
+    if (this.mode === 'player') SFX.button(); else if (this.near()) SFX.tone(660, 0.05, { gain: 0.03, type: 'triangle', pos: this.screenW });
     return true;
   }
   slam() { if (this.state !== 'spinning') return; this.reels.forEach((R, r) => { if (R.phase === 'spin') R.stopAt = Math.min(R.stopAt, this.t + r * 0.04); }); }
@@ -2968,7 +2972,9 @@ class Machine {
       const R = this.reels[r];
       if (R.phase === 'spin') {
         if (this.t < R.t0) { R.pos -= dt * 1.5; continue; }
-        R.v = Math.min(R.v + dt * 90, R.ant ? 30 : 22); R.pos += R.v * dt;
+        // anticipation: the reel races, then visibly winds down over its last moments so you watch the symbols crawl in
+        const left = R.stopAt - this.t, vmax = R.ant ? (left < 0.75 ? lerp(6, 30, clamp(left / 0.75, 0, 1)) : 30) : 22;
+        R.v = R.v > vmax ? Math.max(vmax, R.v - dt * 70) : Math.min(R.v + dt * 90, vmax); R.pos += R.v * dt;
         if (this.mode === 'player' && Math.random() < dt * 14) SFX.spinTick();
         if (this.mode === 'player' && R.ant && Math.random() < dt * 4) SFX.anticip(r * 2 + Math.floor((this.t * 4) % 4));
         if (this.t >= R.stopAt) this.stopReel(r);
@@ -2978,7 +2984,7 @@ class Machine {
         if (k >= 1) {
           R.pos = R.P; R.phase = 'idle';
           if (this.mode === 'player') { SFX.reelStop(r); const trig = this.game.scatter || this.game.bonusSym; if (trig && this.res.grid[r].includes(trig)) SFX.tone(880 + r * 110, 0.25, { gain: 0.08, type: 'triangle' }); }
-          else if (this.mode === 'npc' && Math.random() < 0.3) SFX.tone(150, 0.08, { gain: 0.03, pos: this.screenW });
+          else if (this.near()) { SFX.tone(150 - r * 5, 0.08, { gain: 0.035, pos: this.screenW, fEnd: 70 }); const trig = this.game.scatter || this.game.bonusSym; if (trig && this.res.grid[r].includes(trig)) SFX.tone(880 + r * 110, 0.2, { gain: 0.025, type: 'triangle', pos: this.screenW }); }
         }
       }
     }
@@ -3005,7 +3011,7 @@ class Machine {
     this.win += scatPay;
     if (this.free) { this.featWin += this.win; }
     if (feat === 'retrigger') { this.freeLeft += 5; this.flash('+5 FREE GAMES', 1.6); if (this.mode === 'player') SFX.fanfare(); }
-    if (feat && feat !== 'retrigger') { this.pendingFeat = feat; this.state = 'featIntro'; this.st = 0; if (this.mode === 'player') { SFX.fanfare(); Game.onFeature(feat, this); } this.featBaseWin = this.win; return; }
+    if (feat && feat !== 'retrigger') { this.pendingFeat = feat; this.state = 'featIntro'; this.st = 0; if (this.mode === 'player') { SFX.fanfare(); Game.onFeature(feat, this); } else if (this.near()) SFX.chimeAt(this.screenW, 1); this.featBaseWin = this.win; return; }
     this.state = 'showWin'; this.st = 0;
     if (this.win > 0) {
       this.winLevel = this.win / bet;
@@ -3080,6 +3086,7 @@ class Machine {
           for (const l of s.landed) { h.shown[l.idx] = l.val; }
           h.respins = s.respins; h.lastLanded = s.landed.map(l => l.idx); h.landT = 0;
           if (this.mode === 'player') { if (s.landed.length) { s.landed.forEach((l, i) => SFX.coin()); SFX.tone(660, 0.2, { gain: 0.1, type: 'triangle' }); } else SFX.tone(200, 0.15, { gain: 0.06 }); }
+          else if (this.near() && s.landed.length) SFX.coin(this.screenW);
         } else { h.collect = 0; h.ct = 0; h.acc = 0; }
       }
       h.landT = (h.landT || 0) + dt;
@@ -3154,7 +3161,8 @@ class Machine {
 
   // ---------------- hand-over between players ----------------
   // play out whatever is running (a spin, free games, hold & spin, pick, wheel, gamble) at once, crediting the machine
-  settle() {
+  settle() { SFX.quiet(() => this._settle()); }
+  _settle() {
     this._settling = true;
     try {
       for (let i = 0; i < 4000 && !(this.state === 'ready' || (this.state === 'showWin' && !this.free)); i++) {
@@ -3850,6 +3858,12 @@ function poseFor(kind, t, a) {
   if (a.listen) { p.headX += Math.max(0, Math.sin(t * 2.6)) * 0.08; }
   if (a.laughT > 0) { const k = Math.min(1, a.laughT); p.spine -= 0.12 * k; p.headX = -0.35 * k; p.chest += Math.sin(t * 22) * 0.05 * k; p.hipsY += Math.abs(Math.sin(t * 22)) * 0.006 * k; }
   if (a.holdDrink && kind !== 'pokie' && kind !== 'pool' && kind !== 'darts' && kind !== 'wipe' && kind !== 'cheer') { p.rUAx = -0.25; p.rEL = -1.35; p.rUAz = -0.08; }
+  // a meal at the table (NpcMeals): forearms on the table over the plate, head down a touch; eatT lifts a forkful / a bite to the mouth
+  if (a.dine && kind === 'sit') {
+    p.rUAx = -0.42; p.rEL = -1.05; p.rUAz = -0.05; p.spine = 0.16; p.headX = Math.max(p.headX, 0.22);
+    if (a.dine === 'plate') { p.lUAx = -0.42; p.lEL = -1.05; p.lUAz = 0.05; }
+    if (a.eatT > 0) { const k = Math.sin(clamp(a.eatT / 1.4, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.05, k); p.rEL = lerp(p.rEL, -2.3, k); p.rUAz = lerp(p.rUAz, 0.32, k); p.headX = lerp(p.headX, -0.05, k); }
+  }
   if (a.sipT > 0) { const k = Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.1, k); p.rEL = lerp(p.rEL, -2.2, k); p.rUAz = lerp(p.rUAz, 0.35, k); p.headX = lerp(p.headX, -0.35, k); }
   if (a.smoking) { const k = a.dragT > 0 ? Math.sin(clamp(a.dragT / 2, 0, 1) * Math.PI) : 0; p.lUAx = lerp(-0.2, -0.9, k); p.lEL = lerp(-1.5, -2.35, k); p.lUAz = lerp(0.15, -0.3, k); }
   return p;
@@ -3953,6 +3967,7 @@ function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && !(s
 function claim(n, s) { if (n.spot) n.spot.occ = null; n.spot = s; s.occ = n; if (s.machine) s.machine.occupiedBy = n; }
 // leaving a machine: the punter plays out whatever feature is running and takes their money, so the next player starts clean
 function release(n) {
+  if (n.meal) NpcMeals.leave(n);
   if (n.spot) {
     const m = n.spot.machine;
     if (m && m.occupiedBy === n) { if (m.mode === 'npc') m.settle(); m.credit = 0; m.resetPlay(); m.occupiedBy = null; m.setMode('idle'); }
@@ -4002,6 +4017,7 @@ function seatNPC(n) {
     // glass sits on the ledge
     n.h.root.attach(n.glass.group); n.glass.group.position.copy(s.machine.ledge).sub(n.pos).applyAxisAngle(V3(0, 1, 0), -n.ry); n.glass.group.position.y = s.machine.ledge.y; n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = true;
   } else if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
+  if (n.kind === 'sit') NpcMeals.seat(n);
 }
 function updateNPC(n, dt, t, player) {
   const a = n.a;
@@ -4052,7 +4068,7 @@ function updateNPC(n, dt, t, player) {
     } else {
       a.listen = false;
       n.idleT -= dt;
-      if (n.idleT <= 0) { n.idleT = rand(10, 30); a.phone = n.kind !== 'pokie' && !a.smoking && Math.random() < 0.4; }
+      if (n.idleT <= 0) { n.idleT = rand(10, 30); a.phone = n.kind !== 'pokie' && !a.smoking && !a.dine && Math.random() < 0.4; }
     }
     if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
     if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
@@ -4902,6 +4918,7 @@ const Game = {
     this.trivia = { done: false }; this.raffle = { tickets: 0, drawn: false }; this.keno.tickets = []; this.keno.next = s.time + 0.05; this.lastDrinks = false; this.entered = false; this.footyT = 0;
     // reset world
     for (const n of NPCS.slice()) if (n !== bartender) { release(n); scene.remove(n.h.root); }
+    NpcMeals.clear();
     NPCS.length = 0; NPCS.push(bartender); bartender.queue = []; bartender.job = null; bartender.pos.copy(BAR.tender.home);
     for (const it of this.items) { scene.remove(it.glass ? it.glass.group : it.mesh); }
     this.items = []; interactables.splice(0, interactables.length, ...interactables.filter(i => !i.temp));
@@ -5202,7 +5219,7 @@ const Game = {
     if (!m.canSpin()) return;
     if (m.state === 'showWin') m.endShowWin();
     const amt = Math.round(m.credit * 100) / 100; m.credit = 0; this.state.tickets.push(amt);
-    SFX.print(); this.toast(`Ticket printed: ${fmt$(amt)} — redeem at the cash machine in the gaming room.`);
+    SFX.print(); PokieFX.ticket(amt); this.toast(`Ticket printed: ${fmt$(amt)} — redeem at the cash machine in the gaming room.`);
   },
   redeem() {
     const s = this.state; if (!s.tickets.length) { this.toast('No tickets to redeem.'); return; }
@@ -5487,7 +5504,7 @@ function simulate(dt) {
   if (playing) {
     if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt);
+    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt); NpcMeals.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;
@@ -6207,7 +6224,7 @@ const POOL = (() => {
       const k = 1.25 * v / BALL_R;
       c.w.x = top * k * dz; c.w.z = -top * k * dx; c.w.y = -side * k * 0.8;
       this.shotEvents = [];
-      this._acc = 0;
+      this._acc = 0; this._kicked = false;
       this._active = true;
     }
 
@@ -6366,6 +6383,7 @@ const POOL = (() => {
       const dt = PHYS.contactTime / 40;
       const x = new Float64Array(n), z = new Float64Array(n), vx = new Float64Array(n), vz = new Float64Array(n);
       for (let i = 0; i < n; i++) { const b = balls[list[i]]; x[i] = b.x; z[i] = b.z; vx[i] = b.vx; vz[i] = b.vz; }
+      let vin = 0; for (let i = 0; i < n; i++) vin = Math.max(vin, Math.hypot(vx[i], vz[i]));
       const touching = new Uint8Array(n * n);
       let t = 0;
       for (let step = 0; step < 1200; step++) {
@@ -6390,6 +6408,15 @@ const POOL = (() => {
         for (let i = 0; i < n; i++) { x[i] += vx[i] * dt; z[i] += vz[i] * dt; }
         t += dt;
         if (!active) break;
+      }
+      // breaking a full rack: an ideal frictionless rack sends nearly all the energy into the two back corners and leaves
+      // the rest sitting there.  Real racks have tiny gaps and bad contacts that scatter it, so give every racked ball a
+      // little outward kick in proportion to the hit (once per shot) and the break opens up the way it does on a real table.
+      if (n >= 10 && !this._kicked) {
+        this._kicked = true; let cx = 0, cz = 0, m = 0;
+        for (let i = 0; i < n; i++) if (balls[list[i]].id) { cx += x[i]; cz += z[i]; m++; }
+        cx /= m; cz /= m;
+        for (let i = 0; i < n; i++) { if (!balls[list[i]].id) continue; const dx = x[i] - cx, dz = z[i] - cz, d = Math.hypot(dx, dz) || 1, k = vin * (0.1 + this.rng() * 0.16); vx[i] += dx / d * k; vz[i] += dz / d * k; }
       }
       const rest = Math.max(0, s - t);
       for (let i = 0; i < n; i++) {
@@ -8010,7 +8037,7 @@ const REG = {
       const R = REGULARS[name];
       const n = mkNPC(Object.assign({ name, smoker: name === 'Davo', gambler: name === 'Davo' }, R.look));
       n.regular = name;
-      const sp = SPOTS.find(s => !s.occ && R.spot(s));
+      const sp = SPOTS.find(s => !s.occ && !(s.machine && s.machine.occupiedBy) && R.spot(s));
       if (sp) { claim(n, sp); n.pos.copy(sp.pos); n.ry = sp.ry; seatNPC(n); }
       else { n.pos.copy(NODES.P5); n.state = 'idle'; n.kind = 'stand'; }
       n.timer = 1e9; // regulars stay put
@@ -8419,6 +8446,7 @@ const TOUCH = {
     let mode = 'walk';
     if (Game.mode !== 'play') mode = 'none';
     else if (player.seated) mode = 'pokie';
+    else if (typeof Eat !== 'undefined' && Eat.active) mode = 'eat';
     else if (MG.active) mode = MG.active === Darts ? 'darts' : MG.active === BarShift ? 'shift' : MG.active === Karaoke ? 'karaoke' : 'mg';
     if (mode === this.mode) return;
     this.mode = mode;
@@ -8441,6 +8469,8 @@ const TOUCH = {
       btn('SERVE', '', key('Space')); btn('CLOCK OFF', '', key('KeyQ'));
     } else if (mode === 'karaoke') {
       btn('SING!', 'big huge', key('Space')); btn('QUIT', '', key('KeyQ'));
+    } else if (mode === 'eat') {
+      btn('PUT IT DOWN', '', key('KeyQ'));
     } else if (mode === 'mg') {
       btn('DONE', '', key('KeyQ'));
     }
@@ -8754,6 +8784,10 @@ const PokieFX = {
     if (m.btns[5]) { this.spinShared = m.btns[5].material; m.btns[5].material = this.spinShared.clone(); }
     // note acceptor bezel that blinks green
     this.acceptor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2.2, 0.6), toneMapped: false })); this.acceptor.position.set(0.2, 0.89, 0.342); g.add(this.acceptor);
+    // TITO printer slot opposite the note acceptor
+    // (just under the screen, where you can see it from the seat; the ticket feeds out over the deck)
+    this.tkY = D.cy - D.h / 2 - 0.035; this.tkX = -Math.min(0.2, D.w / 2 - 0.08);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.03), MAT.blackPlastic); slot.position.set(this.tkX, this.tkY, 0.05); g.add(slot); this.tk = null;
     // the screen's own light
     m.screenW && this.light.position.copy(m.screenW).addScaledVector(m.fw, 0.45).add(V3(0, -0.1, 0));
     this.light.color.set(th.glow); this.flash = 0;
@@ -8777,6 +8811,23 @@ const PokieFX = {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
     return (this._legend[b.id] = t);
   },
+  // cash out: a TITO ticket feeds out of the printer slot, droops, then you take it
+  ticket(amt) {
+    if (!this.group) return;
+    const c = mkCanvas(128, 256), x = c.getContext('2d');
+    x.fillStyle = '#f7f4ec'; x.fillRect(0, 0, 128, 256); x.fillStyle = '#1a1a1a'; x.textAlign = 'center';
+    x.font = 'bold 14px Inter, sans-serif'; x.fillText('CASHOUT TICKET', 64, 24);
+    x.font = '34px "Bebas Neue", Impact, sans-serif'; x.fillText(fmt$(amt), 64, 66);
+    x.font = '10px Inter, sans-serif'; x.fillText(VENUE.name, 64, 88); x.fillText(`${Game.clockText ? Game.clockText() : ''} · MACHINE ${this.m.idx + 1}`, 64, 102);
+    for (let i = 0, X = 14; X < 114; i++) { const w = Math.random() < 0.5 ? 1 : 2.5; if (i % 2 === 0) x.fillRect(X, 120, w, 58); X += w + (Math.random() < 0.5 ? 1 : 2); }
+    x.font = '9px Inter, sans-serif'; x.fillText(String(Math.floor(Math.random() * 1e15)).padStart(15, '0').replace(/(\d{4})/g, '$1 '), 64, 192); x.fillText('VALID FOR 30 DAYS', 64, 228);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    if (this.tk) this.group.remove(this.tk.pivot);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.14), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide }));
+    mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = Math.PI;   // lying flat, text toward you as it comes out
+    const pivot = new THREE.Group(); pivot.position.set(this.tkX, this.tkY - 0.002, 0.062); pivot.add(mesh); this.group.add(pivot);
+    this.tk = { pivot, mesh, t: 0 }; mesh.position.z = -0.07;
+  },
   celebrate(level) { this.shake = Math.min(1, 0.4 + level / 60); this.flash = 1; this.burstT = 2.5 + Math.min(4, level / 20); },
   press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.004; c.userData.pressT = 0.14; } },
   update(dt) {
@@ -8791,6 +8842,13 @@ const PokieFX = {
     this.light.intensity = damp(this.light.intensity, base * 1.4, 10, dt);
     if (bigWin) this.light.color.setHSL((this.t * 0.8) % 1, 0.8, 0.6); else this.light.color.lerp(_c1.set(m.game.theme.glow), Math.min(1, dt * 3));
     this.acceptor.material.color.setRGB(0.2, (Math.sin(this.t * 4) > 0 ? 2.2 : 0.4), 0.6);
+    if (this.tk) {
+      const k = this.tk; k.t += dt;
+      const out = clamp(k.t / 1.3, 0, 1);                                         // feeding out of the slot
+      k.mesh.position.z = -0.07 + out * 0.13; k.pivot.rotation.x = out * out * 0.55;   // and drooping as it goes
+      if (k.t > 2.4) { const f = clamp((k.t - 2.4) / 0.5, 0, 1); k.pivot.position.y = this.tkY + f * 0.12; k.pivot.position.z = 0.062 + f * 0.3; k.mesh.material.opacity = 1 - f; k.mesh.material.transparent = true; }
+      if (k.t > 2.9) { this.group.remove(k.pivot); k.mesh.geometry.dispose(); k.mesh.material.map.dispose(); k.mesh.material.dispose(); this.tk = null; }
+    }
     // deck buttons: SPIN pulses when it's your go; gamble glows when it's on offer
     for (const c of this.caps) {
       const id = c.userData.id; if (!id) continue;
@@ -8838,6 +8896,7 @@ const GOALS = [
   { id: 'feed', text: 'Get a proper feed in you', cash: 5, rep: 2, test: (s, n) => n.ate },
   { id: 'water', text: 'Have a water between drinks', cash: 5, rep: 2, test: (s, n) => n.water },
   { id: 'darts', text: 'Beat someone at darts', cash: 25, rep: 5, test: (s, n) => n.dartsWon },
+  { id: 'pool', text: 'Win a frame of pool', cash: 15, rep: 4, test: (s, n) => n.poolWon },
   { id: 'tab', text: 'Back a horse at the TAB', cash: 10, rep: 2, test: (s, n) => n.horse },
   { id: 'tip', text: 'Tip the bartender', cash: 0, rep: 3, test: (s, n) => n.tipped },
   { id: 'garden', text: 'Check out the beer garden', cash: 5, rep: 2, test: (s, n) => n.visited.garden },
@@ -8887,7 +8946,7 @@ const Night = {
   // ---------------------------------------------------------- nightly set-up
   start() {
     const s = Game.state, n = s.night;
-    Object.assign(n, { maxDrunk: 0, talked: {}, ate: false, water: false, dartsWon: false, shouted: false, tipped: false, visited: {}, horse: false, triviaScore: 0, sang: false, log: [], relStart: Object.assign({}, s.rel), repStart: this.rep(), tabStart: this.tab(), freeUsed: false });
+    Object.assign(n, { maxDrunk: 0, talked: {}, ate: false, water: false, dartsWon: false, poolWon: false, shouted: false, tipped: false, visited: {}, horse: false, triviaScore: 0, sang: false, log: [], relStart: Object.assign({}, s.rel), repStart: this.rep(), tabStart: this.tab(), freeUsed: false });
     // three goals: one social, one skill/activity, one end-of-night
     const ok = g => !g.avail || g.avail(s);
     const pick = (list, k) => list.filter(ok).sort(() => Math.random() - 0.5).slice(0, k);
@@ -9381,9 +9440,17 @@ Machine.prototype._paintSkin = function () {
   x.setTransform(sc, 0, 0, sc, 0, 0); x.globalAlpha = 1; x.shadowBlur = 0;
   // the hold & spin screen (and its medal) only while a hold & spin is actually being played
   const hs = st === 'holdspin' && !!this.hs && S.useHS && !!SLOTSKIN.hsImg;
-  const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
-  x.drawImage(hs ? SLOTSKIN.hsImg : S.imgMain, 0, 0, W, H);
-  skinHUD(x, S, this, hs ? SLOTSKIN.hp.hud : S.hud);
+  // the hold & spin screen keeps its proportions on a taller cabinet (Golden Century): it sits at the bottom and the
+  // fire background above it is carried up to the top, rather than the whole picture being stretched
+  const HP = SLOTSKIN.hp, hk = hs ? W / HP.mw : 1, hoy = hs ? Math.max(0, H - HP.mh * hk) : 0;
+  const map = r => [r[0] * hk, r[1] * hk + hoy, r[2] * hk, r[3] * hk];
+  const win = hs ? map(HP.win) : S.win;
+  if (hs) {
+    if (hoy > 1) { x.drawImage(SLOTSKIN.hsImg, 0, 0, HP.mw, 40, 0, 0, W, hoy + 2); x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, hoy); }
+    x.drawImage(SLOTSKIN.hsImg, 0, hoy, W, HP.mh * hk);
+    const hud = {}; for (const k in HP.hud) hud[k] = map(HP.hud[k]);
+    skinHUD(x, HP, this, hud);
+  } else { x.drawImage(S.imgMain, 0, 0, W, H); skinHUD(x, S, this, S.hud); }
   if (!hs) skinTitle(x, S);
   if (S.jpm) skinJP(x, S, { GRAND: S.jpm.GRAND, MEGA: S.jpm.MEGA }, 0);
   // the reel stage: the engine's normal reel / hold & spin / gamble drawing, squeezed into the screen's own reel window
@@ -9408,7 +9475,7 @@ Machine.prototype._paintSkin = function () {
   x.restore();
   // hold & spin medal: the live count in the big gold coin
   if (hs) {
-    const h = this.hs, n = h.shown.filter(Boolean).length, M = SLOTSKIN.hp.medal, cx = (M[0] + M[2] / 2) * W / SLOTSKIN.hp.mw, cy = (M[1] + M[3] / 2) * H / SLOTSKIN.hp.mh;
+    const h = this.hs, n = h.shown.filter(Boolean).length, M = map(HP.medal), cx = M[0] + M[2] / 2, cy = M[1] + M[3] / 2;
     const ink = '#1a0a00', gold = '#ffd84a';
     skinText(x, String(h.collect >= 0 ? Math.min(15, n) : n), cx, cy - 36, 190, ink, gold, 300, "Bungee, Impact, sans-serif");
     skinText(x, h.collect >= 0 ? 'COLLECTING' : 'COLLECTED', cx, cy + 70, 46, ink, gold, 360, "Bungee, Impact, sans-serif");
@@ -10165,7 +10232,7 @@ const VenueLocals = {
   spawn() {
     for (const L of LOCALS[VENUE.id] || []) {
       const n = mkNPC(Object.assign({ name: L.name, smoker: false, gambler: false }, L.look)); n.local = L.name;
-      const sp = SPOTS.find(s => !s.occ && L.spot(s));
+      const sp = SPOTS.find(s => !s.occ && !(s.machine && s.machine.occupiedBy) && L.spot(s));
       if (sp) { claim(n, sp); n.pos.copy(sp.pos); n.ry = sp.ry; seatNPC(n); } else { n.pos.copy(NODES.P5); n.state = 'idle'; n.kind = 'stand'; }
       n.timer = 1e9; n.eventTalk = () => { Night.ev('talk', L.name); DLG.open(L.name + '.hub', n, { key: L.name, bio: L.bio }); };
     }
@@ -10587,6 +10654,55 @@ const Eat = {
 
 function F_TIP(E, A) { return A.F.type === 'pick' ? 0.04 : 0.17; }
 
+// ================================================================== PATRONS EATING
+// Some patrons who sit down at a lounge table or a beer-garden bench have a feed: the plate sits on the table in front
+// of them (hand food is held), and they eat it a forkful / a bite at a time with the same chunk-per-bite models.
+// The empty plate stays until they get up.
+const NpcMeals = {
+  list: [],
+  seat(n) {
+    const s = n.spot; if (!s || s.kind !== 'chair' || (s.area !== 'lounge' && s.area !== 'garden') || n.meal || n.role !== 'patron') return;
+    const ev = Game.state.event, late = Game.state.time > 21.5;
+    if (Math.random() > (ev === 'parma' ? 0.5 : 0.22) * (late ? 0.35 : 1)) return;
+    const kind = ev === 'parma' && Math.random() < 0.6 ? 'parma' : ev === 'sunday' && Math.random() < 0.5 ? 'roast' : choice(['parma', 'schnitty', 'hsp', 'chips', 'chips', 'burger', 'pie', 'cheese', 'nuts', 'sausageroll', 'pav']);
+    n.meal = { kind, type: FOODS[kind].type, spot: s, m: null, next: rand(3, 8), bites: 0, pending: true };
+    this.list.push(n);
+  },
+  // put the food out: on the table (a plate or a bowl) or in the right hand (a pie, a burger)
+  serve(n) {
+    const M = n.meal, s = M.spot, m = makeFood(M.kind); M.m = m; M.pending = false; M.chunks = m.userData.chunks.slice();
+    if (M.type === 'hand') { n.h.J.rH.add(m); m.position.set(0, -0.07, 0.05); m.scale.setScalar(0.9); }
+    else { const fw = V3(Math.sin(s.ry), 0, Math.cos(s.ry)); m.position.copy(s.pos).addScaledVector(fw, s.area === 'garden' ? 0.3 : 0.42); m.position.y = 0.79; m.rotation.set(0, s.ry + Math.PI, 0); scene.add(m); }
+    M.hadDrink = n.a.holdDrink; n.a.holdDrink = false; n.a.phone = false; n.glass.group.visible = false; n.a.dine = M.type === 'plate' ? 'plate' : 'hand';
+  },
+  leave(n) {
+    const M = n.meal; if (!M) return; n.meal = null; if (n.a.dine && M.hadDrink) { n.a.holdDrink = true; n.glass.group.visible = true; } n.a.dine = null; n.a.eatT = 0;
+    if (M.m) { if (M.type === 'hand' || !M.m.parent) { M.m.parent && M.m.parent.remove(M.m); } else { M.left = elapsed; this.left.push(M); } }
+    const i = this.list.indexOf(n); if (i >= 0) this.list.splice(i, 1);
+  },
+  left: [],
+  clear() { for (const n of this.list.slice()) this.leave(n); for (const M of this.left) M.m.parent && M.m.parent.remove(M.m); this.left = []; },
+  update(dt) {
+    for (const n of this.list.slice()) {
+      const M = n.meal, a = n.a;
+      if (!M || n.spot !== M.spot || n.state !== 'idle' || n.mg) { this.leave(n); continue; }
+      // it arrives while nobody's looking straight at the table
+      if (M.pending) { if ((M.next -= dt) <= 0 && n.dist2 > 30) this.serve(n); continue; }
+      if (M.type === 'hand' && M.m) uprightInHand(M.m, n.ry, a.eatT > 0 ? Math.sin(clamp(a.eatT / 1.4, 0, 1) * Math.PI) * 0.9 : 0.25);
+      if (a.eatT > 0) {
+        const was = a.eatT; a.eatT = Math.max(0, a.eatT - dt);
+        if (was > 0.7 && a.eatT <= 0.7) { const c = M.chunks[M.bites++]; if (c) c.visible = false; }
+        continue;
+      }
+      if (M.bites >= M.chunks.length) { if (a.dine) { a.dine = null; if (M.type === 'hand') { M.m.parent && M.m.parent.remove(M.m); M.m = null; } n.a.holdDrink = !!M.hadDrink; n.glass.group.visible = !!M.hadDrink; } continue; }
+      if (a.talk > 0 || a.laughT > 0) continue;
+      if ((M.next -= dt) <= 0) { M.next = rand(3.5, 9); a.eatT = 1.4; }
+    }
+    // empty plates left behind are cleared once you're not right there
+    for (let i = this.left.length - 1; i >= 0; i--) { const M = this.left[i]; if (elapsed - M.left > 45 || M.m.position.distanceTo(camera.position) > 9) { M.m.parent && M.m.parent.remove(M.m); this.left.splice(i, 1); } }
+  },
+};
+
 const Food = {
   t: 0,
   // steam off hot plates sitting on the bar, only while you can see them
@@ -10736,7 +10852,8 @@ const PoolGame = (() => {
     const a = rest(me), b = rest(ai); cx.textAlign = 'left'; cx.fillText(a == null ? 'Table open' : a === 0 ? 'Now the black' : `${a} to go`, 24, y0 + 22); cx.textAlign = 'right'; cx.fillText(b == null ? '' : b === 0 ? 'Now the black' : `${b} to go`, W - 24, y0 + 22);
     // controls
     cx.textAlign = 'center'; cx.fillStyle = 'rgba(240,226,191,.55)'; cx.font = '500 12px "Inter", sans-serif';
-    const help = gm.phase === 'place' ? 'Move the ball · click (or SPACE) to place it' : gm.phase === 'aim' ? 'Aim with the mouse / arrows · hold click or SPACE, release to shoot · Q to forfeit' : '';
+    const help = TOUCH.on ? (gm.phase === 'place' ? 'Tap where the cue ball goes' : gm.phase === 'aim' ? 'Touch to aim, hold to pull back (drag to adjust), let go to shoot' : gm.phase === 'over' ? 'Tap to finish' : '')
+      : gm.phase === 'place' ? 'Move the ball · click (or SPACE) to place it' : gm.phase === 'aim' ? 'Aim with the mouse / arrows · hold click or SPACE, release to shoot · Q to forfeit' : gm.phase === 'over' ? 'Click or SPACE to finish' : '';
     cx.fillText(help, W / 2, H - 22);
   }
 
@@ -10746,7 +10863,7 @@ const PoolGame = (() => {
     cx.fillStyle = 'rgba(240,226,191,.6)'; cx.font = '600 11px "Inter", sans-serif'; cx.textAlign = 'center'; cx.fillText('POWER', x + w / 2, y - 12);
   }
   function spinDial() {
-    const r = 34, X = W - 64, Y = H - 82; gm.dial = { x: X, y: Y, r };
+    const r = 34, X = W - 64, Y = H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
     cx.fillStyle = '#f4f2ea'; cx.beginPath(); cx.arc(X, Y, r, 0, 7); cx.fill(); cx.strokeStyle = 'rgba(0,0,0,.4)'; cx.lineWidth = 2; cx.stroke();
     cx.strokeStyle = 'rgba(0,0,0,.15)'; cx.beginPath(); cx.moveTo(X - r, Y); cx.lineTo(X + r, Y); cx.moveTo(X, Y - r); cx.lineTo(X, Y + r); cx.stroke();
     cx.fillStyle = '#c7352b'; cx.beginPath(); cx.arc(X + gm.spin.side * r * 0.7, Y - gm.spin.top * r * 0.7, 6, 0, 7); cx.fill();
@@ -10810,7 +10927,7 @@ const PoolGame = (() => {
   }
   function finish(won) {
     const s = Game.state; gm.phase = 'over'; gm.won = won; gm.t = 0;
-    if (won) { if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; } s.mood = Math.min(100, s.mood + 10); s.stats.poolWon = (s.stats.poolWon || 0) + 1; Night.log('🎱', `Beat ${gm.opp.name} at pool${gm.stake ? ` (+$${gm.stake})` : ''}`); Night.addRep(1.5, 'Won at pool'); if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4); SFX.cheer && SFX.cheer(V3(-3, 1, -13), 1); gm.endTxt = gm.stake ? `+$${gm.stake}` : 'Bragging rights'; }
+    if (won) { if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; } s.mood = Math.min(100, s.mood + 10); s.stats.poolWon = (s.stats.poolWon || 0) + 1; achieve('pool'); if (s.stats.poolWon >= 3) achieve('shark'); Night.ev('poolWon'); Night.log('🎱', `Beat ${gm.opp.name} at pool${gm.stake ? ` (+$${gm.stake})` : ''}`); Night.addRep(1.5, 'Won at pool'); if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4); SFX.cheer && SFX.cheer(V3(-3, 1, -13), 1); gm.endTxt = gm.stake ? `+$${gm.stake}` : 'Bragging rights'; }
     else { if (gm.stake) s.night.extra -= gm.stake; s.mood = Math.max(0, s.mood - 3); Night.log('🎱', `Lost at pool to ${gm.opp.name}${gm.stake ? ` (−$${gm.stake})` : ''}`); gm.endTxt = gm.stake ? `−$${gm.stake}` : 'Better luck next time'; }
     gm.msg = gm.match.lastMessage;
   }
@@ -10822,10 +10939,10 @@ const PoolGame = (() => {
     toTable(e); ptr.down = true; ptr.on = true; if (e.pointerType === 'touch' || e.pointerType === 'pen') cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
     if (gm.phase === 'over' && gm.t > 0.8) return PoolGame.close();
     const d = gm.dial; if (d && Math.hypot(ptr.x - d.x, ptr.y - d.y) < d.r + 6) { spinDrag = true; setSpin(); return; }
-    if (gm.phase === 'place') { place(); return; }
+    if (gm.phase === 'place') { if (e.pointerType !== 'mouse') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } place(); return; }
     if (gm.phase === 'aim') { updateAimFromPointer(); gm.charging = true; gm.power = 0.02; gm.pdir = 1; }
   }
-  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && !gm.charging) updateAimFromPointer(); }
+  function onMove(e) { toTable(e); ptr.on = true; if (spinDrag) { setSpin(); return; } if (gm && gm.phase === 'place') { gm.px = clamp(tx(ptr.y), -HW + R, HW - R); gm.pz = clamp(tz(ptr.x), -HL + R, HL - R); } else if (gm && gm.phase === 'aim' && (!gm.charging || (e.pointerType === 'touch' && ptr.down))) updateAimFromPointer(); }
   function onUp() { ptr.down = false; spinDrag = false; release(); }
   function setSpin() { const d = gm.dial; gm.spin.side = clamp((ptr.x - d.x) / (d.r * 0.7), -1, 1); gm.spin.top = clamp(-(ptr.y - d.y) / (d.r * 0.7), -1, 1); const l = Math.hypot(gm.spin.side, gm.spin.top); if (l > 1) { gm.spin.side /= l; gm.spin.top /= l; } }
   function place() { if (gm.sim.placeCue(gm.px, gm.pz, gm.match.kitchen)) { SFX.click(); gm.phase = 'aim'; gm.match.lastMessage = gm.match.lastMessage; aimAtNearest(); } else SFX.tone(160, 0.12, { gain: 0.05, type: 'sawtooth' }); }
@@ -10948,4 +11065,4 @@ window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__m
 window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
 window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
 window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
-window.__game = { SPOTS, claim, release, seatNPC, FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
+window.__game = { SPOTS, claim, release, seatNPC, NpcMeals, FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

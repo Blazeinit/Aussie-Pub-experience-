@@ -235,8 +235,9 @@ const AudioSys = (() => {
   function out(pan, dest) {
     const p = ctx.createStereoPanner(); p.pan.value = pan; p.connect(dest || sfx); return p;
   }
+  let hush = 0;   // SFX.quiet(): run something without a sound (fast-forwarding a feature, for one)
   function tone(f, dur, o = {}) {
-    if (!started) return;
+    if (!started || hush) return;
     const t = now() + (o.delay || 0), sp = spatial(o.pos, o.ref);
     const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t);
@@ -249,7 +250,7 @@ const AudioSys = (() => {
     return osc;
   }
   function noise(dur, o = {}) {
-    if (!started) return;
+    if (!started || hush) return;
     const t = now() + (o.delay || 0), sp = spatial(o.pos, o.ref);
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     src.playbackRate.value = o.rate || 1;
@@ -267,6 +268,7 @@ const AudioSys = (() => {
       noise(m[2], { freq: m[0] * rand(.85, 1.15), q: 1.2, gain: m[1], pos });
       if (surface === 'timber' || surface === 'deck') tone(rand(85, 110), 0.08, { gain: 0.06, pos });
     },
+    quiet(f) { hush++; try { return f(); } finally { hush--; } },
     click() { noise(0.03, { freq: 3200, q: 3, gain: 0.12 }); tone(1800, 0.03, { gain: 0.05, type: 'square' }); },
     button() { tone(660, 0.06, { gain: 0.08, type: 'triangle' }); noise(0.02, { freq: 2500, gain: 0.08 }); },
     reelStop(i) { tone(140 - i * 6, 0.12, { gain: 0.22, fEnd: 60 }); noise(0.05, { freq: 1800, q: 2, gain: 0.1 }); },

@@ -458,6 +458,12 @@ function poseFor(kind, t, a) {
   if (a.listen) { p.headX += Math.max(0, Math.sin(t * 2.6)) * 0.08; }
   if (a.laughT > 0) { const k = Math.min(1, a.laughT); p.spine -= 0.12 * k; p.headX = -0.35 * k; p.chest += Math.sin(t * 22) * 0.05 * k; p.hipsY += Math.abs(Math.sin(t * 22)) * 0.006 * k; }
   if (a.holdDrink && kind !== 'pokie' && kind !== 'pool' && kind !== 'darts' && kind !== 'wipe' && kind !== 'cheer') { p.rUAx = -0.25; p.rEL = -1.35; p.rUAz = -0.08; }
+  // a meal at the table (NpcMeals): forearms on the table over the plate, head down a touch; eatT lifts a forkful / a bite to the mouth
+  if (a.dine && kind === 'sit') {
+    p.rUAx = -0.42; p.rEL = -1.05; p.rUAz = -0.05; p.spine = 0.16; p.headX = Math.max(p.headX, 0.22);
+    if (a.dine === 'plate') { p.lUAx = -0.42; p.lEL = -1.05; p.lUAz = 0.05; }
+    if (a.eatT > 0) { const k = Math.sin(clamp(a.eatT / 1.4, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.05, k); p.rEL = lerp(p.rEL, -2.3, k); p.rUAz = lerp(p.rUAz, 0.32, k); p.headX = lerp(p.headX, -0.05, k); }
+  }
   if (a.sipT > 0) { const k = Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI); p.rUAx = lerp(p.rUAx, -1.1, k); p.rEL = lerp(p.rEL, -2.2, k); p.rUAz = lerp(p.rUAz, 0.35, k); p.headX = lerp(p.headX, -0.35, k); }
   if (a.smoking) { const k = a.dragT > 0 ? Math.sin(clamp(a.dragT / 2, 0, 1) * Math.PI) : 0; p.lUAx = lerp(-0.2, -0.9, k); p.lEL = lerp(-1.5, -2.35, k); p.lUAz = lerp(0.15, -0.3, k); }
   return p;
@@ -561,6 +567,7 @@ function freeSpots(filter) { return SPOTS.filter(s => !s.occ && !s.hidden && !(s
 function claim(n, s) { if (n.spot) n.spot.occ = null; n.spot = s; s.occ = n; if (s.machine) s.machine.occupiedBy = n; }
 // leaving a machine: the punter plays out whatever feature is running and takes their money, so the next player starts clean
 function release(n) {
+  if (n.meal) NpcMeals.leave(n);
   if (n.spot) {
     const m = n.spot.machine;
     if (m && m.occupiedBy === n) { if (m.mode === 'npc') m.settle(); m.credit = 0; m.resetPlay(); m.occupiedBy = null; m.setMode('idle'); }
@@ -610,6 +617,7 @@ function seatNPC(n) {
     // glass sits on the ledge
     n.h.root.attach(n.glass.group); n.glass.group.position.copy(s.machine.ledge).sub(n.pos).applyAxisAngle(V3(0, 1, 0), -n.ry); n.glass.group.position.y = s.machine.ledge.y; n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = true;
   } else if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
+  if (n.kind === 'sit') NpcMeals.seat(n);
 }
 function updateNPC(n, dt, t, player) {
   const a = n.a;
@@ -660,7 +668,7 @@ function updateNPC(n, dt, t, player) {
     } else {
       a.listen = false;
       n.idleT -= dt;
-      if (n.idleT <= 0) { n.idleT = rand(10, 30); a.phone = n.kind !== 'pokie' && !a.smoking && Math.random() < 0.4; }
+      if (n.idleT <= 0) { n.idleT = rand(10, 30); a.phone = n.kind !== 'pokie' && !a.smoking && !a.dine && Math.random() < 0.4; }
     }
     if (a.holdDrink && a.sipT <= 0 && Math.random() < dt * 0.06) { a.sipT = 1.6; n.glass.fill = Math.max(0.1, n.glass.fill - 0.08); }
     if (a.smoking) { if (a.dragT <= 0 && Math.random() < dt * 0.08) a.dragT = 2; n.cigTip.material = MAT.ember; if (Math.random() < dt * 6) { n.cigTip.updateWorldMatrix(true, false); smokeFX.emit(_v1.setFromMatrixPosition(n.cigTip.matrixWorld), V3(rand(-.02, .02), 0.12, rand(-.02, .02)), 0.02, rand(3, 5), 0.22, [0.85, 0.85, 0.88], 0.06); }
