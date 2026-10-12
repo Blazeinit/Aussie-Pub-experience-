@@ -377,3 +377,9 @@ body.cine #subtitle{bottom:13vh}
 /* iPhone: no text selection / callouts / rubber-banding while playing */
 body.touchmode{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;touch-action:none;position:fixed;inset:0;overflow:hidden}
 body.touchmode #panel .box,body.touchmode .screen .card,body.touchmode #talk,body.touchmode #title{touch-action:pan-y;-webkit-overflow-scrolling:touch}
+body.touchmode #cineHint kbd{display:none}
+/* phone on its side: the five meters fold into two columns so they stay clear of the thumb buttons */
+@media (max-height:520px){
+  body.touchmode #hud .br{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;width:200px;top:calc(70px + env(safe-area-inset-top))}
+  body.touchmode .meter{margin-top:2px}body.touchmode .meter label{font-size:7.5px}
+}

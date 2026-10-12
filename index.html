@@ -394,6 +394,12 @@ body.cine #subtitle{bottom:13vh}
 /* iPhone: no text selection / callouts / rubber-banding while playing */
 body.touchmode{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;touch-action:none;position:fixed;inset:0;overflow:hidden}
 body.touchmode #panel .box,body.touchmode .screen .card,body.touchmode #talk,body.touchmode #title{touch-action:pan-y;-webkit-overflow-scrolling:touch}
+body.touchmode #cineHint kbd{display:none}
+/* phone on its side: the five meters fold into two columns so they stay clear of the thumb buttons */
+@media (max-height:520px){
+  body.touchmode #hud .br{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;width:200px;top:calc(70px + env(safe-area-inset-top))}
+  body.touchmode .meter{margin-top:2px}body.touchmode .meter label{font-size:7.5px}
+}
 
 </style>
 </head>
@@ -467,6 +473,6 @@ body.touchmode #panel .box,body.touchmode .screen .card,body.touchmode #talk,bod
 <div id="fade"></div>
 <div id="perf" class="hidden"></div>
 <div id="touch" class="hidden"><div id="tStick"><i></i></div><div id="tBtns"></div><button id="tMenu">☰</button><button id="tPhone">📱</button></div>
-<script type="module" src="game.js?v=459280edf6"></script>
+<script type="module" src="game.js?v=299a0a0efd"></script>
 </body>
 </html>

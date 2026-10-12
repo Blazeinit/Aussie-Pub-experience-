@@ -63,28 +63,34 @@ function loadTexture(p, srgb = true) {
     if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
   }, undefined, () => res(null)));
 }
-function loadImage(p) { return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = assetURL(p); }); }
+// (retried: iOS Safari occasionally fails to decode a large embedded image under memory pressure)
+function loadImage(p, tries = 3) { return new Promise(res => { const i = new Image(); i.onload = () => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()).then(() => res(i)); i.onerror = () => tries > 1 ? setTimeout(() => loadImage(p, tries - 1).then(res), 400) : res(null); i.src = assetURL(p); }); }
 const ENVHDR = {};   // real HDRI skies (Poly Haven, CC0, via the @pmndrs/assets npm package) used for reflections; see assets/env
 const SLOTSKIN = {};   // licensed machine skins (assets/slots): exact screen art + symbol sprites, filled in by loadAssets
 async function loadAssets(progress) {
+  let skinsReady = Promise.resolve();
   const work = (async () => {
     const [man, bodies, lm] = await Promise.all([fetchJSON('tex/manifest.json'), fetchJSON('char/bodies.json'), fetchJSON('light/lightmaps.json')]);
     ASSETS.manifest = man; ASSETS.bodies = bodies; ASSETS.lightmaps = lm;
     const jobs = [];
-    const skins = await fetchJSON('slots/skins.json');
+    // the real machine screens are loaded first and waited for in full (a slow phone must never end up with blank generic
+    // machines because the general asset timeout ran out), at a lower canvas resolution on phones to spare their memory
+    const skins = await fetchJSON('slots/skins.json'), sj = [], phone = matchMedia('(pointer: coarse)').matches;
     if (skins) for (const id in skins) {
-      const S = SLOTSKIN[id] = skins[id]; S.k = Math.min(1, 1100 / Math.max(S.mw, S.mh));
-      jobs.push(loadImage(S.main).then(i => S.imgMain = i)); if (S.top) jobs.push(loadImage(S.top).then(i => S.imgTop = i));
-      if (S.front) jobs.push(loadImage(S.front).then(i => S.imgFront = i)); if (S.sprites) jobs.push(loadImage(S.sprites.img).then(i => S.imgSprites = i));
+      const S = SLOTSKIN[id] = skins[id]; S.k = Math.min(1, (phone ? 820 : 1100) / Math.max(S.mw, S.mh));
+      sj.push(loadImage(S.main).then(i => S.imgMain = i)); if (S.top) sj.push(loadImage(S.top).then(i => S.imgTop = i));
+      if (S.front) sj.push(loadImage(S.front).then(i => S.imgFront = i)); if (S.sprites) sj.push(loadImage(S.sprites.img).then(i => S.imgSprites = i));
     }
+    if (skins) { sj.push(loadImage('slots/hs_bg.jpg').then(i => SLOTSKIN.hsImg = i)); sj.push(loadImage('slots/ldl_banner.jpg').then(i => SLOTSKIN.bannerImg = i)); }
+    skinsReady = Promise.all(sj); jobs.push(...sj);
     for (const k of ['sunset', 'night', 'park']) jobs.push(new EXRLoader().loadAsync(assetURL('env/' + k + '.exr')).then(t => { t.mapping = THREE.EquirectangularReflectionMapping; ENVHDR[k] = t; }).catch(() => {}));
-    if (skins) { jobs.push(loadImage('slots/hs_bg.jpg').then(i => SLOTSKIN.hsImg = i)); jobs.push(loadImage('slots/ldl_banner.jpg').then(i => SLOTSKIN.bannerImg = i)); }
     if (man) for (const k in man) for (const ch of ['c', 'n', 'r']) if (man[k][ch]) jobs.push(loadTexture('tex/' + man[k][ch], ch === 'c').then(t => { (ASSETS.tex[k] = ASSETS.tex[k] || {})[ch] = t; }));
     if (lm) for (const k in lm.maps || {}) jobs.push(loadTexture('light/' + lm.maps[k].file, false).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.channel = 1; t.flipY = false; lm.maps[k].tex = t; } }));
     let done = 0; jobs.forEach(j => j.then(() => progress && progress(++done / jobs.length)));
     await Promise.all(jobs);
   })();
   await Promise.race([work, new Promise(r => setTimeout(r, 30000))]);
+  await Promise.race([skinsReady, new Promise(r => setTimeout(r, 90000))]);
 }
 // physical-size aware texture: repeat so one tile covers its real-world size given UVs in metres/k
 function pbr(name) { const t = ASSETS.tex[name]; return t && t.c ? t : null; }

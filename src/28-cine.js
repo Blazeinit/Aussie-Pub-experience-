@@ -15,7 +15,7 @@ const Cine = {
     const A = this.active = { shots, i: -1, t: 0, o, seen: 0, fovStart: camera.fov };
     this.saved = { fov: camera.fov, music: Music.level, uiOpen: Game.uiOpen };
     this.skipT = 0; this.slow = 1; document.body.classList.add('cine'); $('lbT').style.height = $('lbB').style.height = (o.bars === 0 ? 0 : 11) + 'vh';
-    $('cineHint').classList.toggle('hidden', o.skippable === false); this.next();
+    $('cineHint').classList.toggle('hidden', o.skippable === false); $('cineHint').firstChild.textContent = TOUCH.on ? 'TOUCH & HOLD ' : 'HOLD '; this.next();
     return true;
   },
   next() {
@@ -55,7 +55,7 @@ const Cine = {
     // run any remaining shots' end hooks so state is left as the full cinematic would have left it
     for (let i = Math.max(0, A.i); i < A.shots.length; i++) { const s = A.shots[i]; if (skipped && i > A.i && s.fn) s.fn(); if (s.end) s.end(); }
     if (skipped) { Game.subtitle('', 0); $('subtitle').innerHTML = ''; }
-    document.body.classList.remove('cine'); $('lbT').style.height = $('lbB').style.height = 0; $('cineTitle').classList.remove('on'); $('cineSkip').style.width = 0;
+    document.body.classList.remove('cine'); $('cineHint').classList.add('hidden'); $('lbT').style.height = $('lbB').style.height = 0; $('cineTitle').classList.remove('on'); $('cineSkip').style.width = 0;
     camera.fov = this.saved.fov; camera.updateProjectionMatrix(); Music.level = this.saved.music; this.slow = 1; this.skipT = 0; this.touchHeld = false;
     if (A.o.onEnd) A.o.onEnd(skipped);
   },

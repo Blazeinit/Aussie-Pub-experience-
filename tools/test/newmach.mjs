@@ -1,7 +1,7 @@
 // which machines are in each venue, and do their real screens load (served build and offline file)
 import { launch, done } from './harness.mjs';
 const venue = process.argv[2] || 'rsl', file = process.argv[3] || null;
-const g = await launch({ quality: 'low', port: 8180, venue, file });
+const g = await launch({ quality: 'low', port: 8180, venue, file, w: 844, h: 390, mobile: true });
 console.log(venue, file || 'served', 'boot', g.bootErr || 'ok');
 const info = await g.ev(`JSON.stringify({ venue: window.__game.VENUE.id, machines: window.__game.MACHINES.map(m => m.def.game + (m.skin ? '*' : ''))})`);
 console.log(info);
