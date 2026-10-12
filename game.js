@@ -8,6 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -64,6 +65,7 @@ function loadTexture(p, srgb = true) {
   }, undefined, () => res(null)));
 }
 function loadImage(p) { return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = assetURL(p); }); }
+const ENVHDR = {};   // real HDRI skies (Poly Haven, CC0, via the @pmndrs/assets npm package) used for reflections; see assets/env
 const SLOTSKIN = {};   // licensed machine skins (assets/slots): exact screen art + symbol sprites, filled in by loadAssets
 async function loadAssets(progress) {
   const work = (async () => {
@@ -76,6 +78,7 @@ async function loadAssets(progress) {
       jobs.push(loadImage(S.main).then(i => S.imgMain = i)); if (S.top) jobs.push(loadImage(S.top).then(i => S.imgTop = i));
       if (S.front) jobs.push(loadImage(S.front).then(i => S.imgFront = i)); if (S.sprites) jobs.push(loadImage(S.sprites.img).then(i => S.imgSprites = i));
     }
+    for (const k of ['sunset', 'night', 'dawn', 'park', 'lobby']) jobs.push(new EXRLoader().loadAsync(assetURL('env/' + k + '.exr')).then(t => { t.mapping = THREE.EquirectangularReflectionMapping; ENVHDR[k] = t; }).catch(() => {}));
     if (skins) { jobs.push(loadImage('slots/hs_bg.jpg').then(i => SLOTSKIN.hsImg = i)); jobs.push(loadImage('slots/ldl_banner.jpg').then(i => SLOTSKIN.bannerImg = i)); }
     if (man) for (const k in man) for (const ch of ['c', 'n', 'r']) if (man[k][ch]) jobs.push(loadTexture('tex/' + man[k][ch], ch === 'c').then(t => { (ASSETS.tex[k] = ASSETS.tex[k] || {})[ch] = t; }));
     if (lm) for (const k in lm.maps || {}) jobs.push(loadTexture('light/' + lm.maps[k].file, false).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.channel = 1; t.flipY = false; lm.maps[k].tex = t; } }));
@@ -1067,30 +1070,17 @@ function buildStreet() {
   for (const dx of [-0.8, 0.8]) addBoxS(SBX, MAT.iron, -9.5 + dx, 0.22, 19.0, 0.05, 0.45, 0.45);
   addCol(-9.5, 19.05, 1.9, 0.5);
 
-  // ---- bland neighbours: dark, shuttered, forgettable ----
-  const shopMat = [MAT.brickDark, M({ map: TEX.paintDark, color: 0x55504a, roughness: 0.95 }, false), M({ map: TEX.paintDark, color: 0x3a3c40, roughness: 0.95 }, false)];
-  function blandBlock(x0, x1, zf, depth, h, facing, mat) {
-    const w = x1 - x0, cx = (x0 + x1) / 2, cz = zf + depth / 2 * (facing > 0 ? -1 : 1);
-    const g = uvBox(new THREE.BoxGeometry(w, h, depth), w, h, depth, 2.5);
-    const m = new THREE.Mesh(g, mat); m.position.set(cx, h / 2, cz); m.castShadow = m.receiveShadow = true; scene.add(m);
-    addColBox(x0, x1, cz - depth / 2, cz + depth / 2);
-    // shutters / dark shopfront + awning
-    for (let sx = x0 + 1.2; sx < x1 - 2.4; sx += 4.5) {
-      SBX.add(uvBox(new THREE.BoxGeometry(3.2, 2.6, 0.05), 3.2, 2.6, .05, 1), MAT.shutter, sx + 1.6, 1.3, zf + 0.03 * facing);
-      if (h > 5) { const lit = Math.random() < 0.12; const wm = lit ? MAT.litWindow : MAT.darkWindow; SBX.add(G.box, wm, sx + 1.6, h - 2.0, zf + 0.02 * facing, 0, 0, 0, 1.2, 1.4, 0.05); }
-    }
-    SBX.add(G.box, MAT.iron, cx, 3.0, zf + 0.9 * facing, 0, 0, 0, w, 0.08, 1.8);
-  }
-  blandBlock(-46, -27, 2, 12, 5.2, 1, shopMat[1]);
-  blandBlock(-27, -14, 2, 12, 4.4, 1, shopMat[2]);
-  blandBlock(19.6, 33, 2, 22, 4.6, 1, shopMat[1]);
-  blandBlock(33, 50, 2, 14, 6.2, 1, shopMat[0]);
-  blandBlock(-50, -30, 24, 12, 6.5, -1, shopMat[0]);
-  blandBlock(-30, -12, 24, 10, 4.2, -1, shopMat[2]);
-  blandBlock(-12, 6, 24, 10, 5.0, -1, shopMat[1]);
-  blandBlock(6, 7.6, 24, 12, 7.0, -1, shopMat[0]);
-  blandBlock(12.4, 26, 24, 12, 7.0, -1, shopMat[0]); // the gap is the kebab shop (buildKebab)
-  blandBlock(26, 50, 24, 10, 4.5, -1, shopMat[2]);
+  // ---- the neighbours: painted shopfronts with lit windows, awnings and signs (see 25-town.js) ----
+  townBlock(-46, -27, 2, 12, 7.0, 1, 'offices');
+  townBlock(-27, -14, 2, 12, 4.6, 1, 'vacant');
+  townBlock(19.6, 33, 2, 22, 4.8, 1, 'hardware');
+  townBlock(33, 50, 2, 14, 6.6, 1, 'bakery');
+  townBlock(-50, -30, 24, 12, 7.2, -1, 'offices');
+  townBlock(-30, -12, 24, 10, 4.6, -1, 'newsagent');
+  townBlock(-12, 6, 24, 10, 5.4, -1, 'chemist');
+  townBlock(6, 7.6, 24, 12, 7.0, -1, 'brick');
+  townBlock(12.4, 26, 24, 12, 7.0, -1, 'opshop');   // the gap in between is the kebab shop (buildKebab)
+  townBlock(26, 50, 24, 10, 5.0, -1, 'hardware');
   // FOR LEASE sign
   const fl = signTex(['FOR LEASE', '0400 000 000'], { w: 512, h: 256, bg: '#f4f4f0', color: ['#c7352b', '#222'], sizes: [110, 50], border: '#c7352b' });
   signPlane(fl, 1.6, 0.8, -20, 2.2, 2.09, 0);
@@ -1236,27 +1226,48 @@ function buildFacade() {
 }
 
 // ---- double swing doors with spring physics ----
+// timber-framed leaves with glazing bars, brass push plates and kick plates outside, long brass pull handles inside, hinge barrels and overhead closers
 function buildDoors() {
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x1f4d34, roughness: 0.4 });
+  const timber = new THREE.MeshStandardMaterial({ color: 0x1f4d34, roughness: 0.4, metalness: 0.05 });
+  const glassM = new THREE.MeshStandardMaterial({ color: 0x9fb8c0, roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 });
+  interiorMats.push(timber);
+  const brass = MAT.brass, w = 1.28, h = 2.62;
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group(); pivot.position.set(1.3 * s, 0, 2.0); scene.add(pivot);
     const leaf = new THREE.Group(); pivot.add(leaf);
-    const w = 1.28;
-    const lo = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, 0.05), leafMat); lo.position.set(-s * w / 2, 0.6, 0); leaf.add(lo);
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, 0.06), leafMat); fr.position.set(-s * w / 2, 2.62, 0); leaf.add(fr);
-    for (const fx of [0.04, w - 0.04]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.5, 0.06), leafMat); st.position.set(-s * fx, 1.9, 0); leaf.add(st); }
-    const gl = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.1, 1.45), MAT.window); gl.position.set(-s * w / 2, 1.9, 0); leaf.add(gl);
-    const pl = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.07), MAT.brass); pl.position.set(-s * (w - 0.25), 1.15, 0); leaf.add(pl);
-    const et = signTex(['PUSH'], { w: 256, h: 64, color: '#e8c56a', size: 44 });
-    const ep = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: et, transparent: true })); ep.position.set(-s * w / 2, 1.0, 0.03); leaf.add(ep);
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(-s * x, y, z); m.castShadow = true; leaf.add(m); return m; };
+    // frame: stiles, top and bottom rails, mid rail
+    add(new THREE.BoxGeometry(0.1, h, 0.06), timber, 0.05, h / 2, 0); add(new THREE.BoxGeometry(0.1, h, 0.06), timber, w - 0.05, h / 2, 0);
+    add(new THREE.BoxGeometry(w, 0.12, 0.06), timber, w / 2, h - 0.06, 0); add(new THREE.BoxGeometry(w, 0.18, 0.06), timber, w / 2, 0.09, 0); add(new THREE.BoxGeometry(w, 0.1, 0.06), timber, w / 2, 1.2, 0);
+    // lower panel with a raised moulding
+    add(new THREE.BoxGeometry(w - 0.2, 0.9, 0.035), timber, w / 2, 0.65, 0.0); add(new THREE.BoxGeometry(w - 0.34, 0.74, 0.02), timber, w / 2, 0.65, 0.03); add(new THREE.BoxGeometry(w - 0.34, 0.74, 0.02), timber, w / 2, 0.65, -0.03);
+    // glazing with bars
+    add(new THREE.PlaneGeometry(w - 0.2, 1.3), glassM, w / 2, 1.9, 0);
+    add(new THREE.BoxGeometry(0.03, 1.3, 0.04), timber, w / 2, 1.9, 0); for (const gy of [1.58, 2.22]) add(new THREE.BoxGeometry(w - 0.2, 0.03, 0.04), timber, w / 2, gy, 0);
+    // brass: kick plates both sides, push plate outside, pull bar inside
+    add(new THREE.BoxGeometry(w - 0.24, 0.22, 0.012), brass, w / 2, 0.2, 0.034); add(new THREE.BoxGeometry(w - 0.24, 0.22, 0.012), brass, w / 2, 0.2, -0.034);
+    add(new THREE.BoxGeometry(0.22, 0.46, 0.014), brass, w - 0.24, 1.05, 0.035);
+    const bar = add(new THREE.CylinderGeometry(0.018, 0.018, 0.62, 10), brass, w - 0.2, 1.05, -0.085); for (const by of [-0.24, 0.24]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.05, 6), brass); post.rotation.x = Math.PI / 2; post.position.set(0, by, 0.04); bar.add(post); }
+    // PUSH outside, PULL inside
+    const et = signTex(['PUSH'], { w: 256, h: 64, color: '#e8c56a', size: 40 }), pt = signTex(['PULL'], { w: 256, h: 64, color: '#e8c56a', size: 40 });
+    const ep = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), new THREE.MeshBasicMaterial({ map: et, transparent: true })); ep.position.set(-s * (w - 0.24), 1.34, 0.037); leaf.add(ep);
+    const pp = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), new THREE.MeshBasicMaterial({ map: pt, transparent: true })); pp.position.set(-s * (w - 0.2), 1.46, -0.037); pp.rotation.y = Math.PI; leaf.add(pp);
+    // hinge barrels and a spring closer on the head
+    for (const hy of [0.35, 1.3, 2.3]) { const hg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.16, 8), brass); hg.position.set(0, hy, 0); pivot.add(hg); }
+    const clo = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.07, 0.06), new THREE.MeshStandardMaterial({ color: 0x2a2a2e, metalness: 0.6, roughness: 0.4 })); clo.position.set(-s * 0.28, h + 0.05, -0.1); leaf.add(clo);
     pivot.traverse(o => { if (o.isMesh) o.castShadow = true; });
     dynamic.doors.push({ pivot, s, w, ang: 0, vel: 0, lastSound: 0 });
   }
+  // brass threshold strip and a stainless kick-guard on the jambs
+  addBoxS(SBX, brass, 0, 0.012, 2.0, 2.7, 0.025, 0.2);
 }
 function updateDoors(dt, actors) {
   for (const d of dynamic.doors) {
     let torque = -d.ang * 9 - d.vel * 3.2; // spring + damper
     for (const a of actors) {
+      // open a little before you reach it, so the leaf never swings through the camera: the nearer you are, the further it eases open
+      const az = a.z - d.pivot.position.z, ax = a.x;
+      if (Math.abs(az) < 1.5 && Math.abs(ax) < 1.6) torque += -Math.sign(az || 1) * (1.5 - Math.abs(az)) * 6.5;
       // test against leaf segment
       const hx = d.pivot.position.x, hz = d.pivot.position.z;
       const tipx = hx - d.s * Math.cos(d.ang) * d.w, tipz = hz + Math.sin(d.ang) * d.w;
@@ -1728,6 +1739,7 @@ function buildSky() {
 }
 let skyEnvRT = null, lastEnvHour = -99;
 const lastShadowSun = new THREE.Vector3();
+let lastEnvKey = '';
 function setTimeOfDay(h, weather) {
   // Autumn in Oz: sunset ~17:50. elevation in degrees
   const dayLen = 11.2, rise = 6.6;
@@ -1776,6 +1788,15 @@ function setTimeOfDay(h, weather) {
   if (_v1.angleTo(lastShadowSun) > 0.012 || lastShadowSun.lengthSq() === 0) { lastShadowSun.copy(_v1); if (typeof shadowDirty !== 'undefined') shadowDirty = 1; }
   // refresh the sky reflection rarely, and only while indoors so the change is never seen popping
   const camIn = isInside(camera.position.x, camera.position.z);
+  // real HDRI skies for reflections when we have them: night / dusk / day, swapped while you're indoors so it never pops
+  if (ENVHDR.night && ENVHDR.sunset) {
+    const key = nightF > 0.55 ? 'night' : dayF > 0.6 ? (ENVHDR.park ? 'park' : 'sunset') : (elev < 0 ? 'dusk' : 'dawn');
+    if (key !== lastEnvKey && (camIn || lastEnvKey === '')) {
+      lastEnvKey = key; const nm = key === 'dusk' ? 'sunset' : key;
+      if (!ENVHDR['_p' + nm]) ENVHDR['_p' + nm] = pmrem.fromEquirectangular(ENVHDR[nm] || ENVHDR.sunset).texture;
+      scene.environment = ENVHDR['_p' + nm]; scene.environmentIntensity = { night: 0.55, sunset: 0.6, dusk: 0.6, dawn: 0.6, park: 0.75 }[key] || 0.6;
+    }
+  } else
   if (lastEnvHour < -50 || (Math.abs(h - lastEnvHour) > 1.0 && camIn)) {
     lastEnvHour = h;
     const envScene = new THREE.Scene(); const s2 = new Sky(); s2.scale.setScalar(100); s2.material.uniforms.sunPosition.value.copy(sunPos);
@@ -5383,7 +5404,7 @@ function simulate(dt) {
     const gam = inGaming(camera.position.x, camera.position.z);
     atmo.iF = damp(atmo.iF || 0, inside ? 1 : 0, 3, dt);
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
-    fxPass.uniforms.uWarm.value = atmo.iF * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
+    Town.glow(atmo.nightF); fxPass.uniforms.uWarm.value = atmo.iF * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
     updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
@@ -7283,30 +7304,71 @@ function mkTex(w, h, draw, srgb = true) { const c = mkCanvas(w, h); draw(c.getCo
 
 // ---------------------------------------------------------------- the gents
 let gentsMirror = null;
+function texSubway(band = '#2a7a58') {
+  return mkTex(256, 256, (x, W, H) => {
+    x.fillStyle = '#b8b4a6'; x.fillRect(0, 0, W, H);                       // grout
+    const rh = H / 8;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) {
+      const ox = (r % 2) * W / 8, X = c * W / 4 - ox, Y = r * rh, bandRow = r === 2;
+      const g = x.createLinearGradient(0, Y, 0, Y + rh); g.addColorStop(0, bandRow ? band : '#fbfaf4'); g.addColorStop(1, bandRow ? '#1e5a40' : '#e2dfd2');
+      x.fillStyle = g; x.fillRect(X + 2, Y + 2, W / 4 - 4, rh - 4); if (X < 0) x.fillRect(X + W + 2, Y + 2, W / 4 - 4, rh - 4);
+      x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(X + 3, Y + 3, W / 4 - 6, 2);
+    }
+    for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(120,100,60,${Math.random() * 0.06})`; x.beginPath(); x.arc(Math.random() * W, Math.random() * H, rand(4, 20), 0, 7); x.fill(); }
+  });
+}
+function texToiletFloor() {
+  return mkTex(256, 256, (x, W, H) => {
+    x.fillStyle = '#7a776c'; x.fillRect(0, 0, W, H);
+    const n = 8, s = W / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const l = 62 + rand(-4, 5); x.fillStyle = `hsl(${40 + rand(-4, 4)},8%,${l}%)`; x.fillRect(i * s + 1.5, j * s + 1.5, s - 3, s - 3); }
+    for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(50,40,20,${Math.random() * 0.08})`; x.beginPath(); x.arc(Math.random() * W, Math.random() * H, rand(6, 24), 0, 7); x.fill(); }
+  });
+}
 function buildToilets() {
-  const tiles = M({ map: TEX.tileCream, roughness: 0.25 });
-  plane(3.6, 4.6, tiles, -11.2, 0.004, -20.3, -Math.PI / 2, 0, 0.6);
-  plane(3.6, 4.6, M({ color: 0xd8d4c4, roughness: 0.8 }), -11.2, 2.9, -20.3, Math.PI / 2);
-  const wm = { low: [MAT.tileGreen, MAT.brick], high: [MAT.paintCream, MAT.brick] };
-  buildWall('z', -13, -22.6, -18.15, 2.9, wm, -1, [], 0.3);
-  buildWall('z', -9.4, -22.6, -18.15, 2.9, wm, 1, [], 0.3);
-  buildWall('x', -22.6, -13.1, -9.3, 2.9, wm, -1, [], 0.3);
-  buildWall('z', -11.0, -22.45, -18.15, 2.9, { low: [MAT.tileGreen, MAT.tileGreen], high: [MAT.paintCream, MAT.paintCream] }, 1, [], 0.12);
+  const subway = M({ map: texSubway(), roughness: 0.22, metalness: 0.02 }), paint = M({ color: 0xe9e5d3, roughness: 0.85 }), ceilM = M({ color: 0xdcd9cb, roughness: 0.9 });
+  const floorM = M({ map: texToiletFloor(), roughness: 0.32 }), ceramic = M({ color: 0xf7f7f3, roughness: 0.08 }), lam = M({ color: 0xa9b8b2, roughness: 0.5 });
+  floorM.map.wrapS = floorM.map.wrapT = THREE.RepeatWrapping; subway.map.wrapS = subway.map.wrapT = THREE.RepeatWrapping;
+  plane(3.6, 4.6, floorM, -11.2, 0.004, -20.3, -Math.PI / 2, 0, 0.5);
+  plane(3.6, 4.6, ceilM, -11.2, 2.88, -20.3, Math.PI / 2);        // just under the roof block so the two never z-fight
+  const wm = { low: [subway, MAT.brick], high: [paint, MAT.brick] };
+  buildWall('z', -13, -22.6, -18.15, 2.9, wm, -1, [], 0.3, 1.5);
+  buildWall('z', -9.4, -22.6, -18.15, 2.9, wm, 1, [], 0.3, 1.5);
+  buildWall('x', -22.6, -13.1, -9.3, 2.9, wm, -1, [], 0.3, 1.5);
+  buildWall('z', -11.0, -22.45, -18.15, 2.9, { low: [subway, subway], high: [paint, paint] }, 1, [], 0.12, 1.5);
   addBoxS(SBX, MAT.corr, -11.2, 3.0, -20.35, 3.9, 0.2, 4.8); // roof of the block, seen from the garden
   addSwingDoor(-12.45, -18.0, -1, 0.9, M({ color: 0x3a2618, roughness: 0.5 }));
-  // stainless urinal trough on the back wall
-  addBoxS(SB, MAT.chrome, -12.05, 1.05, -22.42, 1.7, 1.1, 0.03);
-  addBoxS(SB, MAT.chrome, -12.05, 0.52, -22.32, 1.7, 0.08, 0.22);
-  addCylS(SB, MAT.chrome, -12.05, 1.62, -22.38, 0.015, 1.7, 8, 0, 0, Math.PI / 2);
+  // ---- three wall-hung ceramic urinals with modesty dividers, a flush pipe each, a drain and a urinal cake
+  for (const ux of [-12.5, -12.0, -11.5]) {
+    addBoxS(SB, ceramic, ux, 1.0, -22.4, 0.36, 0.8, 0.06);
+    SB.add(G.sph, ceramic, ux, 0.74, -22.28, 0, 0, 0, 0.2, 0.3, 0.17);                                          // the bowl
+    addBoxS(SB, ceramic, ux, 0.92, -22.34, 0.28, 0.5, 0.1);                                                      // back slab it hangs from
+    addBoxS(SB, M({ color: 0x2c2e32, roughness: 0.3 }), ux, 0.58, -22.2, 0.09, 0.02, 0.05);                      // drain grate
+    addCylS(SB, MAT.chrome, ux, 1.78, -22.4, 0.012, 0.8, 8);                       // flush pipe from the ceiling
+    addBoxS(SB, MAT.chrome, ux, 1.45, -22.38, 0.07, 0.07, 0.03);                   // flush sensor
+    addCylS(SB, M({ color: 0xf0a8c0, roughness: 0.6 }), ux, 0.7, -22.22, 0.035, 0.015, 10);
+    addCylS(SB, MAT.chrome, ux, 0.55, -22.24, 0.03, 0.01, 8);
+  }
+  for (const dx of [-12.25, -11.75]) addBoxS(SB, M({ color: 0xcfd8d4, roughness: 0.2 }), dx, 1.12, -22.25, 0.025, 0.74, 0.4);
   addColBox(-12.95, -11.15, -22.45, -22.15);
-  // cubicle on the left with a toilet in it, door ajar
-  addBoxS(SB, M({ color: 0x4a5a4a, roughness: 0.5 }), -12.55, 1.1, -19.25, 0.9, 1.9, 0.04);
-  addBoxS(SB, M({ color: 0x4a5a4a, roughness: 0.5 }), -12.55, 1.1, -20.75, 0.9, 1.9, 0.04);
-  const cd = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.85, 1.4), M({ color: 0x4a5a4a, roughness: 0.5 })); cd.position.set(-12.05, 1.08, -20.3); cd.rotation.y = -0.6; scene.add(cd);
-  addCylS(SB, MAT.white, -12.75, 0.22, -20.0, 0.17, 0.44, 16); addBoxS(SB, MAT.white, -12.9, 0.65, -20.0, 0.16, 0.38, 0.42);
+  // ---- the cubicle: laminate partitions with a gap at the floor, a door standing ajar, a proper pedestal and cistern
+  const PY = 0.17 + 0.88;   // partition centre: 17cm off the floor, 1.76m tall
+  addBoxS(SB, lam, -12.45, PY, -19.2, 0.8, 1.76, 0.035); addBoxS(SB, lam, -12.45, PY, -20.8, 0.8, 1.76, 0.035);
+  const pivot = new THREE.Group(); pivot.position.set(-12.04, PY, -19.24); pivot.rotation.y = -0.32; scene.add(pivot);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.76, 1.5), lam); leaf.position.z = -0.75; leaf.castShadow = true; pivot.add(leaf);
+  const latch = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.04), M({ color: 0x1ea040, roughness: 0.4 })); latch.position.set(0.03, 0.05, -1.38); pivot.add(latch);
+  addCylS(SB, MAT.chrome, -12.04, 1.9, -19.24, 0.016, 0.16, 8); addCylS(SB, MAT.chrome, -12.04, 0.3, -19.24, 0.016, 0.16, 8);   // hinges
+  addCylS(SB, ceramic, -12.7, 0.19, -20.0, 0.11, 0.38, 14);                                                                    // pedestal
+  SB.add(G.sph, ceramic, -12.52, 0.4, -20.0, 0, 0, 0, 0.2, 0.15, 0.27);                                                         // bowl
+  SB.add(G.sph, M({ color: 0xeeeeea, roughness: 0.15 }), -12.52, 0.46, -20.0, 0, 0, 0, 0.19, 0.05, 0.25);                       // seat
+  addBoxS(SB, ceramic, -12.76, 0.78, -20.0, 0.17, 0.4, 0.44); addBoxS(SB, MAT.chrome, -12.66, 0.99, -20.0, 0.04, 0.03, 0.07);   // cistern + button
+  addCylS(SB, MAT.chrome, -12.42, 0.7, -19.22, 0.02, 0.12, 8, 0, 0, Math.PI / 2); addCylS(SB, MAT.white, -12.42, 0.7, -19.22, 0.055, 0.1, 12, 0, 0, Math.PI / 2);   // loo roll
+  addBoxS(SB, MAT.chrome, -12.8, 1.6, -20.78, 0.05, 0.05, 0.05);                                                                // coat hook
   addColBox(-13, -12.05, -20.8, -19.2);
-  // basin, sticker-covered mirror, hand dryer, condom machine
-  addBoxS(SB, MAT.white, -11.25, 0.82, -19.1, 0.4, 0.14, 0.5); addCylS(SB, MAT.chrome, -11.15, 0.95, -19.1, 0.012, 0.15, 6);
+  // ---- basin with taps and soap, sticker-covered mirror, hand dryer, condom machine, bin, floor drain
+  addBoxS(SB, ceramic, -11.3, 0.86, -19.1, 0.4, 0.16, 0.5); addBoxS(SB, M({ color: 0x9aa0a4, roughness: 0.4 }), -11.3, 0.78, -19.1, 0.3, 0.02, 0.4);
+  addCylS(SB, MAT.chrome, -11.13, 1.0, -19.1, 0.012, 0.16, 8); addBoxS(SB, MAT.chrome, -11.2, 1.07, -19.1, 0.12, 0.02, 0.02);
+  addBoxS(SB, M({ color: 0x5a9a5a, roughness: 0.3 }), -11.12, 1.05, -18.8, 0.06, 0.14, 0.08);                                  // soap pump
   addColBox(-11.5, -11.0, -19.4, -18.8);
   gentsMirror = new Reflector(new THREE.PlaneGeometry(0.55, 0.7), { clipBias: 0.003, textureWidth: 256, textureHeight: 320, color: 0x9a9890 });
   gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror); window.__gentsMirror = gentsMirror;
@@ -7314,18 +7376,26 @@ function buildToilets() {
   gentsMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || !roomAt(c.x, c.z) || roomAt(c.x, c.z).id !== 'toilets') return; if (playerBody) playerBody.root.visible = true; mob.apply(this, a); if (playerBody) playerBody.root.visible = false; };
   const stick = mkTex(256, 320, (x, W, H) => { x.clearRect(0, 0, W, H); [['#e8c52a', 'PIES'], ['#c7352b', 'XXXX'], ['#1a3a8a', 'NRL'], ['#fff', 'LOVE YA MUM']].forEach(([c, t], i) => { x.save(); x.translate(30 + (i % 2) * 180, 30 + i * 80); x.rotate(rand(-0.4, 0.4)); x.fillStyle = c; x.fillRect(-26, -12, 70, 24); x.fillStyle = '#111'; x.font = 'bold 14px Inter'; x.fillText(t, -20, 5); x.restore(); }); });
   signPlane(stick, 0.6, 0.75, -11.06, 1.62, -19.1, -Math.PI / 2, { transparent: true });
-  addBoxS(SB, MAT.chrome, -11.08, 1.25, -20.0, 0.15, 0.3, 0.25);
-  addBoxS(SB, M({ color: 0x8a1a1a, roughness: 0.4 }), -12.92, 1.35, -18.75, 0.12, 0.6, 0.35);
+  addBoxS(SB, M({ color: 0xb8bcc2, metalness: 0.6, roughness: 0.25 }), -11.1, 1.25, -20.0, 0.16, 0.3, 0.26);                  // hand dryer
+  addBoxS(SB, M({ color: 0x8a1a1a, roughness: 0.4 }), -12.8, 1.35, -18.75, 0.1, 0.6, 0.35);                                   // condom machine
+  addCylS(SB, MAT.chrome, -11.35, 0.27, -21.0, 0.15, 0.54, 14); addColBox(-11.5, -11.2, -21.15, -20.85);                       // steel bin
+  addCylS(SB, M({ color: 0x25272a, roughness: 0.5 }), -12.0, 0.006, -21.2, 0.1, 0.012, 14);                                  // floor drain
+  // hygiene notices
+  const hy = signTex(['PLEASE WASH', 'YOUR HANDS'], { w: 256, h: 128, bg: '#2a6ab8', color: '#fff', sizes: [40, 40] }); signPlane(hy, 0.3, 0.15, -11.065, 1.55, -18.55, -Math.PI / 2);
+  // high frosted window on the back wall: the only daylight in here
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.35), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.6, 0.78), toneMapped: false })); win.position.set(-11.6, 2.35, -22.44); scene.add(win); dynamic.toiletWin = win;
+  addBoxS(SB, MAT.chrome, -11.6, 2.35, -22.45, 0.66, 0.41, 0.02);
   // graffiti, of course
   const graf = mkTex(512, 256, (x, W, H) => {
     x.clearRect(0, 0, W, H); const lines = [['DAZZA WOZ ERE 09', '#222', 0.1], ['KENNO IS A DART GOD', '#1a3a8a', -0.05], ['the pies will win a flag (lol)', '#7a1f14', 0.03], ['IIII IIII III', '#333', 0], ['don\'t eat the yellow snow - mgmt', '#2a5a2a', -0.08]];
     lines.forEach(([t, c, r], i) => { x.save(); x.translate(20 + (i % 2) * 60, 40 + i * 46); x.rotate(r); x.fillStyle = c; x.font = `${rand(22, 30)}px 'Permanent Marker', cursive`; x.fillText(t, 0, 0); x.restore(); });
   });
-  signPlane(graf, 1.4, 0.7, -12.98, 1.75, -21.4, Math.PI / 2, { transparent: true });
-  signPlane(graf, 1.2, 0.6, -11.12, 1.9, -21.6, -Math.PI / 2, { transparent: true });
-  SB.add(G.box, MAT.bulbCool, -11.9, 2.86, -20.3, 0, 0, 0, 0.06, 0.04, 1.2);
-  zoneLight('toilets', -11.9, 2.6, -20.4, 0xe0f0ff, 7, 7);
-  addInteract({ id: 'urinal', pos: V3(-12.05, 1.0, -22.1), r: 1.9, label: () => 'Use the trough', action: () => Needs.toilet() });
+  signPlane(graf, 1.4, 0.7, -12.84, 1.75, -21.4, Math.PI / 2, { transparent: true });
+  signPlane(graf, 1.2, 0.6, -11.1, 1.9, -21.6, -Math.PI / 2, { transparent: true });
+  SB.add(G.box, M({ color: 0xe8f0ff, emissive: 0xcfe0ff, emissiveIntensity: 0.8, roughness: 0.4 }), -12.0, 2.84, -20.3, 0, 0, 0, 0.08, 0.04, 1.2);
+  zoneLight('toilets', -12.0, 2.5, -20.4, 0xf0f6ff, 3.6, 6);
+  addInteract({ id: 'urinal', pos: V3(-12.0, 1.0, -22.1), r: 1.9, label: () => 'Use the urinal', action: () => Needs.toilet() });
+  addInteract({ id: 'cubicle', pos: V3(-12.3, 1.0, -20.0), r: 1.5, label: () => 'Use the cubicle', action: () => Needs.toilet() });
 }
 
 // ---------------------------------------------------------------- beer garden
@@ -9154,6 +9224,9 @@ function skinTitle(x, S) {
 // ---------------------------------------------------------------- Machine: draw with the skin
 Machine.prototype.drawSkin = function () {
   const S = this.skin, x = this.ctx, sc = this.res_ * S.k, g = this.game, st = this.state, W = S.mw, H = S.mh;
+  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only a few times a second
+  if (st === 'ready' && !(this.flashT > 0) && !this.particles.length) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10 !== 1 && this._lastCredit === this.credit && this._lastBet === this.bet) return; }
+  this._lastCredit = this.credit; this._lastBet = this.bet;
   x.setTransform(sc, 0, 0, sc, 0, 0);
   const hs = st === 'holdspin' && S.useHS && SLOTSKIN.hsImg;
   const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;
@@ -9399,6 +9472,96 @@ drawScene = function (x, scene, t) {
     x.fillStyle = '#5a2a10'; x.fillRect(0, 470, SW, 300);
   } else _drawScene(x, scene, t);
 };
+
+// ---- src/25-town.js ----
+
+// =====================================================================
+//  WATTLE CREEK MAIN STREET: the buildings either side of the Royal.
+//  Every shopfront gets a painted facade (windows, awning, signage, plinth) with a matching emissive map so lit
+//  windows and lightbox signs glow after dark; rooftop plant, downpipes and a parapet make the roofline read.
+// =====================================================================
+const Town = {
+  mats: [], lastGlow: -1,
+  glow(night) { if (Math.abs(night - this.lastGlow) < 0.02) return; this.lastGlow = night; for (const m of this.mats) m.emissiveIntensity = 0.04 + night * 1.3; },
+};
+const TOWN_KINDS = {
+  hardware: { wall: '#6f808c', trim: '#e6e6e0', sign: ['#1a4a8a', '#fff', "CAMPBELL & SON HARDWARE"], shutter: true, awning: ['#1a4a8a', '#e8e8e8'] },
+  bakery: { wall: '#8e3c2c', trim: '#f2e6c8', sign: ['#f2e8c8', '#5a2a14', 'WATTLE CREEK BAKERY'], awning: ['#c7352b', '#f4ead6'] },
+  vacant: { wall: '#7b756a', trim: '#cfc8b8', sign: null, shutter: true, closed: true },
+  newsagent: { wall: '#d9c9a2', trim: '#8a7a5a', sign: ['#c7352b', '#fff', 'NEWSAGENCY · LOTTO'], awning: ['#2a2a30', '#f2c230'] },
+  chemist: { wall: '#c9d9cd', trim: '#5a7a66', sign: ['#1a8a4a', '#fff', 'WATTLE CHEMIST'], awning: ['#1a8a4a', '#f4f4ee'] },
+  opshop: { wall: '#a9b9d1', trim: '#e8e8f0', sign: ['#8a2a6a', '#fff', 'SECOND CHANCE OP SHOP'], awning: ['#8a2a6a', '#f4ead6'] },
+  offices: { wall: '#b9a98f', trim: '#6a5a44', sign: ['#2a2c34', '#e8c56a', 'GREENE & PARTNERS · SOLICITORS'], awning: null },
+  brick: { wall: '#7a3a2a', trim: '#4a2a20', sign: null, awning: null },
+};
+function townRng(seed) { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function texFacade(kind, wM, hM, seed) {
+  const K = TOWN_KINDS[kind], rnd = townRng(seed), PX = 36, W = Math.min(1024, Math.round(wM * PX)), H = Math.round(hM * PX), s = W / wM;
+  const c = mkCanvas(W, H), x = c.getContext('2d'), e = mkCanvas(W, H), ex = e.getContext('2d');
+  ex.fillStyle = '#000'; ex.fillRect(0, 0, W, H);
+  x.fillStyle = K.wall; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < W * H / 500; i++) { x.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},${rnd() * 0.05})`; x.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 10, 1 + rnd() * 4); }
+  if (kind === 'brick') for (let y = 0; y < H; y += 5) { x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, y, W, 1); for (let xx = (y / 5 % 2) * 8; xx < W; xx += 16) x.fillRect(xx, y, 1, 5); }
+  const groundH = 3.3 * s, plinth = 0.5 * s;
+  // parapet cap + cornice
+  x.fillStyle = K.trim; x.fillRect(0, 0, W, 0.35 * s); x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(0, 0.35 * s, W, 3);
+  // upper floor windows
+  if (hM > 4.8) {
+    const ww = 1.1 * s, wh = 1.5 * s, gap = 2.6 * s, y0 = H - groundH - 0.5 * s - wh - 0.3 * s;
+    for (let wx = 0.9 * s; wx + ww < W - 0.5 * s; wx += gap) {
+      const lit = rnd() < 0.3;
+      x.fillStyle = K.trim; x.fillRect(wx - 5, y0 - 5, ww + 10, wh + 10);
+      x.fillStyle = lit ? '#ffcf80' : '#10141c'; x.fillRect(wx, y0, ww, wh);
+      if (lit) { ex.fillStyle = '#ffb860'; ex.fillRect(wx, y0, ww, wh); x.fillStyle = 'rgba(80,40,10,.35)'; for (let by = y0 + 4; by < y0 + wh; by += 7) x.fillRect(wx, by, ww, 2); }
+      x.fillStyle = K.trim; x.fillRect(wx + ww / 2 - 1, y0, 2, wh); x.fillRect(wx, y0 + wh * 0.45, ww, 2); x.fillRect(wx - 7, y0 + wh + 5, ww + 14, 5);
+    }
+  }
+  // ground floor
+  const gy = H - groundH;
+  x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, H - plinth, W, plinth); x.fillStyle = 'rgba(255,255,255,.08)'; for (let tx = 0; tx < W; tx += 0.45 * s) x.fillRect(tx, H - plinth, 1, plinth);
+  if (K.sign) { // lightbox sign band
+    const sy = gy + 0.1 * s, sh = 0.75 * s;
+    x.fillStyle = K.sign[0]; x.fillRect(0.5 * s, sy, W - s, sh); x.strokeStyle = K.trim; x.lineWidth = 3; x.strokeRect(0.5 * s, sy, W - s, sh);
+    ex.fillStyle = K.sign[0]; ex.fillRect(0.5 * s, sy, W - s, sh);
+    for (const g of [x, ex]) { g.fillStyle = K.sign[1]; g.font = `${Math.round(sh * 0.58)}px Rye, Bungee, Impact, serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(K.sign[2], W / 2, sy + sh / 2 + 2, W - 1.4 * s); }
+  }
+  if (K.shutter) { // roller shutter
+    x.fillStyle = '#7d8284'; x.fillRect(0.5 * s, gy + 1 * s, W - s, groundH - 1 * s - plinth); x.fillStyle = 'rgba(0,0,0,.28)'; for (let ry = gy + 1 * s; ry < H - plinth; ry += 5) x.fillRect(0.5 * s, ry, W - s, 1.5);
+    if (K.closed) { x.fillStyle = 'rgba(0,0,0,.25)'; for (let i = 0; i < 6; i++) x.fillRect(rnd() * W, gy + rnd() * groundH, 30 + rnd() * 90, 3); }   // graffiti tags and grime
+  } else { // shop window and door
+    const wy = gy + (K.sign ? 1.0 : 0.5) * s, wh = groundH - (K.sign ? 1.0 : 0.5) * s - plinth - 0.1 * s, doorW = 1.1 * s, doorX = W * 0.3;
+    x.fillStyle = K.trim; x.fillRect(0.4 * s, wy - 4, W - 0.8 * s, wh + 8);
+    const gl = x.createLinearGradient(0, wy, 0, wy + wh); gl.addColorStop(0, '#2a323c'); gl.addColorStop(1, '#10151c'); x.fillStyle = gl; x.fillRect(0.5 * s, wy, W - s, wh);
+    ex.fillStyle = '#ffcf90'; ex.globalAlpha = kind === 'offices' ? 0.2 : 0.55; ex.fillRect(0.5 * s, wy + wh * 0.3, W - s, wh * 0.7); ex.globalAlpha = 1;   // shop lights spilling through the glass
+    x.fillStyle = 'rgba(255,255,255,.10)'; x.beginPath(); x.moveTo(0.5 * s, wy + wh); x.lineTo(0.5 * s + 80, wy); x.lineTo(0.5 * s + 150, wy); x.lineTo(0.5 * s + 70, wy + wh); x.fill();
+    x.fillStyle = K.trim; x.fillRect(doorX - 3, wy, doorW + 6, wh); x.fillStyle = '#0a0d12'; x.fillRect(doorX, wy + 4, doorW, wh - 4); x.fillStyle = '#d8b050'; x.fillRect(doorX + doorW - 8, wy + wh * 0.5, 3, 24);
+    for (let mx = 0.5 * s + 40; mx < W - 0.6 * s; mx += 70 + rnd() * 90) { if (mx > doorX - 10 && mx < doorX + doorW + 10) continue; x.fillStyle = K.trim; x.fillRect(mx, wy, 3, wh); }
+  }
+  const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
+  const emap = new THREE.CanvasTexture(e); emap.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.05, roughness: 0.9 }); Town.mats.push(mat);
+  return mat;
+}
+function awningTex(a, b) { return mkTex(128, 64, (x, W, H) => { for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? b : a; x.fillRect(i * W / 8, 0, W / 8, H); } x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(0, H - 6, W, 6); }); }
+function townBlock(x0, x1, zf, depth, h, facing, kind) {
+  const K = TOWN_KINDS[kind], w = x1 - x0, cx = (x0 + x1) / 2, cz = zf + depth / 2 * (facing > 0 ? -1 : 1), seed = Math.round(x0 * 7 + zf * 3);
+  const fac = texFacade(kind, w, h, seed), side = M({ map: TEX.brickDark, color: 0x9a8a80, roughness: 0.95 }, false), roof = M({ color: 0x4a4c50, roughness: 0.8 }, false);
+  const faces = [side, side, roof, side, facing > 0 ? fac : side, facing > 0 ? side : fac];
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), faces); body.position.set(cx, h / 2, cz); body.castShadow = body.receiveShadow = true; scene.add(body);
+  addColBox(x0, x1, cz - depth / 2, cz + depth / 2);
+  const fz = zf + 0.0 * facing, rnd = townRng(seed + 11);
+  // awning over the footpath
+  if (K.awning) {
+    const aw = new THREE.Mesh(new THREE.BoxGeometry(w - 1.0, 0.06, 1.7), new THREE.MeshStandardMaterial({ map: awningTex(...K.awning), roughness: 0.8 })); aw.position.set(cx, 3.05, fz + 0.85 * facing); aw.rotation.x = 0.12 * facing; aw.castShadow = true; scene.add(aw);
+    for (const ax of [x0 + 0.7, x1 - 0.7]) addCylS(SBX, MAT.iron, ax, 1.5, fz + 1.6 * facing, 0.03, 3.0, 8);
+  }
+  // parapet lip, downpipes, rooftop plant and an aerial
+  SBX.add(G.box, MAT.iron, cx, h + 0.1, cz, 0, 0, 0, w + 0.1, 0.2, depth + 0.1);
+  for (const px of [x0 + 0.25, x1 - 0.25]) addCylS(SBX, M({ color: 0x4a4e52, roughness: 0.6 }, false), px, h / 2, fz + 0.06 * facing, 0.04, h, 8);
+  for (let i = 0, n = 1 + Math.floor(rnd() * 3); i < n; i++) SBX.add(G.box, MAT.shutter, x0 + 1.5 + rnd() * (w - 3), h + 0.55, cz + (rnd() - 0.5) * depth * 0.5, 0, 0, 0, 1.0 + rnd(), 0.7 + rnd() * 0.5, 0.9 + rnd() * 0.6);
+  if (rnd() < 0.7) { const ax = x0 + 1 + rnd() * (w - 2); addCylS(SBX, MAT.iron, ax, h + 1.4, cz, 0.02, 2.4, 6); SBX.add(G.box, MAT.iron, ax, h + 2.3, cz, 0, 0, 0, 1.0, 0.03, 0.03); }
+  return body;
+}
 
 // ---- src/99-boot.js ----
 

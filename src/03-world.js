@@ -288,30 +288,17 @@ function buildStreet() {
   for (const dx of [-0.8, 0.8]) addBoxS(SBX, MAT.iron, -9.5 + dx, 0.22, 19.0, 0.05, 0.45, 0.45);
   addCol(-9.5, 19.05, 1.9, 0.5);
 
-  // ---- bland neighbours: dark, shuttered, forgettable ----
-  const shopMat = [MAT.brickDark, M({ map: TEX.paintDark, color: 0x55504a, roughness: 0.95 }, false), M({ map: TEX.paintDark, color: 0x3a3c40, roughness: 0.95 }, false)];
-  function blandBlock(x0, x1, zf, depth, h, facing, mat) {
-    const w = x1 - x0, cx = (x0 + x1) / 2, cz = zf + depth / 2 * (facing > 0 ? -1 : 1);
-    const g = uvBox(new THREE.BoxGeometry(w, h, depth), w, h, depth, 2.5);
-    const m = new THREE.Mesh(g, mat); m.position.set(cx, h / 2, cz); m.castShadow = m.receiveShadow = true; scene.add(m);
-    addColBox(x0, x1, cz - depth / 2, cz + depth / 2);
-    // shutters / dark shopfront + awning
-    for (let sx = x0 + 1.2; sx < x1 - 2.4; sx += 4.5) {
-      SBX.add(uvBox(new THREE.BoxGeometry(3.2, 2.6, 0.05), 3.2, 2.6, .05, 1), MAT.shutter, sx + 1.6, 1.3, zf + 0.03 * facing);
-      if (h > 5) { const lit = Math.random() < 0.12; const wm = lit ? MAT.litWindow : MAT.darkWindow; SBX.add(G.box, wm, sx + 1.6, h - 2.0, zf + 0.02 * facing, 0, 0, 0, 1.2, 1.4, 0.05); }
-    }
-    SBX.add(G.box, MAT.iron, cx, 3.0, zf + 0.9 * facing, 0, 0, 0, w, 0.08, 1.8);
-  }
-  blandBlock(-46, -27, 2, 12, 5.2, 1, shopMat[1]);
-  blandBlock(-27, -14, 2, 12, 4.4, 1, shopMat[2]);
-  blandBlock(19.6, 33, 2, 22, 4.6, 1, shopMat[1]);
-  blandBlock(33, 50, 2, 14, 6.2, 1, shopMat[0]);
-  blandBlock(-50, -30, 24, 12, 6.5, -1, shopMat[0]);
-  blandBlock(-30, -12, 24, 10, 4.2, -1, shopMat[2]);
-  blandBlock(-12, 6, 24, 10, 5.0, -1, shopMat[1]);
-  blandBlock(6, 7.6, 24, 12, 7.0, -1, shopMat[0]);
-  blandBlock(12.4, 26, 24, 12, 7.0, -1, shopMat[0]); // the gap is the kebab shop (buildKebab)
-  blandBlock(26, 50, 24, 10, 4.5, -1, shopMat[2]);
+  // ---- the neighbours: painted shopfronts with lit windows, awnings and signs (see 25-town.js) ----
+  townBlock(-46, -27, 2, 12, 7.0, 1, 'offices');
+  townBlock(-27, -14, 2, 12, 4.6, 1, 'vacant');
+  townBlock(19.6, 33, 2, 22, 4.8, 1, 'hardware');
+  townBlock(33, 50, 2, 14, 6.6, 1, 'bakery');
+  townBlock(-50, -30, 24, 12, 7.2, -1, 'offices');
+  townBlock(-30, -12, 24, 10, 4.6, -1, 'newsagent');
+  townBlock(-12, 6, 24, 10, 5.4, -1, 'chemist');
+  townBlock(6, 7.6, 24, 12, 7.0, -1, 'brick');
+  townBlock(12.4, 26, 24, 12, 7.0, -1, 'opshop');   // the gap in between is the kebab shop (buildKebab)
+  townBlock(26, 50, 24, 10, 5.0, -1, 'hardware');
   // FOR LEASE sign
   const fl = signTex(['FOR LEASE', '0400 000 000'], { w: 512, h: 256, bg: '#f4f4f0', color: ['#c7352b', '#222'], sizes: [110, 50], border: '#c7352b' });
   signPlane(fl, 1.6, 0.8, -20, 2.2, 2.09, 0);
@@ -457,27 +444,48 @@ function buildFacade() {
 }
 
 // ---- double swing doors with spring physics ----
+// timber-framed leaves with glazing bars, brass push plates and kick plates outside, long brass pull handles inside, hinge barrels and overhead closers
 function buildDoors() {
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x1f4d34, roughness: 0.4 });
+  const timber = new THREE.MeshStandardMaterial({ color: 0x1f4d34, roughness: 0.4, metalness: 0.05 });
+  const glassM = new THREE.MeshStandardMaterial({ color: 0x9fb8c0, roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 });
+  interiorMats.push(timber);
+  const brass = MAT.brass, w = 1.28, h = 2.62;
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group(); pivot.position.set(1.3 * s, 0, 2.0); scene.add(pivot);
     const leaf = new THREE.Group(); pivot.add(leaf);
-    const w = 1.28;
-    const lo = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, 0.05), leafMat); lo.position.set(-s * w / 2, 0.6, 0); leaf.add(lo);
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, 0.06), leafMat); fr.position.set(-s * w / 2, 2.62, 0); leaf.add(fr);
-    for (const fx of [0.04, w - 0.04]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.5, 0.06), leafMat); st.position.set(-s * fx, 1.9, 0); leaf.add(st); }
-    const gl = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.1, 1.45), MAT.window); gl.position.set(-s * w / 2, 1.9, 0); leaf.add(gl);
-    const pl = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.07), MAT.brass); pl.position.set(-s * (w - 0.25), 1.15, 0); leaf.add(pl);
-    const et = signTex(['PUSH'], { w: 256, h: 64, color: '#e8c56a', size: 44 });
-    const ep = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: et, transparent: true })); ep.position.set(-s * w / 2, 1.0, 0.03); leaf.add(ep);
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(-s * x, y, z); m.castShadow = true; leaf.add(m); return m; };
+    // frame: stiles, top and bottom rails, mid rail
+    add(new THREE.BoxGeometry(0.1, h, 0.06), timber, 0.05, h / 2, 0); add(new THREE.BoxGeometry(0.1, h, 0.06), timber, w - 0.05, h / 2, 0);
+    add(new THREE.BoxGeometry(w, 0.12, 0.06), timber, w / 2, h - 0.06, 0); add(new THREE.BoxGeometry(w, 0.18, 0.06), timber, w / 2, 0.09, 0); add(new THREE.BoxGeometry(w, 0.1, 0.06), timber, w / 2, 1.2, 0);
+    // lower panel with a raised moulding
+    add(new THREE.BoxGeometry(w - 0.2, 0.9, 0.035), timber, w / 2, 0.65, 0.0); add(new THREE.BoxGeometry(w - 0.34, 0.74, 0.02), timber, w / 2, 0.65, 0.03); add(new THREE.BoxGeometry(w - 0.34, 0.74, 0.02), timber, w / 2, 0.65, -0.03);
+    // glazing with bars
+    add(new THREE.PlaneGeometry(w - 0.2, 1.3), glassM, w / 2, 1.9, 0);
+    add(new THREE.BoxGeometry(0.03, 1.3, 0.04), timber, w / 2, 1.9, 0); for (const gy of [1.58, 2.22]) add(new THREE.BoxGeometry(w - 0.2, 0.03, 0.04), timber, w / 2, gy, 0);
+    // brass: kick plates both sides, push plate outside, pull bar inside
+    add(new THREE.BoxGeometry(w - 0.24, 0.22, 0.012), brass, w / 2, 0.2, 0.034); add(new THREE.BoxGeometry(w - 0.24, 0.22, 0.012), brass, w / 2, 0.2, -0.034);
+    add(new THREE.BoxGeometry(0.22, 0.46, 0.014), brass, w - 0.24, 1.05, 0.035);
+    const bar = add(new THREE.CylinderGeometry(0.018, 0.018, 0.62, 10), brass, w - 0.2, 1.05, -0.085); for (const by of [-0.24, 0.24]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.05, 6), brass); post.rotation.x = Math.PI / 2; post.position.set(0, by, 0.04); bar.add(post); }
+    // PUSH outside, PULL inside
+    const et = signTex(['PUSH'], { w: 256, h: 64, color: '#e8c56a', size: 40 }), pt = signTex(['PULL'], { w: 256, h: 64, color: '#e8c56a', size: 40 });
+    const ep = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), new THREE.MeshBasicMaterial({ map: et, transparent: true })); ep.position.set(-s * (w - 0.24), 1.34, 0.037); leaf.add(ep);
+    const pp = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), new THREE.MeshBasicMaterial({ map: pt, transparent: true })); pp.position.set(-s * (w - 0.2), 1.46, -0.037); pp.rotation.y = Math.PI; leaf.add(pp);
+    // hinge barrels and a spring closer on the head
+    for (const hy of [0.35, 1.3, 2.3]) { const hg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.16, 8), brass); hg.position.set(0, hy, 0); pivot.add(hg); }
+    const clo = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.07, 0.06), new THREE.MeshStandardMaterial({ color: 0x2a2a2e, metalness: 0.6, roughness: 0.4 })); clo.position.set(-s * 0.28, h + 0.05, -0.1); leaf.add(clo);
     pivot.traverse(o => { if (o.isMesh) o.castShadow = true; });
     dynamic.doors.push({ pivot, s, w, ang: 0, vel: 0, lastSound: 0 });
   }
+  // brass threshold strip and a stainless kick-guard on the jambs
+  addBoxS(SBX, brass, 0, 0.012, 2.0, 2.7, 0.025, 0.2);
 }
 function updateDoors(dt, actors) {
   for (const d of dynamic.doors) {
     let torque = -d.ang * 9 - d.vel * 3.2; // spring + damper
     for (const a of actors) {
+      // open a little before you reach it, so the leaf never swings through the camera: the nearer you are, the further it eases open
+      const az = a.z - d.pivot.position.z, ax = a.x;
+      if (Math.abs(az) < 1.5 && Math.abs(ax) < 1.6) torque += -Math.sign(az || 1) * (1.5 - Math.abs(az)) * 6.5;
       // test against leaf segment
       const hx = d.pivot.position.x, hz = d.pivot.position.z;
       const tipx = hx - d.s * Math.cos(d.ang) * d.w, tipz = hz + Math.sin(d.ang) * d.w;
@@ -949,6 +957,7 @@ function buildSky() {
 }
 let skyEnvRT = null, lastEnvHour = -99;
 const lastShadowSun = new THREE.Vector3();
+let lastEnvKey = '';
 function setTimeOfDay(h, weather) {
   // Autumn in Oz: sunset ~17:50. elevation in degrees
   const dayLen = 11.2, rise = 6.6;
@@ -997,6 +1006,15 @@ function setTimeOfDay(h, weather) {
   if (_v1.angleTo(lastShadowSun) > 0.012 || lastShadowSun.lengthSq() === 0) { lastShadowSun.copy(_v1); if (typeof shadowDirty !== 'undefined') shadowDirty = 1; }
   // refresh the sky reflection rarely, and only while indoors so the change is never seen popping
   const camIn = isInside(camera.position.x, camera.position.z);
+  // real HDRI skies for reflections when we have them: night / dusk / day, swapped while you're indoors so it never pops
+  if (ENVHDR.night && ENVHDR.sunset) {
+    const key = nightF > 0.55 ? 'night' : dayF > 0.6 ? (ENVHDR.park ? 'park' : 'sunset') : (elev < 0 ? 'dusk' : 'dawn');
+    if (key !== lastEnvKey && (camIn || lastEnvKey === '')) {
+      lastEnvKey = key; const nm = key === 'dusk' ? 'sunset' : key;
+      if (!ENVHDR['_p' + nm]) ENVHDR['_p' + nm] = pmrem.fromEquirectangular(ENVHDR[nm] || ENVHDR.sunset).texture;
+      scene.environment = ENVHDR['_p' + nm]; scene.environmentIntensity = { night: 0.55, sunset: 0.6, dusk: 0.6, dawn: 0.6, park: 0.75 }[key] || 0.6;
+    }
+  } else
   if (lastEnvHour < -50 || (Math.abs(h - lastEnvHour) > 1.0 && camIn)) {
     lastEnvHour = h;
     const envScene = new THREE.Scene(); const s2 = new Sky(); s2.scale.setScalar(100); s2.material.uniforms.sunPosition.value.copy(sunPos);

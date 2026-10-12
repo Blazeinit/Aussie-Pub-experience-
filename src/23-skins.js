@@ -71,6 +71,9 @@ function skinTitle(x, S) {
 // ---------------------------------------------------------------- Machine: draw with the skin
 Machine.prototype.drawSkin = function () {
   const S = this.skin, x = this.ctx, sc = this.res_ * S.k, g = this.game, st = this.state, W = S.mw, H = S.mh;
+  // a big canvas: when nothing is moving (waiting for a spin, nothing flashing) repaint only a few times a second
+  if (st === 'ready' && !(this.flashT > 0) && !this.particles.length) { this._idleN = (this._idleN || 0) + 1; if (this._idleN % 10 !== 1 && this._lastCredit === this.credit && this._lastBet === this.bet) return; }
+  this._lastCredit = this.credit; this._lastBet = this.bet;
   x.setTransform(sc, 0, 0, sc, 0, 0);
   const hs = st === 'holdspin' && S.useHS && SLOTSKIN.hsImg;
   const win = hs ? SLOTSKIN.hp.win.map((v, i) => v * (i % 2 ? H / SLOTSKIN.hp.mh : W / SLOTSKIN.hp.mw)) : S.win;

@@ -17,30 +17,71 @@ function mkTex(w, h, draw, srgb = true) { const c = mkCanvas(w, h); draw(c.getCo
 
 // ---------------------------------------------------------------- the gents
 let gentsMirror = null;
+function texSubway(band = '#2a7a58') {
+  return mkTex(256, 256, (x, W, H) => {
+    x.fillStyle = '#b8b4a6'; x.fillRect(0, 0, W, H);                       // grout
+    const rh = H / 8;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) {
+      const ox = (r % 2) * W / 8, X = c * W / 4 - ox, Y = r * rh, bandRow = r === 2;
+      const g = x.createLinearGradient(0, Y, 0, Y + rh); g.addColorStop(0, bandRow ? band : '#fbfaf4'); g.addColorStop(1, bandRow ? '#1e5a40' : '#e2dfd2');
+      x.fillStyle = g; x.fillRect(X + 2, Y + 2, W / 4 - 4, rh - 4); if (X < 0) x.fillRect(X + W + 2, Y + 2, W / 4 - 4, rh - 4);
+      x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(X + 3, Y + 3, W / 4 - 6, 2);
+    }
+    for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(120,100,60,${Math.random() * 0.06})`; x.beginPath(); x.arc(Math.random() * W, Math.random() * H, rand(4, 20), 0, 7); x.fill(); }
+  });
+}
+function texToiletFloor() {
+  return mkTex(256, 256, (x, W, H) => {
+    x.fillStyle = '#7a776c'; x.fillRect(0, 0, W, H);
+    const n = 8, s = W / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const l = 62 + rand(-4, 5); x.fillStyle = `hsl(${40 + rand(-4, 4)},8%,${l}%)`; x.fillRect(i * s + 1.5, j * s + 1.5, s - 3, s - 3); }
+    for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(50,40,20,${Math.random() * 0.08})`; x.beginPath(); x.arc(Math.random() * W, Math.random() * H, rand(6, 24), 0, 7); x.fill(); }
+  });
+}
 function buildToilets() {
-  const tiles = M({ map: TEX.tileCream, roughness: 0.25 });
-  plane(3.6, 4.6, tiles, -11.2, 0.004, -20.3, -Math.PI / 2, 0, 0.6);
-  plane(3.6, 4.6, M({ color: 0xd8d4c4, roughness: 0.8 }), -11.2, 2.9, -20.3, Math.PI / 2);
-  const wm = { low: [MAT.tileGreen, MAT.brick], high: [MAT.paintCream, MAT.brick] };
-  buildWall('z', -13, -22.6, -18.15, 2.9, wm, -1, [], 0.3);
-  buildWall('z', -9.4, -22.6, -18.15, 2.9, wm, 1, [], 0.3);
-  buildWall('x', -22.6, -13.1, -9.3, 2.9, wm, -1, [], 0.3);
-  buildWall('z', -11.0, -22.45, -18.15, 2.9, { low: [MAT.tileGreen, MAT.tileGreen], high: [MAT.paintCream, MAT.paintCream] }, 1, [], 0.12);
+  const subway = M({ map: texSubway(), roughness: 0.22, metalness: 0.02 }), paint = M({ color: 0xe9e5d3, roughness: 0.85 }), ceilM = M({ color: 0xdcd9cb, roughness: 0.9 });
+  const floorM = M({ map: texToiletFloor(), roughness: 0.32 }), ceramic = M({ color: 0xf7f7f3, roughness: 0.08 }), lam = M({ color: 0xa9b8b2, roughness: 0.5 });
+  floorM.map.wrapS = floorM.map.wrapT = THREE.RepeatWrapping; subway.map.wrapS = subway.map.wrapT = THREE.RepeatWrapping;
+  plane(3.6, 4.6, floorM, -11.2, 0.004, -20.3, -Math.PI / 2, 0, 0.5);
+  plane(3.6, 4.6, ceilM, -11.2, 2.88, -20.3, Math.PI / 2);        // just under the roof block so the two never z-fight
+  const wm = { low: [subway, MAT.brick], high: [paint, MAT.brick] };
+  buildWall('z', -13, -22.6, -18.15, 2.9, wm, -1, [], 0.3, 1.5);
+  buildWall('z', -9.4, -22.6, -18.15, 2.9, wm, 1, [], 0.3, 1.5);
+  buildWall('x', -22.6, -13.1, -9.3, 2.9, wm, -1, [], 0.3, 1.5);
+  buildWall('z', -11.0, -22.45, -18.15, 2.9, { low: [subway, subway], high: [paint, paint] }, 1, [], 0.12, 1.5);
   addBoxS(SBX, MAT.corr, -11.2, 3.0, -20.35, 3.9, 0.2, 4.8); // roof of the block, seen from the garden
   addSwingDoor(-12.45, -18.0, -1, 0.9, M({ color: 0x3a2618, roughness: 0.5 }));
-  // stainless urinal trough on the back wall
-  addBoxS(SB, MAT.chrome, -12.05, 1.05, -22.42, 1.7, 1.1, 0.03);
-  addBoxS(SB, MAT.chrome, -12.05, 0.52, -22.32, 1.7, 0.08, 0.22);
-  addCylS(SB, MAT.chrome, -12.05, 1.62, -22.38, 0.015, 1.7, 8, 0, 0, Math.PI / 2);
+  // ---- three wall-hung ceramic urinals with modesty dividers, a flush pipe each, a drain and a urinal cake
+  for (const ux of [-12.5, -12.0, -11.5]) {
+    addBoxS(SB, ceramic, ux, 1.0, -22.4, 0.36, 0.8, 0.06);
+    SB.add(G.sph, ceramic, ux, 0.74, -22.28, 0, 0, 0, 0.2, 0.3, 0.17);                                          // the bowl
+    addBoxS(SB, ceramic, ux, 0.92, -22.34, 0.28, 0.5, 0.1);                                                      // back slab it hangs from
+    addBoxS(SB, M({ color: 0x2c2e32, roughness: 0.3 }), ux, 0.58, -22.2, 0.09, 0.02, 0.05);                      // drain grate
+    addCylS(SB, MAT.chrome, ux, 1.78, -22.4, 0.012, 0.8, 8);                       // flush pipe from the ceiling
+    addBoxS(SB, MAT.chrome, ux, 1.45, -22.38, 0.07, 0.07, 0.03);                   // flush sensor
+    addCylS(SB, M({ color: 0xf0a8c0, roughness: 0.6 }), ux, 0.7, -22.22, 0.035, 0.015, 10);
+    addCylS(SB, MAT.chrome, ux, 0.55, -22.24, 0.03, 0.01, 8);
+  }
+  for (const dx of [-12.25, -11.75]) addBoxS(SB, M({ color: 0xcfd8d4, roughness: 0.2 }), dx, 1.12, -22.25, 0.025, 0.74, 0.4);
   addColBox(-12.95, -11.15, -22.45, -22.15);
-  // cubicle on the left with a toilet in it, door ajar
-  addBoxS(SB, M({ color: 0x4a5a4a, roughness: 0.5 }), -12.55, 1.1, -19.25, 0.9, 1.9, 0.04);
-  addBoxS(SB, M({ color: 0x4a5a4a, roughness: 0.5 }), -12.55, 1.1, -20.75, 0.9, 1.9, 0.04);
-  const cd = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.85, 1.4), M({ color: 0x4a5a4a, roughness: 0.5 })); cd.position.set(-12.05, 1.08, -20.3); cd.rotation.y = -0.6; scene.add(cd);
-  addCylS(SB, MAT.white, -12.75, 0.22, -20.0, 0.17, 0.44, 16); addBoxS(SB, MAT.white, -12.9, 0.65, -20.0, 0.16, 0.38, 0.42);
+  // ---- the cubicle: laminate partitions with a gap at the floor, a door standing ajar, a proper pedestal and cistern
+  const PY = 0.17 + 0.88;   // partition centre: 17cm off the floor, 1.76m tall
+  addBoxS(SB, lam, -12.45, PY, -19.2, 0.8, 1.76, 0.035); addBoxS(SB, lam, -12.45, PY, -20.8, 0.8, 1.76, 0.035);
+  const pivot = new THREE.Group(); pivot.position.set(-12.04, PY, -19.24); pivot.rotation.y = -0.32; scene.add(pivot);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.76, 1.5), lam); leaf.position.z = -0.75; leaf.castShadow = true; pivot.add(leaf);
+  const latch = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.04), M({ color: 0x1ea040, roughness: 0.4 })); latch.position.set(0.03, 0.05, -1.38); pivot.add(latch);
+  addCylS(SB, MAT.chrome, -12.04, 1.9, -19.24, 0.016, 0.16, 8); addCylS(SB, MAT.chrome, -12.04, 0.3, -19.24, 0.016, 0.16, 8);   // hinges
+  addCylS(SB, ceramic, -12.7, 0.19, -20.0, 0.11, 0.38, 14);                                                                    // pedestal
+  SB.add(G.sph, ceramic, -12.52, 0.4, -20.0, 0, 0, 0, 0.2, 0.15, 0.27);                                                         // bowl
+  SB.add(G.sph, M({ color: 0xeeeeea, roughness: 0.15 }), -12.52, 0.46, -20.0, 0, 0, 0, 0.19, 0.05, 0.25);                       // seat
+  addBoxS(SB, ceramic, -12.76, 0.78, -20.0, 0.17, 0.4, 0.44); addBoxS(SB, MAT.chrome, -12.66, 0.99, -20.0, 0.04, 0.03, 0.07);   // cistern + button
+  addCylS(SB, MAT.chrome, -12.42, 0.7, -19.22, 0.02, 0.12, 8, 0, 0, Math.PI / 2); addCylS(SB, MAT.white, -12.42, 0.7, -19.22, 0.055, 0.1, 12, 0, 0, Math.PI / 2);   // loo roll
+  addBoxS(SB, MAT.chrome, -12.8, 1.6, -20.78, 0.05, 0.05, 0.05);                                                                // coat hook
   addColBox(-13, -12.05, -20.8, -19.2);
-  // basin, sticker-covered mirror, hand dryer, condom machine
-  addBoxS(SB, MAT.white, -11.25, 0.82, -19.1, 0.4, 0.14, 0.5); addCylS(SB, MAT.chrome, -11.15, 0.95, -19.1, 0.012, 0.15, 6);
+  // ---- basin with taps and soap, sticker-covered mirror, hand dryer, condom machine, bin, floor drain
+  addBoxS(SB, ceramic, -11.3, 0.86, -19.1, 0.4, 0.16, 0.5); addBoxS(SB, M({ color: 0x9aa0a4, roughness: 0.4 }), -11.3, 0.78, -19.1, 0.3, 0.02, 0.4);
+  addCylS(SB, MAT.chrome, -11.13, 1.0, -19.1, 0.012, 0.16, 8); addBoxS(SB, MAT.chrome, -11.2, 1.07, -19.1, 0.12, 0.02, 0.02);
+  addBoxS(SB, M({ color: 0x5a9a5a, roughness: 0.3 }), -11.12, 1.05, -18.8, 0.06, 0.14, 0.08);                                  // soap pump
   addColBox(-11.5, -11.0, -19.4, -18.8);
   gentsMirror = new Reflector(new THREE.PlaneGeometry(0.55, 0.7), { clipBias: 0.003, textureWidth: 256, textureHeight: 320, color: 0x9a9890 });
   gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror); window.__gentsMirror = gentsMirror;
@@ -48,18 +89,26 @@ function buildToilets() {
   gentsMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || !roomAt(c.x, c.z) || roomAt(c.x, c.z).id !== 'toilets') return; if (playerBody) playerBody.root.visible = true; mob.apply(this, a); if (playerBody) playerBody.root.visible = false; };
   const stick = mkTex(256, 320, (x, W, H) => { x.clearRect(0, 0, W, H); [['#e8c52a', 'PIES'], ['#c7352b', 'XXXX'], ['#1a3a8a', 'NRL'], ['#fff', 'LOVE YA MUM']].forEach(([c, t], i) => { x.save(); x.translate(30 + (i % 2) * 180, 30 + i * 80); x.rotate(rand(-0.4, 0.4)); x.fillStyle = c; x.fillRect(-26, -12, 70, 24); x.fillStyle = '#111'; x.font = 'bold 14px Inter'; x.fillText(t, -20, 5); x.restore(); }); });
   signPlane(stick, 0.6, 0.75, -11.06, 1.62, -19.1, -Math.PI / 2, { transparent: true });
-  addBoxS(SB, MAT.chrome, -11.08, 1.25, -20.0, 0.15, 0.3, 0.25);
-  addBoxS(SB, M({ color: 0x8a1a1a, roughness: 0.4 }), -12.92, 1.35, -18.75, 0.12, 0.6, 0.35);
+  addBoxS(SB, M({ color: 0xb8bcc2, metalness: 0.6, roughness: 0.25 }), -11.1, 1.25, -20.0, 0.16, 0.3, 0.26);                  // hand dryer
+  addBoxS(SB, M({ color: 0x8a1a1a, roughness: 0.4 }), -12.8, 1.35, -18.75, 0.1, 0.6, 0.35);                                   // condom machine
+  addCylS(SB, MAT.chrome, -11.35, 0.27, -21.0, 0.15, 0.54, 14); addColBox(-11.5, -11.2, -21.15, -20.85);                       // steel bin
+  addCylS(SB, M({ color: 0x25272a, roughness: 0.5 }), -12.0, 0.006, -21.2, 0.1, 0.012, 14);                                  // floor drain
+  // hygiene notices
+  const hy = signTex(['PLEASE WASH', 'YOUR HANDS'], { w: 256, h: 128, bg: '#2a6ab8', color: '#fff', sizes: [40, 40] }); signPlane(hy, 0.3, 0.15, -11.065, 1.55, -18.55, -Math.PI / 2);
+  // high frosted window on the back wall: the only daylight in here
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.35), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.6, 0.78), toneMapped: false })); win.position.set(-11.6, 2.35, -22.44); scene.add(win); dynamic.toiletWin = win;
+  addBoxS(SB, MAT.chrome, -11.6, 2.35, -22.45, 0.66, 0.41, 0.02);
   // graffiti, of course
   const graf = mkTex(512, 256, (x, W, H) => {
     x.clearRect(0, 0, W, H); const lines = [['DAZZA WOZ ERE 09', '#222', 0.1], ['KENNO IS A DART GOD', '#1a3a8a', -0.05], ['the pies will win a flag (lol)', '#7a1f14', 0.03], ['IIII IIII III', '#333', 0], ['don\'t eat the yellow snow - mgmt', '#2a5a2a', -0.08]];
     lines.forEach(([t, c, r], i) => { x.save(); x.translate(20 + (i % 2) * 60, 40 + i * 46); x.rotate(r); x.fillStyle = c; x.font = `${rand(22, 30)}px 'Permanent Marker', cursive`; x.fillText(t, 0, 0); x.restore(); });
   });
-  signPlane(graf, 1.4, 0.7, -12.98, 1.75, -21.4, Math.PI / 2, { transparent: true });
-  signPlane(graf, 1.2, 0.6, -11.12, 1.9, -21.6, -Math.PI / 2, { transparent: true });
-  SB.add(G.box, MAT.bulbCool, -11.9, 2.86, -20.3, 0, 0, 0, 0.06, 0.04, 1.2);
-  zoneLight('toilets', -11.9, 2.6, -20.4, 0xe0f0ff, 7, 7);
-  addInteract({ id: 'urinal', pos: V3(-12.05, 1.0, -22.1), r: 1.9, label: () => 'Use the trough', action: () => Needs.toilet() });
+  signPlane(graf, 1.4, 0.7, -12.84, 1.75, -21.4, Math.PI / 2, { transparent: true });
+  signPlane(graf, 1.2, 0.6, -11.1, 1.9, -21.6, -Math.PI / 2, { transparent: true });
+  SB.add(G.box, M({ color: 0xe8f0ff, emissive: 0xcfe0ff, emissiveIntensity: 0.8, roughness: 0.4 }), -12.0, 2.84, -20.3, 0, 0, 0, 0.08, 0.04, 1.2);
+  zoneLight('toilets', -12.0, 2.5, -20.4, 0xf0f6ff, 3.6, 6);
+  addInteract({ id: 'urinal', pos: V3(-12.0, 1.0, -22.1), r: 1.9, label: () => 'Use the urinal', action: () => Needs.toilet() });
+  addInteract({ id: 'cubicle', pos: V3(-12.3, 1.0, -20.0), r: 1.5, label: () => 'Use the cubicle', action: () => Needs.toilet() });
 }
 
 // ---------------------------------------------------------------- beer garden

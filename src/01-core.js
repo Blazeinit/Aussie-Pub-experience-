@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -63,6 +64,7 @@ function loadTexture(p, srgb = true) {
   }, undefined, () => res(null)));
 }
 function loadImage(p) { return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = assetURL(p); }); }
+const ENVHDR = {};   // real HDRI skies (Poly Haven, CC0, via the @pmndrs/assets npm package) used for reflections; see assets/env
 const SLOTSKIN = {};   // licensed machine skins (assets/slots): exact screen art + symbol sprites, filled in by loadAssets
 async function loadAssets(progress) {
   const work = (async () => {
@@ -75,6 +77,7 @@ async function loadAssets(progress) {
       jobs.push(loadImage(S.main).then(i => S.imgMain = i)); if (S.top) jobs.push(loadImage(S.top).then(i => S.imgTop = i));
       if (S.front) jobs.push(loadImage(S.front).then(i => S.imgFront = i)); if (S.sprites) jobs.push(loadImage(S.sprites.img).then(i => S.imgSprites = i));
     }
+    for (const k of ['sunset', 'night', 'dawn', 'park', 'lobby']) jobs.push(new EXRLoader().loadAsync(assetURL('env/' + k + '.exr')).then(t => { t.mapping = THREE.EquirectangularReflectionMapping; ENVHDR[k] = t; }).catch(() => {}));
     if (skins) { jobs.push(loadImage('slots/hs_bg.jpg').then(i => SLOTSKIN.hsImg = i)); jobs.push(loadImage('slots/ldl_banner.jpg').then(i => SLOTSKIN.bannerImg = i)); }
     if (man) for (const k in man) for (const ch of ['c', 'n', 'r']) if (man[k][ch]) jobs.push(loadTexture('tex/' + man[k][ch], ch === 'c').then(t => { (ASSETS.tex[k] = ASSETS.tex[k] || {})[ch] = t; }));
     if (lm) for (const k in lm.maps || {}) jobs.push(loadTexture('light/' + lm.maps[k].file, false).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.channel = 1; t.flipY = false; lm.maps[k].tex = t; } }));

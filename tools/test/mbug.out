@@ -1,0 +1,23 @@
+boot ok
+{"id":"am","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":558.35,"gambleState":"ready","hs":"showWin","hsGain":52,"after":"showWin"}
+{"id":"gc","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":490,"gambleState":"ready","after":"ready"}
+{"id":"pm","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":576.77,"gambleState":"ready","after":"ready"}
+{"id":"hp","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":495.87,"gambleState":"ready","hs":"showWin","hsGain":70,"after":"showWin"}
+{"id":"ldl1","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":504.09,"gambleState":"ready","after":"ready"}
+{"id":"ldl2","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":490,"gambleState":"ready","after":"ready"}
+{"id":"ldl3","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":496.46,"gambleState":"ready","after":"ready"}
+{"id":"ldl4","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":492.59,"gambleState":"ready","after":"ready"}
+{"id":"fm","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":494.35,"gambleState":"ready","hs":"showWin","hsGain":139.41,"after":"showWin"}
+{"id":"te1","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":490,"gambleState":"ready","after":"ready"}
+{"id":"te2","skin":true,"spins":5,"stuck":0,"state":"showWin","credit":494.4,"gambleState":"ready","after":"ready"}
+{"id":"qotn","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":500.9,"gambleState":"ready","after":"ready"}
+{"id":"bigred","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":495.4,"gambleState":"ready","after":"ready"}
+{"id":"buffalo","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":492.91,"gambleState":"ready","after":"ready"}
+{"id":"dragon","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":495.7,"gambleState":"ready","after":"ready"}
+{"id":"outback","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":490,"gambleState":"ready","hs":"showWin","hsGain":74,"after":"showWin"}
+{"id":"reef","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":490,"gambleState":"ready","after":"ready"}
+{"id":"sevens","skin":false,"spins":5,"stuck":0,"state":"showWin","credit":490.96,"gambleState":"ready","after":"ready"}
+ms per frame to tick+draw all 18 machines in NPC mode: 7.54
+FAILS 0
+errors 
+DONE

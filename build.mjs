@@ -16,7 +16,7 @@ writeFileSync('index.html', head + `<script type="module" src="game.js?v=${ver}"
 console.log(`index.html + game.js written (${(js.length / 1024).toFixed(0)} KB of code)`);
 
 if (process.argv.includes('--offline')) {
-  const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json', '.bin': 'application/octet-stream', '.hdr': 'application/octet-stream', '.mp3': 'audio/mpeg' };
+  const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json', '.bin': 'application/octet-stream', '.hdr': 'application/octet-stream', '.mp3': 'audio/mpeg', '.exr': 'application/octet-stream' };
   const files = {};
   const walk = dir => { if (!existsSync(dir)) return; for (const f of readdirSync(dir)) { const p = join(dir, f); if (statSync(p).isDirectory()) walk(p); else if (MIME[extname(f).toLowerCase()]) files[p.slice('assets/'.length).split('\\').join('/')] = `data:${MIME[extname(f).toLowerCase()]};base64,` + readFileSync(p).toString('base64'); } };
   walk('assets');
