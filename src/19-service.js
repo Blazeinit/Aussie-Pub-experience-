@@ -138,7 +138,7 @@ const ATM = {
     const opt = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = 'atmopt ' + cls; b.innerHTML = label; b.onclick = () => { SFX.beep(); fn(); }; return b; };
     body.innerHTML = '';
     if (st.stage === 'card') { body.innerHTML = '<p class="big">WELCOME</p><p>Please insert your card</p><div class="cardslot"></div>'; body.appendChild(opt('Insert card ▸', () => { SFX.noise(0.4, { freq: 600, q: 1, gain: 0.08 }); st.stage = 'reading'; this.render(); setTimeout(() => { st.stage = 'pin'; this.render(); }, 900); })); }
-    else if (st.stage === 'reading') body.innerHTML = '<p class="big">READING CARD…</p><div class="spin"></div>';
+    else if (st.stage === 'reading') body.innerHTML = '<p class="big">READING CARD…</p><div class="atmspin"></div>';
     else if (st.stage === 'pin') body.innerHTML = `<p>Enter your PIN, then press ENTER</p><p class="pin">${'●'.repeat(st.pin.length)}${'○'.repeat(4 - st.pin.length)}</p><p class="small">Cover the keypad when entering your PIN</p>`;
     else if (st.stage === 'menu') { body.innerHTML = '<p>Select a transaction</p>'; const g = document.createElement('div'); g.className = 'atmgrid'; g.append(opt('Withdrawal', () => { st.stage = 'amount'; this.render(); }), opt('Balance', () => { st.stage = 'balance'; this.render(); }), opt('Cancel', () => this.close())); body.appendChild(g); }
     else if (st.stage === 'balance') { body.innerHTML = `<p>Available balance</p><p class="big">${fmt$(s.bank)}</p><p class="small">Withdrawn today: ${fmt0(s.night.atm || 0)} of $500 limit</p>`; body.appendChild(opt('Back', () => { st.stage = 'menu'; this.render(); })); }
@@ -151,7 +151,7 @@ const ATM = {
       if (bad) { body.innerHTML = `<p class="big err">${bad}</p>`; body.appendChild(opt('Back', () => { st.stage = 'amount'; this.render(); })); return; }
       body.innerHTML = `<p>This ATM operator charges a fee of <b>${fmt$(this.FEE)}</b> for this withdrawal.</p><p class="big">${fmt0(st.amt)} + ${fmt$(this.FEE)}</p><p>Do you accept?</p>`;
       const g = document.createElement('div'); g.className = 'atmgrid'; g.append(opt('Accept', () => this.withdraw()), opt('Decline', () => { st.stage = 'menu'; this.render(); })); body.appendChild(g);
-    } else if (st.stage === 'processing') body.innerHTML = '<p class="big">PROCESSING…</p><p>Please wait</p><div class="spin"></div>';
+    } else if (st.stage === 'processing') body.innerHTML = '<p class="big">PROCESSING…</p><p>Please wait</p><div class="atmspin"></div>';
     else if (st.stage === 'take') { body.innerHTML = '<p class="big">PLEASE TAKE YOUR CASH</p><p>Then take your card</p>'; }
   },
   key(k) {
