@@ -5224,7 +5224,9 @@ function updatePlayer(dt, t) {
   vm.lagV.x += -vm.lag.x * 150 * dt; vm.lagV.y += -vm.lag.y * 150 * dt; vm.lagV.multiplyScalar(Math.exp(-12 * dt));
   vm.lag.addScaledVector(vm.lagV, dt); vm.lag.clampLength(0, 0.04);
   let moving = false;
-  const wantFov = player.seated ? (player.seated.dims ? player.seated.dims.fov : 55) : settings.fov;
+  // sat at a pokie on a very wide phone screen (and with the touch deck along the bottom), pull back a touch so the whole screen fits
+  const wide = camera.aspect > 1.8 ? 1 + Math.min(0.2, (camera.aspect - 1.8) * 0.35) + (TOUCH.on ? 0.06 : 0) : 1;
+  const wantFov = player.seated ? (player.seated.dims ? player.seated.dims.fov : 55) * wide : settings.fov;
   if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = damp(camera.fov, wantFov, 5, dt); camera.updateProjectionMatrix(); }
   bloom.strength = damp(bloom.strength, player.seated ? Math.min(0.22, settings.bloomStr) : settings.bloomStr, 4, dt);
   if (player.seated) {
