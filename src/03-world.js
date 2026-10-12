@@ -609,7 +609,7 @@ function buildBar() {
   const runner = M({ color: 0x1a3a6a, roughness: 0.95 });
   for (let z = z0 + 0.8; z < z1 - 0.3; z += 1.05) SB.add(G.box, runner, F - 0.12, 1.116, z, 0, 0, 0, 0.3, 0.006, 0.42);
   // till / register
-  SB.add(G.box, MAT.blackPlastic, F - 0.55, 1.25, -9, 0, 0, 0, 0.35, 0.25, 0.4); SB.add(G.box, MAT.bulbCool, F - 0.4, 1.38, -9, 0, 0.5, 0, 0.01, 0.15, 0.25);
+  SB.add(G.box, MAT.blackPlastic, F - 0.55, 1.25, -9, 0, 0, 0, 0.35, 0.25, 0.4); SB.add(G.box, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.12, 0.4, 0.3) }), F - 0.4, 1.38, -9, 0, 0.5, 0, 0.01, 0.15, 0.25); // till display
   // back bar: cabinets, fridges, shelves, mirror
   SB.add(uvBox(new THREE.BoxGeometry(0.6, 0.95, 12), .6, .95, 12, 1), MAT.darkWood, -12.6, 0.475, -8.5);
   SB.add(uvBox(new THREE.BoxGeometry(0.66, 0.05, 12), .66, .05, 12, 1), MAT.barTop, -12.6, 0.97, -8.5);
