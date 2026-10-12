@@ -13,12 +13,14 @@ One page, kept honest. What changed, in what order, and the risks.
 8. **Food** (`29-food.js`): 16 dishes with chunk-based models, kitchen-pass service (the bartender carries the plate), first-person eating with fork/knife/hand animations, steam, partial eating applies partial stats.
 9. **Overheard** (`30-overheard.js`): eight patron-to-patron rumours with small effects (a hot machine, an inspector warning, a racing tip).
 10. **Pool** (`10-pool-sim.js` physics/rules/AI + `31-pool-game.js` top-down game): eight-ball on the house table, ball in hand, spin dial, stakes, an AI with a per-opponent skill. Interact at the table or via Spud / Slick Rick conversations.
-11. Bug found and fixed on the way: patrons walking in from the street got stuck on a collider in front of the pub.
+11. **Machine hand-over fix**: a feature (hold & spin, free games, pick, gamble) is played out and the machine wiped when a player or NPC leaves, so a stale hold & spin medal can no longer show over normal reels. `tools/test/hpbug2.mjs`, `hsall.mjs`.
+12. **Patron meals** (`NpcMeals` in `29-food.js`): seated patrons in the lounge and beer garden sometimes eat a dish, a bite at a time.
+13. Bug found and fixed on the way: patrons walking in from the street got stuck on a collider in front of the pub.
 
 ## Risks / known gaps
 - The skin art is third-party artwork supplied by the user for a non-commercial game. Do not publish it publicly without swapping it out.
 - Lightning Dollar Link and Thunder Empire screens were supplied at low resolution (about 140px wide): they are upscaled and look soft up close.
-- Pokie realism pass 2 (hand-to-button IK, screen reflections, TITO printer) was not done. Venue-specific events (RSL members' draw, dive pool league) are not done. NPCs don't yet eat props at tables.
+- Pokie realism pass 2 is partial: anticipation, TITO tickets and positional neighbour audio are in; hand-to-button IK and screen glass reflections are not. Venue-specific events (RSL members' draw, dive pool league) are not done.
 
 ## Testing
 `tools/test`: `npm i`, then `node skins.mjs`, `node classics.mjs`, `node machines-bug.mjs`, `node rtp.mjs`, `node night.mjs`, `node moments.mjs`, `node gents.mjs`, `node ext.mjs`. Screenshots land in `tools/test/out/` (gitignored). Run one browser test at a time (they share a CPU and the machines test is slow).
