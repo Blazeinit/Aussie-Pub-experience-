@@ -3823,7 +3823,7 @@ function updateBartender(n, dt, t, player) {
       if (j.t > 0.6) {
         let item;
         if (j.glass) { j.glass.group.position.copy(spot); j.glass.group.rotation.set(0, 0, 0); item = { kind: 'drink', glass: j.glass }; SFX.glassDown(spot); }
-        else { const plate = makeFood(j.food); plate.position.copy(spot); scene.add(plate); item = { kind: 'food', food: j.food, mesh: plate }; SFX.glassDown(spot); }
+        else { const plate = makeFood(Game.state.event === 'sunday' && j.food === 'parma' ? 'roast' : j.food); plate.position.copy(spot); scene.add(plate); item = { kind: 'food', food: j.food, mesh: plate }; SFX.glassDown(spot); }
         bark(n, choice(["There ya go, love.", "Enjoy, mate.", "Cheers.", "There you are.", "Get that into ya."]));
         j.cb && j.cb(item, spot);
         n.job = null;
@@ -3845,15 +3845,50 @@ function updateBartender(n, dt, t, player) {
     j.glass.update(dt, t);
   }
 }
+// food on a plate: a crumbed schnitzel with napoli + melted cheese, chips and salad (parma); a roast; or a bowl of chips
+let _foodTex = null;
+function foodTextures() {
+  if (_foodTex) return _foodTex;
+  const crumb = mkCanvas(128, 128), c = crumb.getContext('2d');
+  c.fillStyle = '#c8862e'; c.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) { c.fillStyle = `hsl(${rand(28, 40)},${rand(55, 75)}%,${rand(30, 58)}%)`; c.fillRect(Math.random() * 128, Math.random() * 128, rand(1, 3), rand(1, 3)); }
+  const sauce = mkCanvas(128, 128), x = sauce.getContext('2d');
+  x.fillStyle = '#b3240f'; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(${randi(200, 255)},${randi(190, 220)},${randi(90, 140)},${rand(0.55, 0.95)})`; x.beginPath(); x.ellipse(Math.random() * 128, Math.random() * 128, rand(5, 16), rand(4, 12), rand(0, 3), 0, 7); x.fill(); }
+  for (let i = 0; i < 40; i++) { x.fillStyle = 'rgba(120,60,10,.5)'; x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, rand(1, 3), 0, 7); x.fill(); }
+  const mk = cv => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+  _foodTex = { crumb: mk(crumb), sauce: mk(sauce) };
+  return _foodTex;
+}
 function makeFood(kind) {
-  const g = new THREE.Group();
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.015, 24), MAT.white); g.add(plate);
-  if (kind === 'parma') {
-    const sch = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 12), cm(0xb8742a, 0.8)); sch.scale.set(1.2, 1, 0.8); sch.position.set(-0.02, 0.018, 0); g.add(sch);
-    const sauce = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.006, 12), cm(0xa8200a, 0.5)); sauce.scale.set(1.2, 1, 0.8); sauce.position.set(-0.02, 0.03, 0); g.add(sauce);
-    const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.005, 12), cm(0xf2c84a, 0.4)); ch.scale.set(1.15, 1, 0.7); ch.position.set(-0.02, 0.035, 0); g.add(ch);
-  }
-  for (let i = 0; i < 16; i++) { const c = new THREE.Mesh(G.box, cm(0xe8b84a, 0.6)); c.scale.set(0.012, 0.012, 0.06); c.position.set(rand(0.03, 0.1), 0.02 + rand(0, 0.02), rand(-0.07, 0.07)); c.rotation.set(rand(0, 1), rand(0, 3), 0); g.add(c); }
+  const g = new THREE.Group(), T = foodTextures();
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.115, 0.016, 32), MAT.white); plate.position.y = 0.008; g.add(plate);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.143, 0.006, 6, 32), MAT.white); rim.rotation.x = Math.PI / 2; rim.position.y = 0.017; g.add(rim);
+  g.userData.bites = [];
+  const chips = (cx, cz, n, spread) => { for (let i = 0; i < n; i++) { const c = new THREE.Mesh(G.box, cm(choice([0xe8b84a, 0xdca33a, 0xf0c860]), 0.6)); c.scale.set(0.011, 0.011, rand(0.05, 0.075)); c.position.set(cx + rand(-spread, spread), 0.024 + (i % 3) * 0.009, cz + rand(-spread, spread)); c.rotation.set(rand(-0.25, 0.25), rand(0, 3.14), rand(-0.2, 0.2)); g.add(c); g.userData.bites.push(c); } };
+  if (kind === 'parma' || kind === 'roast') {
+    if (kind === 'parma') {
+      // a schnitzel: an irregular flat crumbed shape, sauce and cheese on top
+      const sh = new THREE.Shape(); const pts = 14;
+      for (let i = 0; i <= pts; i++) { const a = i / pts * Math.PI * 2, r = 0.075 + Math.sin(a * 3 + 1) * 0.008 + Math.sin(a * 5) * 0.005; const px = Math.cos(a) * r * 1.35, pz = Math.sin(a) * r * 0.9; i ? sh.lineTo(px, pz) : sh.moveTo(px, pz); }
+      const sch = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.005, bevelSegments: 2, curveSegments: 6 }), new THREE.MeshStandardMaterial({ map: T.crumb, roughness: 0.85 }));
+      sch.geometry.rotateX(-Math.PI / 2); sch.position.set(-0.035, 0.02, 0.0); g.add(sch);
+      const top = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshStandardMaterial({ map: T.sauce, roughness: 0.35 }));
+      top.geometry.rotateX(-Math.PI / 2); top.scale.set(0.86, 1, 0.84); top.position.set(-0.035, 0.0375, 0.0); g.add(top);
+      g.userData.main = [sch, top];
+    } else {
+      for (let i = 0; i < 3; i++) { const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.008, 16), cm(0xc8a088, 0.7)); sl.scale.set(1.3, 1, 0.8); sl.position.set(-0.05 + i * 0.012, 0.022 + i * 0.006, -0.01 + i * 0.02); sl.rotation.z = 0.12; g.add(sl); g.userData.bites.push(sl); }
+      for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(G.sph, cm(0xd8a050, 0.6)); p.scale.set(0.022, 0.017, 0.02); p.position.set(0.06 + rand(-0.02, 0.02), 0.03, rand(-0.06, 0.06)); g.add(p); g.userData.bites.push(p); }
+      const gravy = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16), cm(0x5a2e12, 0.25)); gravy.rotation.x = -Math.PI / 2; gravy.position.set(-0.04, 0.0175, 0); g.add(gravy);
+      g.userData.main = [];
+    }
+    chips(0.085, 0.045, 12, 0.03);
+    // salad: a few leaves and a tomato wedge
+    for (let i = 0; i < 6; i++) { const l = new THREE.Mesh(new THREE.CircleGeometry(0.018, 7), new THREE.MeshStandardMaterial({ color: choice([0x5a9a2a, 0x7ab83a, 0x4a8a2a]), roughness: 0.7, side: THREE.DoubleSide })); l.position.set(0.075 + rand(-0.02, 0.02), 0.022 + i * 0.002, -0.06 + rand(-0.015, 0.015)); l.rotation.set(-Math.PI / 2 + rand(-0.4, 0.4), 0, rand(0, 6)); g.add(l); g.userData.bites.push(l); }
+    const tom = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6, 0, Math.PI), cm(0xc02a18, 0.4)); tom.position.set(0.1, 0.024, -0.055); tom.rotation.x = -Math.PI / 2; g.add(tom); g.userData.bites.push(tom);
+    const lemon = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6, 0, Math.PI), cm(0xf2d23a, 0.5)); lemon.position.set(-0.11, 0.024, 0.07); lemon.rotation.set(-Math.PI / 2, 0, 0.6); g.add(lemon);
+  } else chips(0, 0, 28, 0.07);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 
@@ -4590,7 +4625,7 @@ const Game = {
   },
   placeItem(item, spot) {
     this.items.push(item);
-    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${item.food === 'chips' ? 'chips' : item.food === 'parma' ? 'parma' : 'meal'}`;
+    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${item.food === 'chips' ? 'chips' : this.state.event === 'sunday' ? 'roast' : 'parma'}`;
     const ia = addInteract({ id: 'item', temp: true, pos: spot.clone().add(V3(0, 0.08, 0)), r: 2.0, label: () => lbl, action: () => {
       if (item.kind === 'drink') { if (player.drink) { this.toast('Hands full — finish or drop (G) what you\'ve got.'); return; } giveDrink(item.glass); SFX.clink(spot); }
       else { this.eat(item); }
@@ -4598,9 +4633,18 @@ const Game = {
     } });
   },
   eat(item) {
-    const s = this.state; Needs.eat(item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma');
-    let k = 0; const m = item.mesh; const iv = setInterval(() => { k++; m.children.slice(1).forEach((c, i) => { if (Math.random() < 0.3) c.visible = false; }); if (k > 6) { clearInterval(iv); scene.remove(m); } }, 350);
-    this.toast(item.food === 'chips' ? 'Hot chips with chicken salt. Perfection.' : 'That parma was the size of a hubcap. You feel human again.');
+    const s = this.state, kind = item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma';
+    Needs.eat(kind);
+    // eaten bite by bite: chips and salad go first, then the parma itself shrinks away
+    const m = item.mesh, bites = (m.userData.bites || []).slice().sort(() => Math.random() - 0.5), main = m.userData.main || [];
+    let k = 0; const n = 8;
+    const iv = setInterval(() => {
+      k++; SFX.noise(0.12, { freq: rand(1400, 2200), q: 1, gain: 0.06, pos: m.position });
+      bites.splice(0, Math.ceil(bites.length / (n - k + 1))).forEach(c => c.visible = false);
+      const f = Math.max(0.05, 1 - k / n); main.forEach(o => o.scale.set(f, 1, f * 0.95 + 0.05));
+      if (k >= n) { clearInterval(iv); main.forEach(o => o.visible = false); setTimeout(() => scene.remove(m), 4000); }
+    }, 450);
+    this.toast(kind === 'chips' ? 'Hot chips with chicken salt. Perfection.' : kind === 'roast' ? 'Roast lamb, crispy spuds, gravy. Sunday sorted.' : 'Crumbed chook, napoli, melted cheese, chips and salad. The size of a hubcap. You feel human again.');
   },
   openATM() {
     const s = this.state, fee = 2.5;

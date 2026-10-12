@@ -295,7 +295,7 @@ const Game = {
   },
   placeItem(item, spot) {
     this.items.push(item);
-    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${item.food === 'chips' ? 'chips' : item.food === 'parma' ? 'parma' : 'meal'}`;
+    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${item.food === 'chips' ? 'chips' : this.state.event === 'sunday' ? 'roast' : 'parma'}`;
     const ia = addInteract({ id: 'item', temp: true, pos: spot.clone().add(V3(0, 0.08, 0)), r: 2.0, label: () => lbl, action: () => {
       if (item.kind === 'drink') { if (player.drink) { this.toast('Hands full — finish or drop (G) what you\'ve got.'); return; } giveDrink(item.glass); SFX.clink(spot); }
       else { this.eat(item); }
@@ -303,9 +303,18 @@ const Game = {
     } });
   },
   eat(item) {
-    const s = this.state; Needs.eat(item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma');
-    let k = 0; const m = item.mesh; const iv = setInterval(() => { k++; m.children.slice(1).forEach((c, i) => { if (Math.random() < 0.3) c.visible = false; }); if (k > 6) { clearInterval(iv); scene.remove(m); } }, 350);
-    this.toast(item.food === 'chips' ? 'Hot chips with chicken salt. Perfection.' : 'That parma was the size of a hubcap. You feel human again.');
+    const s = this.state, kind = item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma';
+    Needs.eat(kind);
+    // eaten bite by bite: chips and salad go first, then the parma itself shrinks away
+    const m = item.mesh, bites = (m.userData.bites || []).slice().sort(() => Math.random() - 0.5), main = m.userData.main || [];
+    let k = 0; const n = 8;
+    const iv = setInterval(() => {
+      k++; SFX.noise(0.12, { freq: rand(1400, 2200), q: 1, gain: 0.06, pos: m.position });
+      bites.splice(0, Math.ceil(bites.length / (n - k + 1))).forEach(c => c.visible = false);
+      const f = Math.max(0.05, 1 - k / n); main.forEach(o => o.scale.set(f, 1, f * 0.95 + 0.05));
+      if (k >= n) { clearInterval(iv); main.forEach(o => o.visible = false); setTimeout(() => scene.remove(m), 4000); }
+    }, 450);
+    this.toast(kind === 'chips' ? 'Hot chips with chicken salt. Perfection.' : kind === 'roast' ? 'Roast lamb, crispy spuds, gravy. Sunday sorted.' : 'Crumbed chook, napoli, melted cheese, chips and salad. The size of a hubcap. You feel human again.');
   },
   openATM() {
     const s = this.state, fee = 2.5;
