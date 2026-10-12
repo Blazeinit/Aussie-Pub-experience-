@@ -690,7 +690,7 @@ function simulate(dt) {
   if (playing) {
     if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt); DLG.update(dt); Eat.update(dt, elapsed); Food.update(dt);
+    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;

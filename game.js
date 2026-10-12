@@ -2935,7 +2935,7 @@ class Machine {
     this.free = free;
     this.res = spinGrid(this.game, bet, free);
     this.lw = evalLines(this.game, this.res, bet, free);
-    this.wins = this.lw.wins; this.win = this.lw.total; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
+    this.wins = this.lw.wins; this.win = this.lw.total; if (this.hotTip && this.mode === 'player' && this.win > 0 && (this.hotN = (this.hotN || 0) + 1) <= 25) this.win = Math.round(this.win * 1.1 * 100) / 100; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
     // decide anticipation
     const trig = this.game.scatter || this.game.bonusSym;
     let antFrom = 9;
@@ -5452,7 +5452,7 @@ function simulate(dt) {
   if (playing) {
     if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt); DLG.update(dt); Eat.update(dt, elapsed); Food.update(dt);
+    Game.updateEvents(dt); DLG.update(dt); Overheard.update(dt); Eat.update(dt, elapsed); Food.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;
@@ -10554,6 +10554,39 @@ const Food = {
   },
 };
 
+// ---- src/30-overheard.js ----
+
+// =====================================================================
+//  OVERHEARD: wander near two patrons who are talking and you catch the gist.
+//  Each rumour is worth something small: a tip on a machine, a warning, a nudge to your mood.
+//  What you've heard is kept in flags.gossip so it isn't repeated.
+// =====================================================================
+const GOSSIP = [
+  { id: 'hot', lines: [['{a}', "Dragon Link out the back paid {b} three hundred last night. Three hundred!"], ['{b}', "Yeah, then I put it all back in. Don't tell the missus."]], act() { const m = choice(MACHINES.filter(x => !x.def.smoke && x.skin)); if (m) { m.hotTip = true; Game.toast(`Tip: ${m.game.name} has been paying lately.`); Night.log('👂', `Heard ${m.game.name} was running hot`); } } },
+  { id: 'inspector', lines: [['{a}', "Reckon there's a liquor inspector doing the rounds tonight."], ['{b}', "Then somebody tell Dazza to stop doing shots off the bar."]], act() { Game.state.flags.inspectorWarn = true; Game.toast('Heard: an inspector is about. Keep it tidy.'); Night.log('👂', 'Heard an inspector might be about'); } },
+  { id: 'raffle', lines: [['{a}', "Bev's meat tray raffle is rigged, you know."], ['{b}', "Every Friday for six years and I've never won a snag."]], act() { Game.state.mood = clamp(Game.state.mood + 3, 0, 100); } },
+  { id: 'footy', lines: [['{a}', "Reckon the Tigers get up by two goals."], ['{b}', "Mate, they couldn't get up off the couch."]], act() { Game.state.mood = clamp(Game.state.mood + 3, 0, 100); } },
+  { id: 'council', lines: [['{a}', "They want to knock the Royal down and put up units."], ['{b}', "Over my dead body. Well. Over my cold beer."]], act() { Night.log('👂', 'Heard the council wants the Royal'); } },
+  { id: 'cabbie', lines: [['{a}', "Left me car at the servo. Cabbie knows the whole town's business."], ['{b}', "Cabbie knows YOUR business."]], act() { Game.state.mood = clamp(Game.state.mood + 2, 0, 100); } },
+  { id: 'tab', lines: [['{a}', "Got a tip on the fifth at Flemington. Bloke at the TAB swears by it."], ['{b}', "The bloke at the TAB swears by everything."]], act() { Game.state.flags.tabTip = true; Game.toast('Heard a racing tip. Maybe worth a flutter at the TAB.'); Night.log('👂', 'Heard a racing tip'); } },
+  { id: 'kid', lines: [['{a}', "My boy reckons he's going to be a streamer. Playing video games. For money."], ['{b}', "Mate, that's what you do at the pokies."]], act() { Game.state.mood = clamp(Game.state.mood + 3, 0, 100); } },
+];
+const Overheard = {
+  cd: 25, cur: null,
+  update(dt) {
+    if (Game.mode !== 'play' || Game.uiOpen || Cine.active || DLG.active || MG.active) return;
+    const c = this.cur;
+    if (c) { c.t += dt; const L = c.g.lines[c.i]; if (L && c.t > c.i * 3.6) { Game.subtitle(`<i>(overheard)</i> <b>${L[0].replace('{a}', c.a.name).replace('{b}', c.b.name)}:</b> ${L[1]}`, 3.4); c.i++; } if (c.i >= c.g.lines.length && c.t > c.g.lines.length * 3.6) { this.cur = null; c.g.act && c.g.act(); } return; }
+    this.cd -= dt; if (this.cd > 0) return;
+    this.cd = rand(35, 70);
+    const heard = (Game.state.flags.gossip = Game.state.flags.gossip || []);
+    const near = NPCS.filter(n => n !== bartender && n.state !== 'walk' && n.dist2 > 2 && n.dist2 < 20);
+    for (const a of near) { const b = near.find(o => o !== a && (o.pos.x - a.pos.x) ** 2 + (o.pos.z - a.pos.z) ** 2 < 5); if (!b) continue;
+      const pool = GOSSIP.filter(g => !heard.includes(g.id)); if (!pool.length) return;
+      const g = choice(pool); heard.push(g.id); a.a.talk = b.a.talk = 12; this.cur = { a, b, g, i: 0, t: 0 }; return; }
+  },
+};
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -10611,4 +10644,4 @@ window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__m
 window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
 window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
 window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
-window.__game = { FOODS, makeFood, Eat, Cine, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
+window.__game = { FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

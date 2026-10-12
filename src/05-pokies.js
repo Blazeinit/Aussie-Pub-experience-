@@ -546,7 +546,7 @@ class Machine {
     this.free = free;
     this.res = spinGrid(this.game, bet, free);
     this.lw = evalLines(this.game, this.res, bet, free);
-    this.wins = this.lw.wins; this.win = this.lw.total; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
+    this.wins = this.lw.wins; this.win = this.lw.total; if (this.hotTip && this.mode === 'player' && this.win > 0 && (this.hotN = (this.hotN || 0) + 1) <= 25) this.win = Math.round(this.win * 1.1 * 100) / 100; this.shownWin = 0; this.winLineI = -1; this.lastWin = 0; this.gambleOK = false;
     // decide anticipation
     const trig = this.game.scatter || this.game.bonusSym;
     let antFrom = 9;
