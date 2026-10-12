@@ -114,7 +114,7 @@ const PoolGame = (() => {
     cx.fillStyle = 'rgba(240,226,191,.6)'; cx.font = '600 11px "Inter", sans-serif'; cx.textAlign = 'center'; cx.fillText('POWER', x + w / 2, y - 12);
   }
   function spinDial() {
-    const r = rot ? 30 : 34, X = rot ? 56 : W - 64, Y = rot ? H - 66 : H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
+    const r = rot ? 30 : 34, X = rot ? W / 2 : W - 64, Y = rot ? H - 62 : H - 82 - (TOUCH.on ? 96 : 0); gm.dial = { x: X, y: Y, r };   // clear of the touch DONE button
     cx.fillStyle = '#f4f2ea'; cx.beginPath(); cx.arc(X, Y, r, 0, 7); cx.fill(); cx.strokeStyle = 'rgba(0,0,0,.4)'; cx.lineWidth = 2; cx.stroke();
     cx.strokeStyle = 'rgba(0,0,0,.15)'; cx.beginPath(); cx.moveTo(X - r, Y); cx.lineTo(X + r, Y); cx.moveTo(X, Y - r); cx.lineTo(X, Y + r); cx.stroke();
     cx.fillStyle = '#c7352b'; cx.beginPath(); cx.arc(X + gm.spin.side * r * 0.7, Y - gm.spin.top * r * 0.7, 6, 0, 7); cx.fill();

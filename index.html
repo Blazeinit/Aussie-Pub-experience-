@@ -258,6 +258,13 @@ body.touchmode.tui #tStick,body.touchmode.tui #tBtns,body.touchmode.tui #tPhone,
 body.touchmode.tui #objective,body.touchmode.tui #goals,body.touchmode.tui #hud .br{opacity:0!important;pointer-events:none}
 /* minigames draw their own scoreboards */
 body.touchmode.inmg #hud .tl,body.touchmode.inmg #hud .br,body.touchmode.inmg #hud .tr,body.touchmode.inmg #mgHelp{opacity:0!important;pointer-events:none}
+body.touchmode #mgTop{top:calc(54px + env(safe-area-inset-top));width:max-content;max-width:96vw}
+body.touchmode .mgscore{font-size:19px;gap:12px;padding:6px 12px;flex-wrap:wrap;justify-content:center}
+body.touchmode .mgmsg{font-size:14px}
+@media (max-width:600px){body.touchmode .mgscore{font-size:16px;gap:9px}
+  body.touchmode #tMenu,body.touchmode #tPhone{top:auto;left:calc(18px + env(safe-area-inset-left));bottom:calc(clamp(112px,32vmin,140px) + 30px + env(safe-area-inset-bottom));transform:none}
+  body.touchmode #tPhone{left:calc(70px + env(safe-area-inset-left))}
+  body.touchmode.inmg #tMenu{bottom:calc(16px + env(safe-area-inset-bottom))}}
 /* sat at a pokie: the machine owns the screen */
 body.touchmode.seated #objective,body.touchmode.seated #goals,body.touchmode.seated #hud .br,body.touchmode.seated #prompt{display:none}
 body.touchmode.seated #hud .tl,body.touchmode.seated #hud .tr{opacity:.6}
@@ -455,6 +462,6 @@ body.cine #subtitle{bottom:13vh}
 <div id="fade"></div>
 <div id="perf" class="hidden"></div>
 <div id="touch" class="hidden"><div id="tStick"><i></i></div><div id="tBtns"></div><button id="tMenu">☰</button><button id="tPhone">📱</button></div>
-<script type="module" src="game.js?v=dd051fa34e"></script>
+<script type="module" src="game.js?v=5bfa6174c2"></script>
 </body>
 </html>

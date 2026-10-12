@@ -8,24 +8,24 @@
 const VENUES = {
   royal: {
     id: 'royal', name: 'THE ROYAL', hotel: 'ROYAL HOTEL', est: 'EST. 1888', short: 'the Royal', sub: 'FINE ALES · WINES · SPIRITS', terrazzo: 'ROYAL',
-    blurb: "Wattle Creek's last proper pub. Pressed-tin ceilings, a Dragon Link bank out the back, and everyone you know.",
+    blurb: "Wattle Creek's last proper pub. Pressed-tin ceilings, a full Dragon Link bank and Fire Mountain out the back, and everyone you know.",
     story: true, priceMul: 1, crowd: 1, exposure: 1, warm: 1, fare: 0,
     tint: { carpet: 0xffffff, gaming: 0x6a3a4a, paint: 0xffffff, ceiling: 0xc8bca0, wood: 0xffffff },
     fascia: ['#1f4d34', '#123222', '#f0cf6a'], roof: '#7a1f14', roofStroke: '#f3e2b8', deckLine: 'THE ROYAL · GAMING · 1c',
     machines: {
-      back: ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'], front: ['fm', 'te1', 'te2'], rear: ['qotn', 'bigred', 'buffalo'], terrace: ['dragon', 'outback', 'reef', 'sevens']
+      back: ['am', 'gc', 'pm', 'hp', 'hp', 'am', 'gc', 'pm'], front: ['fm', 'fm', 'buffalo'], rear: ['qotn', 'bigred', 'buffalo'], terrace: ['dragon', 'outback', 'reef', 'sevens']
     },
     pal: { carpet: ['#3b0c14', '#c99a2e', '#1b6d73', '#d6a838', '#7a1424', '#e8c35a', '#2a8a7f'], damask: ['#d6c49a', '150,108,40', '120,80,25', '170,125,50'] },
     bartenders: ['Jacko', 'Rhonda', 'Mick'], songs: null, moments: null,
   },
   rsl: {
     id: 'rsl', name: 'WATTLE CREEK RSL', hotel: 'RSL SUB-BRANCH', est: 'EST. 1921', short: 'the RSL', sub: 'MEMBERS & GUESTS WELCOME', terrazzo: 'RSL',
-    blurb: 'The club. Carpet you could land a plane on, a courtesy bus, $14 schnitty night, and the newest machines in town: Lightning Dollar Link, Thunder Empire and Fire Mountain.',
+    blurb: 'The club. Carpet you could land a plane on, a courtesy bus, $14 schnitty night, and the newest machines in town, only here: Lightning Dollar Link, Thunder Empire, Lightning Link (Magic Pearl, Happy Lantern), Dragon Train, Cash Express, Buffalo Gold and Timber Wolf.',
     story: false, priceMul: 0.82, crowd: 1.2, exposure: 1.08, warm: 0.5, fare: 12, unlock: 0,
     tint: { carpet: 0xffffff, gaming: 0x2a3a6a, paint: 0xffffff, ceiling: 0xd2d6dc, wood: 0xc8b8a8 },
     fascia: ['#14305a', '#0a1a3a', '#e8c56a'], roof: '#14305a', roofStroke: '#f1e4bd', deckLine: 'WATTLE CREEK RSL · GAMING · 1c',
     machines: {
-      back: ['ldl1', 'ldl2', 'ldl3', 'ldl4', 'te1', 'te2', 'fm', 'fm'], front: ['fm', 'te1', 'te2'], rear: ['am', 'gc', 'hp'], terrace: ['bigred', 'qotn', 'buffalo', 'dragon']
+      back: ['ldl1', 'ldl2', 'ldl3', 'ldl4', 'llmp', 'llhl', 'llmp', 'llhl'], front: ['te1', 'te2', 'cashx'], rear: ['dtrain', 'dtrain', 'cashx'], terrace: ['bgold', 'twolf', 'bgold', 'twolf']
     },
     pal: { carpet: ['#0f2350', '#b8c4e0', '#4a78d0', '#dcdcc0', '#243a78', '#f0e8c0', '#3a6ab0'], damask: ['#8fb2e6', '40,72,150', '28,52,115', '60,96,170'] },
     bartenders: ['Lorraine', 'Digger', 'Marg'], songs: [4, 6, 5, 0], moments: ['footy', 'inspector', 'busker', 'wake'],
