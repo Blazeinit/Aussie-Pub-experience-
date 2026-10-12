@@ -376,7 +376,9 @@ function drawTopper(id) {
 }
 function drawLinkTopper(x, g, t) {
   x.fillStyle = '#0a0202'; x.fillRect(0, 0, SW, 512);
-  x.save(); x.shadowColor = '#ff7a10'; x.shadowBlur = 30; outlineText(x, 'FORTUNE LINK', SW / 2, 62, 86, lg(x, 0, 20, 0, 100, ['#ffe27a', '#ff6a10', '#a0100a']), '#2a0400', 12, 'Rye, serif'); x.restore();
+  // the link's own banner: a game can name its series (Lightning Link, Dragon Train ...) and colour it from its theme
+  const nm = g.linkName || 'FORTUNE LINK', cols = g.linkName ? ['#ffffff', g.theme.glow, g.theme.accent] : ['#ffe27a', '#ff6a10', '#a0100a'];
+  x.save(); x.shadowColor = g.linkName ? g.theme.accent : '#ff7a10'; x.shadowBlur = 30; outlineText(x, nm, SW / 2, 62, 86, lg(x, 0, 20, 0, 100, cols), '#1a0400', 12, g.linkName ? 'Bungee, Impact, sans-serif' : 'Rye, serif'); x.restore();
   const row = (label, val, y, w, cx, col, sz) => { rr(x, cx - w / 2, y, w, sz + 26, 12); x.fillStyle = '#000'; x.fill(); x.lineWidth = 5; x.strokeStyle = col; x.stroke(); outlineText(x, fmt$(val), cx + 28, y + (sz + 26) / 2 + 2, sz, col, '#000', 6, 'Bebas Neue, Impact'); x.fillStyle = rg(x, cx - w / 2 + 34, y + (sz + 26) / 2, 4, 40, ['#fff6a0', '#f0b81a', '#a06a04']); x.beginPath(); x.arc(cx - w / 2 + 34, y + (sz + 26) / 2, 34, 0, 7); x.fill(); outlineText(x, label, cx - w / 2 + 34, y + (sz + 26) / 2, 15, col, '#000', 3); };
   row('GRAND', JP.GRAND, 120, 900, SW / 2, '#ff3a2a', 96);
   row('MAJOR', JP.MAJOR, 262, 820, SW / 2, '#3aff4a', 78);
