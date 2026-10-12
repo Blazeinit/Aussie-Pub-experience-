@@ -20,7 +20,7 @@ def load(name):
     return im.convert('RGB')
 
 
-def save_jpg(im, name, q=90):
+def save_jpg(im, name, q=80):
     im.convert('RGB').save(OUT + name, quality=q, optimize=True)
 
 
@@ -60,7 +60,7 @@ class Atlas:
         sheet = Image.new('RGB', (self.cols * CW, rows * CH), (0, 0, 0)); m = {}
         for i, (k, im) in enumerate(self.cells):
             x, y = (i % self.cols) * CW, (i // self.cols) * CH; sheet.paste(im, (x, y)); m[k] = [x, y, CW, CH]
-        sheet.save(OUT + name, quality=92, optimize=True)
+        sheet.save(OUT + name, quality=84, optimize=True)
         return {'img': 'slots/' + name, 'map': m}
 
 
@@ -158,7 +158,7 @@ col = np.clip(col + hl, 0, 255)
 arr = np.array(main).astype(float); disc = (d < 0.985)[..., None]
 feather = np.clip((0.985 - d) / 0.03, 0, 1)[..., None]
 arr = arr * (1 - feather) + col * feather
-medal = Image.fromarray(arr.astype(np.uint8)); medal.save(OUT + 'hs_bg.jpg', quality=90)
+medal = Image.fromarray(arr.astype(np.uint8)); medal.save(OUT + 'hs_bg.jpg', quality=80)
 save_jpg(medal, 'hp_main.jpg')   # the medal is blank here; the game writes the title / live count on it
 A = Atlas()
 for key, (c, r) in {'10': (0, 0), 'JUNK': (4, 0), '9': (4, 1), 'K': (1, 2), 'J': (2, 2), 'LANTERN': (4, 2), 'LOTUS': (2, 1), 'WILD': (1, 0)}.items():
@@ -206,10 +206,10 @@ save_jpg(ldl.crop((70, 112, 930, 238)), 'ldl_banner.jpg')
 names = [('ldl1', 'CHECKERED FLAG', 150), ('ldl2', 'CHICA BONITA', 328), ('ldl3', 'CORRIDA DE TOROS', 505), ('ldl4', 'KUNG FU MASTER', 683)]
 for gid, nm, ox_ in names:
     mainc = ldl.crop((ox_ + 11, 388, ox_ + 150, 628)); topc = ldl.crop((ox_ + 7, 262, ox_ + 161, 351))
-    mainu, topu = upscale(mainc, 5), upscale(topc, 5)
-    save_jpg(mainu, f'{gid}_main.jpg', 86); save_jpg(topu, f'{gid}_top.jpg', 86)
+    mainu, topu = upscale(mainc, 4), upscale(topc, 4)
+    save_jpg(mainu, f'{gid}_main.jpg', 74); save_jpg(topu, f'{gid}_top.jpg', 74)
     A = Atlas(); shared_royals(A); themed_sprites(A, mainu); atlas = A.save(f'{gid}_sprites.jpg')
-    k = 5
+    k = 4
     SKINS[gid] = {'name': nm, 'main': f'slots/{gid}_main.jpg', 'mw': mainu.width, 'mh': mainu.height, 'top': f'slots/{gid}_top.jpg', 'tw': topu.width, 'th': topu.height,
                   'win': [8 * k, 150 * k // 1 - 4 * k, 123 * k, 66 * k], 'cellw': 25 * k, 'cellh': 22 * k,
                   'hud': {}, 'jp': {'GRAND': [14 * k, 50 * k, 126 * k, 28 * k]}, 'sprites': atlas}
@@ -218,7 +218,7 @@ for gid, nm, ox_ in names:
 te = load('thunder_empire.png')
 for gid, nm, mb, tb in [('te1', 'INCA DIAMONDS', (36, 280, 196, 580), (36, 176, 197, 254)), ('te2', 'MAGIC EMPEROR', (232, 280, 392, 580), (226, 178, 388, 256))]:
     mainu, topu = upscale(te.crop(mb), 4), upscale(te.crop(tb), 4)
-    save_jpg(mainu, f'{gid}_main.jpg', 86); save_jpg(topu, f'{gid}_top.jpg', 86)
+    save_jpg(mainu, f'{gid}_main.jpg', 74); save_jpg(topu, f'{gid}_top.jpg', 74)
     A = Atlas(); shared_royals(A); themed_sprites(A, mainu); atlas = A.save(f'{gid}_sprites.jpg')
     k = 4
     SKINS[gid] = {'name': nm, 'main': f'slots/{gid}_main.jpg', 'mw': mainu.width, 'mh': mainu.height, 'top': f'slots/{gid}_top.jpg', 'tw': topu.width, 'th': topu.height,

@@ -688,26 +688,26 @@
  "ldl1": {
   "name": "CHECKERED FLAG",
   "main": "slots/ldl1_main.jpg",
-  "mw": 695,
-  "mh": 1200,
+  "mw": 556,
+  "mh": 960,
   "top": "slots/ldl1_top.jpg",
-  "tw": 770,
-  "th": 445,
+  "tw": 616,
+  "th": 356,
   "win": [
-   40,
-   730,
-   615,
-   330
+   32,
+   584,
+   492,
+   264
   ],
-  "cellw": 125,
-  "cellh": 110,
+  "cellw": 100,
+  "cellh": 88,
   "hud": {},
   "jp": {
    "GRAND": [
-    70,
-    250,
-    630,
-    140
+    56,
+    200,
+    504,
+    112
    ]
   },
   "sprites": {
@@ -791,26 +791,26 @@
  "ldl2": {
   "name": "CHICA BONITA",
   "main": "slots/ldl2_main.jpg",
-  "mw": 695,
-  "mh": 1200,
+  "mw": 556,
+  "mh": 960,
   "top": "slots/ldl2_top.jpg",
-  "tw": 770,
-  "th": 445,
+  "tw": 616,
+  "th": 356,
   "win": [
-   40,
-   730,
-   615,
-   330
+   32,
+   584,
+   492,
+   264
   ],
-  "cellw": 125,
-  "cellh": 110,
+  "cellw": 100,
+  "cellh": 88,
   "hud": {},
   "jp": {
    "GRAND": [
-    70,
-    250,
-    630,
-    140
+    56,
+    200,
+    504,
+    112
    ]
   },
   "sprites": {
@@ -894,26 +894,26 @@
  "ldl3": {
   "name": "CORRIDA DE TOROS",
   "main": "slots/ldl3_main.jpg",
-  "mw": 695,
-  "mh": 1200,
+  "mw": 556,
+  "mh": 960,
   "top": "slots/ldl3_top.jpg",
-  "tw": 770,
-  "th": 445,
+  "tw": 616,
+  "th": 356,
   "win": [
-   40,
-   730,
-   615,
-   330
+   32,
+   584,
+   492,
+   264
   ],
-  "cellw": 125,
-  "cellh": 110,
+  "cellw": 100,
+  "cellh": 88,
   "hud": {},
   "jp": {
    "GRAND": [
-    70,
-    250,
-    630,
-    140
+    56,
+    200,
+    504,
+    112
    ]
   },
   "sprites": {
@@ -997,26 +997,26 @@
  "ldl4": {
   "name": "KUNG FU MASTER",
   "main": "slots/ldl4_main.jpg",
-  "mw": 695,
-  "mh": 1200,
+  "mw": 556,
+  "mh": 960,
   "top": "slots/ldl4_top.jpg",
-  "tw": 770,
-  "th": 445,
+  "tw": 616,
+  "th": 356,
   "win": [
-   40,
-   730,
-   615,
-   330
+   32,
+   584,
+   492,
+   264
   ],
-  "cellw": 125,
-  "cellh": 110,
+  "cellw": 100,
+  "cellh": 88,
   "hud": {},
   "jp": {
    "GRAND": [
-    70,
-    250,
-    630,
-    140
+    56,
+    200,
+    504,
+    112
    ]
   },
   "sprites": {
