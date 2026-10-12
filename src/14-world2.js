@@ -43,7 +43,7 @@ function buildToilets() {
   addBoxS(SB, MAT.white, -11.25, 0.82, -19.1, 0.4, 0.14, 0.5); addCylS(SB, MAT.chrome, -11.15, 0.95, -19.1, 0.012, 0.15, 6);
   addColBox(-11.5, -11.0, -19.4, -18.8);
   gentsMirror = new Reflector(new THREE.PlaneGeometry(0.55, 0.7), { clipBias: 0.003, textureWidth: 256, textureHeight: 320, color: 0x9a9890 });
-  gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror);
+  gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror); window.__gentsMirror = gentsMirror;
   const mob = gentsMirror.onBeforeRender;
   gentsMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || !roomAt(c.x, c.z) || roomAt(c.x, c.z).id !== 'toilets') return; if (playerBody) playerBody.root.visible = true; mob.apply(this, a); if (playerBody) playerBody.root.visible = false; };
   const stick = mkTex(256, 320, (x, W, H) => { x.clearRect(0, 0, W, H); [['#e8c52a', 'PIES'], ['#c7352b', 'XXXX'], ['#1a3a8a', 'NRL'], ['#fff', 'LOVE YA MUM']].forEach(([c, t], i) => { x.save(); x.translate(30 + (i % 2) * 180, 30 + i * 80); x.rotate(rand(-0.4, 0.4)); x.fillStyle = c; x.fillRect(-26, -12, 70, 24); x.fillStyle = '#111'; x.font = 'bold 14px Inter'; x.fillText(t, -20, 5); x.restore(); }); });

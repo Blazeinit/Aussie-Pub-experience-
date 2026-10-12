@@ -199,6 +199,7 @@ const REG = {
     if (first) { s.tonight['talk_' + name] = 1; relUp(name, 5); s.mood = Math.min(100, s.mood + 3); }
     const opts = [];
     R.extra && R.extra(n, s, opts);
+    STORY.talkOpts(n, opts);
     const price = Game.drinkPrice('schooner');
     if (!s.tonight['shout_' + name]) opts.push({ label: `Shout ${name} a drink`, d: 'Mateship is a currency', price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentDrinks')) return; s.tonight['shout_' + name] = 1; relUp(name, 10); n.glass.fill = 1; Game.closePanel(); bark(n, choice(['You beauty! Cheers.', 'Ahh, you\'re a gentleman and a scholar.', 'Legend. Owe ya one.']), true); SFX.register(V3(-9, 1.2, -9)); } });
     opts.push({ label: 'See ya', fn: () => Game.closePanel() });

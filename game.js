@@ -33,7 +33,20 @@ function angleDiff(a, b) { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 
 const savedSettings = store('ld_settings');
-const settings = Object.assign({ quality: 'high', sens: 1, vol: 0.8, music: 0.6, fov: 72 }, savedSettings || {});
+const settings = Object.assign({
+  quality: 'high', preset: 'high', sens: 1, vol: 0.8, music: 0.6, sfx: 1, amb: 1, fov: 72,
+  resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1, dynres: true, showFps: false,
+  touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
+}, savedSettings || {});
+// graphics presets: each sets a bundle of individual options (changing one by hand makes it 'custom')
+const PRESETS = {
+  low: { quality: 'low', resScale: 0.85, shadows: 'low', aa: false, bloom: true, bloomStr: 0.4, reflections: false, shafts: false, crowd: 0.7 },
+  medium: { quality: 'high', resScale: 0.9, shadows: 'low', aa: false, bloom: true, bloomStr: 0.5, reflections: false, shafts: true, crowd: 0.85 },
+  high: { quality: 'high', resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1 },
+  ultra: { quality: 'high', resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.6, reflections: true, shafts: true, crowd: 1.25 },
+};
+function applyPreset(name) { if (PRESETS[name]) Object.assign(settings, PRESETS[name]); settings.preset = name; }
+if (savedSettings && !savedSettings.preset && savedSettings.quality) applyPreset(savedSettings.quality === 'low' ? 'low' : 'high');
 function saveSettings() { store('ld_settings', settings); }
 const HIGH = () => settings.quality === 'high';
 
@@ -71,7 +84,7 @@ function pbr(name) { const t = ASSETS.tex[name]; return t && t.c ? t : null; }
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: false, powerPreference: 'high-performance', stencil: false });
 // dynamic resolution: renderScale is adjusted at runtime to hold the frame rate
 let renderScale = 1;
-const basePR = () => Math.min(window.devicePixelRatio, HIGH() ? 1.25 : 0.8);
+const basePR = () => Math.min(window.devicePixelRatio, settings.preset === 'ultra' ? 1.6 : HIGH() ? 1.25 : 0.9) * settings.resScale;
 renderer.setPixelRatio(basePR());
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -80,7 +93,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 // first launch: pick Low automatically on integrated / mobile / software GPUs
 try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); window.__gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; } catch (e) { window.__gpu = ''; }
-if ((!savedSettings || !savedSettings.quality) && /intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(window.__gpu)) { settings.quality = 'low'; renderer.setPixelRatio(Math.min(window.devicePixelRatio, 0.8)); }
+if ((!savedSettings || !savedSettings.quality) && /intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(window.__gpu)) { applyPreset('low'); renderer.setPixelRatio(basePR()); }
 renderer.shadowMap.type = HIGH() ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false; // static world: shadow maps are refreshed on demand (big perf win)
 renderer.info.autoReset = false; // counted per frame across all post passes (see the F3 overlay)
@@ -92,7 +105,7 @@ const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeigh
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
-const composerRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: HIGH() ? 4 : 0 });
+const composerRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: settings.aa ? 4 : 0 });
 const composer = new EffectComposer(renderer, composerRT);
 composer.setPixelRatio(renderer.getPixelRatio());
 composer.setSize(innerWidth, innerHeight);
@@ -153,10 +166,17 @@ function applyQuality() {
   renderer.setPixelRatio(basePR() * renderScale);
   composer.setPixelRatio(renderer.getPixelRatio());
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
-  bloom.enabled = true; bloom.strength = HIGH() ? 0.55 : 0.4;
-  renderer.shadowMap.type = HIGH() ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-  if (window.__mirror) window.__mirror.visible = HIGH();
-  if (window.__mirrorFallback) window.__mirrorFallback.visible = !HIGH();
+  bloom.enabled = settings.bloom; bloom.strength = settings.bloomStr;
+  const shadowsOn = settings.shadows !== 'off', type = settings.shadows === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  if (renderer.shadowMap.enabled !== shadowsOn || renderer.shadowMap.type !== type) { renderer.shadowMap.enabled = shadowsOn; renderer.shadowMap.type = type; scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); }); }
+  if (window.__mirror) window.__mirror.visible = settings.reflections;
+  if (window.__mirrorFallback) window.__mirrorFallback.visible = !settings.reflections;
+  if (window.__gentsMirror) window.__gentsMirror.visible = settings.reflections;
+  fxPass.uniforms.uVig.value = 0.35 * settings.vignette;
+  camera.fov = settings.fov; camera.updateProjectionMatrix();
+  document.documentElement.style.setProperty('--subsize', settings.subSize);
+  if (typeof perf !== 'undefined') perf.show = settings.showFps || /[?&]perf/.test(location.search);
+  if (typeof Game !== 'undefined') Game.timeScale = 0.8 / 60 * settings.timeSpeed;
   // Low: drop the optional lights and the decorative light shafts/dust
   (window.__optionalLights || []).forEach(l => l.visible = HIGH());
   if (typeof shadowDirty !== 'undefined') shadowDirty = 2;
@@ -176,8 +196,8 @@ const AudioSys = (() => {
     comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
     master = ctx.createGain(); master.gain.value = settings.vol;
     master.connect(comp); comp.connect(ctx.destination);
-    sfx = ctx.createGain(); sfx.connect(master);
-    amb = ctx.createGain(); amb.connect(master);
+    sfx = ctx.createGain(); sfx.gain.value = settings.sfx; sfx.connect(master);
+    amb = ctx.createGain(); amb.gain.value = settings.amb; amb.connect(master);
     mus = ctx.createGain(); mus.gain.value = settings.music; mus.connect(master);
     // reverb
     verb = ctx.createConvolver();
@@ -358,7 +378,7 @@ const AudioSys = (() => {
     if (clinkT <= 0 && state.inside) { clinkT = rand(2, 7) / Math.max(0.3, crowd); S.clink(V3(rand(-10, 10), 1, rand(-16, 0))); }
     Music.update(dt, state);
   }
-  function setVolume() { if (master) master.gain.value = settings.vol; if (mus) mus.gain.value = settings.music; }
+  function setVolume() { if (master) master.gain.value = settings.vol; if (mus) mus.gain.value = settings.music; if (sfx) sfx.gain.value = settings.sfx; if (amb) amb.gain.value = settings.amb; }
   return { init, S, update, amp, setVolume, get ctx() { return ctx; }, get mus() { return mus; }, get started() { return started; }, spatial, tone, noise };
 })();
 const SFX = AudioSys.S;
@@ -371,7 +391,29 @@ const Music = (() => {
     { name: 'Knock-Off Boogie', bpm: 124, prog: ['E', 'E', 'A', 'B'], feel: 'straight' },
     { name: 'Sunday Arvo Shuffle', bpm: 104, prog: ['A', 'D', 'E', 'D'], feel: 'shuffle' },
     { name: 'Back of the Ute', bpm: 138, prog: ['G', 'C', 'D', 'C'], feel: 'straight' },
-    { name: 'Bush Telegraph', bpm: 96, prog: ['D', 'G', 'A', 'G'], feel: 'shuffle' }];
+    { name: 'Bush Telegraph', bpm: 96, prog: ['D', 'G', 'A', 'G'], feel: 'shuffle' },
+    // real recordings (assets/music) — the jukebox falls back to the synth band if a file can't load
+    { name: 'Friday Knock-Off', file: 'music/friday-knock-off.mp3', artist: 'cyelune', feel: '6 min · the Friday anthem' },
+    { name: 'Maccas Farm', file: 'music/maccas-farm.mp3', artist: 'cyelune', feel: '2:52' },
+    { name: 'The Uni People Have No Clue', file: 'music/the-uni-people-have-no-clue.mp3', artist: 'cyelune', feel: '3:10' },
+    { name: 'One Nation, Pauline', file: 'music/one-nation-pauline.mp3', artist: 'cyelune', feel: '3:46' }];
+  let audioEl = null, audioSrc = null, broken = {};
+  // play a recorded track through the same spatial jukebox chain as the synth band
+  function playFile(i) {
+    const S = SONGS[i];
+    if (!ctx || !S.file || broken[i]) return false;
+    if (!audioEl) { audioEl = new Audio(); audioEl.crossOrigin = 'anonymous'; audioEl.preload = 'auto'; audioSrc = ctx.createMediaElementSource(audioEl); audioSrc.connect(out); audioEl.onended = () => { const files = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0 && k !== song); setSong(files.length ? choice(files) : 0); }; }
+    audioEl.onerror = () => { broken[i] = true; if (song === i) setSong(0); };
+    audioEl.src = assetURL(S.file); audioEl.currentTime = 0;
+    const p = audioEl.play(); if (p && p.catch) p.catch(() => {});
+    return true;
+  }
+  function setSong(v) {
+    song = ((v % SONGS.length) + SONGS.length) % SONGS.length; bar = 0;
+    if (SONGS[song].file) { if (!playFile(song)) { pendingFile = true; } }
+    else if (audioEl) audioEl.pause();
+  }
+  let pendingFile = false;
   const ROOT = { E: 82.41, A: 110, B: 123.47, D: 73.42, G: 98, C: 65.41 };
   function ks(freq, dur, bright = 0.5) {
     const sr = ctx.sampleRate, n = Math.floor(sr * dur), b = new Float32Array(n);
@@ -434,13 +476,15 @@ const Music = (() => {
   let level = 0.5;
   function update(dt, state) {
     if (!ready) return;
-    while (nextBar < ctx.currentTime + 0.3) nextBar = scheduleBar(Math.max(nextBar, ctx.currentTime + 0.05));
+    if (pendingFile) { pendingFile = false; if (!playFile(song)) setSong(0); }
+    if (!SONGS[song].file) while (nextBar < ctx.currentTime + 0.3) nextBar = scheduleBar(Math.max(nextBar, ctx.currentTime + 0.05));
+    else nextBar = ctx.currentTime + 0.1;
     const sp = AudioSys.spatial(state.jukePos || V3(), 3);
     gainNode.gain.setTargetAtTime(level * sp.g * 0.6, ctx.currentTime, 0.2);
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, set song(v) { song = v % SONGS.length; bar = 0; }, get song() { return song; }, set level(v) { level = v; } };
+  return { init, update, SONGS, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();
 
 // ---- src/02-textures.js ----
@@ -1543,7 +1587,8 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
+  const link = ['moon', 'dynasty', 'panda'];
+  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: link[i % 3], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
   for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false });
   for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false });
   addColBox(5.0, 8.2, -12.75, -11.25);
@@ -1655,7 +1700,7 @@ function buildSky() {
   skyObj = new Sky(); skyObj.scale.setScalar(900); scene.add(skyObj);
   const u = skyObj.material.uniforms; u.turbidity.value = 6; u.rayleigh.value = 2.2; u.mieCoefficient.value = 0.005; u.mieDirectionalG.value = 0.82;
   sun = new THREE.DirectionalLight(0xffe2c0, 2.5);
-  sun.castShadow = true; sun.shadow.mapSize.set(HIGH() ? 2048 : 1024, HIGH() ? 2048 : 1024);
+  sun.castShadow = true; sun.shadow.mapSize.setScalar(settings.preset === 'ultra' ? 4096 : HIGH() ? 2048 : 1024);
   const sc = sun.shadow.camera; sc.left = -36; sc.right = 36; sc.top = 36; sc.bottom = -36; sc.near = 1; sc.far = 160; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   scene.add(sun); scene.add(sun.target); sun.target.position.set(0, 0, 4);
   hemi = new THREE.HemisphereLight(0xa8c0e0, 0x2a2018, 0.4); scene.add(hemi);
@@ -1896,13 +1941,13 @@ function buildAtmosphere() {
 }
 function updateAtmosphere(dt, t, camPos, inside) {
   // dust drifts slowly, only simulated when you can see it
-  if (inside && atmo.dust && HIGH()) {
+  if (inside && atmo.dust && settings.shafts) {
     const a = atmo.dust.geometry.attributes.position, b = atmo.dustBase;
     for (let i = 0; i < a.count; i++) { const k = i * 3; a.array[k] = b[k] + Math.sin(t * 0.13 + i) * 0.25; a.array[k + 1] = b[k + 1] + Math.sin(t * 0.09 + i * 1.7) * 0.18; a.array[k + 2] = b[k + 2] + Math.cos(t * 0.11 + i * 0.6) * 0.25; }
     a.needsUpdate = true;
   }
-  if (atmo.dust) atmo.dust.visible = inside && HIGH();
-  for (const c of atmo.cones) if (!atmo.streetCones.includes(c)) c.visible = HIGH();
+  if (atmo.dust) atmo.dust.visible = inside && settings.shafts;
+  for (const c of atmo.cones) if (!atmo.streetCones.includes(c)) c.visible = settings.shafts;
   const night = atmo.night;
   if (atmo.moths) {
     atmo.moths.visible = night > 0.5 && !inside;
@@ -1912,7 +1957,7 @@ function updateAtmosphere(dt, t, camPos, inside) {
       a.needsUpdate = true;
     }
   }
-  for (const c of atmo.streetCones) c.visible = night > 0.5 && HIGH();
+  for (const c of atmo.streetCones) c.visible = night > 0.5 && settings.shafts;
   for (const h of atmo.halosOut) h.visible = night > 0.5;
   for (const sp of atmo.spill) sp.material.opacity = 0.08 + 0.3 * atmo.nightF;
   if (atmo.flickerGlow) atmo.flickerGlow.visible = night > 0.5;
@@ -2056,6 +2101,15 @@ const GAMES = {
     noWild: [0], wild: 'WILD', scatter: 'CHEST'
   }
 };
+
+// ---- FORTUNE LINK series: hold & spin link games (6+ fireballs, 3 respins, fill all 15 for the Grand) ----
+const LINK_BASE = (hi) => ({ '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, [hi[0]]: 6, [hi[1]]: 5, [hi[2]]: 4.5, [hi[3]]: 3.5, WILD: 2.2, COIN: 11.3 });
+const LINK_PAYS = (hi) => Object.assign({}, ROYAL_PAYS, { [hi[0]]: [0,0,0,12,40,150], [hi[1]]: [0,0,0,15,50,200], [hi[2]]: [0,0,0,20,75,300], [hi[3]]: [0,0,0,30,120,600], WILD: [0,0,0,30,120,800] });
+for (const [id, name, hi, theme] of [
+  ['moon', 'MOON FESTIVAL', ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], { bg1: '#0a0a3a', bg2: '#3a2a8a', frame: '#f6c445', accent: '#ff4a6a', glow: '#ffe9a0', text: '#fff3cf', scene: 'moon' }],
+  ['dynasty', 'GOLDEN DYNASTY', ['FAN', 'VASE', 'WALL', 'EMPEROR'], { bg1: '#3a1204', bg2: '#d8780a', frame: '#ffd84a', accent: '#c0141a', glow: '#fff0a0', text: '#fff3cf', scene: 'sunset' }],
+  ['panda', 'BAMBOO PANDA', ['LOTUS', 'JUNK', 'LANTERN', 'PANDA'], { bg1: '#06280a', bg2: '#2a8a2a', frame: '#f6c445', accent: '#e8201a', glow: '#eaffb0', text: '#f3ffe0', scene: 'bamboo' }],
+]) GAMES[id] = { id, name, sub: 'FORTUNE LINK', feature: 'holdspin', link: true, payScale: 5.5, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND', syms: ['9', '10', 'J', 'Q', 'K', 'A', ...hi, 'WILD', 'COIN'], pays: LINK_PAYS(hi), base: LINK_BASE(hi), noWild: [0], wild: 'WILD', bonusSym: 'COIN' };
 
 function reelWeights(game, reel, free) {
   const w = [];
@@ -2291,13 +2345,110 @@ const ART = {
     rr(x, -78, -48, 156, 96, 18); x.fillStyle = lg(x, 0, -48, 0, 48, [t.bg2, t.bg1]); x.fill(); x.lineWidth = 7; x.strokeStyle = t.frame; x.stroke();
     if (g.id === 'dragon') { x.fillStyle = rg(x, -10, -12, 4, 46, ['#ffffff', '#ffd6f0', '#9ad0ff', '#4a2a8a']); x.beginPath(); x.arc(0, 0, 44, 0, 7); x.fill(); }
     if (g.id === 'reef') { x.fillStyle = '#ffb8c8'; x.beginPath(); x.ellipse(0, 18, 60, 24, 0, 0, Math.PI); x.fill(); x.fillStyle = rg(x, -6, -6, 2, 24, ['#fff', '#e8e8ff', '#b8b8d8']); x.beginPath(); x.arc(0, 4, 22, 0, 7); x.fill(); }
+    if (g.link) { x.fillStyle = rg(x, -8, -10, 4, 44, ['#fffbe0', g.theme.glow, g.theme.accent]); x.beginPath(); x.arc(0, 0, 40, 0, 7); x.fill(); }
     if (g.id === 'sevens') { x.fillStyle = '#ffd84a'; x.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? 22 : 50; x.lineTo(Math.cos(a) * r, Math.sin(a) * r); } x.closePath(); x.fill(); }
     outlineText(x, 'WILD', 0, 4, 46, lg(x, 0, -20, 0, 24, ['#fffbe0', t.glow, t.accent]), '#1a0802', 9);
   },
-  COIN(x) {
+  COIN(x, g) {
+    if (g && g.link) { ART.FIREBALL(x); return; }
     x.beginPath(); for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, r = 52 + Math.sin(i * 2.7) * 7; x.lineTo(Math.cos(a) * r * 1.1, Math.sin(a) * r * 0.9); } x.closePath();
     x.fillStyle = rg(x, -18, -18, 4, 64, ['#fffbe0', '#ffd84a', '#c88a10', '#6a4004']); x.fill(); x.lineWidth = 4; x.strokeStyle = '#4a2a02'; x.stroke();
     x.fillStyle = 'rgba(255,255,255,.7)'; x.beginPath(); x.ellipse(-20, -20, 10, 6, -0.6, 0, 7); x.fill();
+  },
+  // ---------- FORTUNE LINK art ----------
+  FIREBALL(x) {
+    for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + 0.2, r = 62 + (i % 3) * 6; x.fillStyle = i % 2 ? 'rgba(255,90,10,.85)' : 'rgba(255,170,30,.85)'; x.beginPath(); x.moveTo(Math.cos(a - 0.25) * 44, Math.sin(a - 0.25) * 44); x.quadraticCurveTo(Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15, Math.cos(a + 0.3) * 46, Math.sin(a + 0.3) * 46); x.fill(); }
+    x.fillStyle = rg(x, -14, -16, 4, 58, ['#fffbe0', '#ffe27a', '#f0a010', '#a04a04']); x.beginPath(); x.arc(0, 0, 52, 0, 7); x.fill();
+    x.lineWidth = 4; x.strokeStyle = '#ff7a10'; x.stroke(); x.lineWidth = 2; x.strokeStyle = 'rgba(120,40,0,.5)'; x.beginPath(); x.arc(0, 0, 44, 0, 7); x.stroke();
+    x.fillStyle = 'rgba(255,255,255,.55)'; x.beginPath(); x.ellipse(-18, -22, 12, 6, -0.6, 0, 7); x.fill();
+  },
+  PIPA(x) {
+    x.rotate(0.5);
+    x.fillStyle = lg(x, -40, 0, 40, 0, ['#6a3a10', '#c88a3a', '#6a3a10']); x.beginPath(); x.ellipse(0, 22, 40, 48, 0, 0, 7); x.fill(); x.lineWidth = 4; x.strokeStyle = '#2a1204'; x.stroke();
+    x.fillStyle = '#3a1a04'; x.fillRect(-7, -72, 14, 66); x.beginPath(); x.arc(0, 30, 9, 0, 7); x.fill();
+    x.strokeStyle = '#f0e0c0'; x.lineWidth = 1.5; for (const sx of [-4, -1.5, 1.5, 4]) { x.beginPath(); x.moveTo(sx, -66); x.lineTo(sx * 1.4, 50); x.stroke(); }
+    x.fillStyle = '#d8b070'; for (const py of [-58, -50]) for (const s of [-1, 1]) { x.fillRect(s * 7, py, s * 9, 4); }
+  },
+  MOONCAKE(x) {
+    x.fillStyle = lg(x, 0, -50, 0, 50, ['#f0c070', '#c07a2a', '#6a3a0a']); x.beginPath();
+    for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = 54 + (i % 2) * 6; x.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.9); } x.closePath(); x.fill(); x.lineWidth = 3; x.strokeStyle = '#4a2204'; x.stroke();
+    x.strokeStyle = 'rgba(80,30,0,.55)'; x.lineWidth = 3; x.beginPath(); x.arc(0, 0, 34, 0, 7); x.stroke();
+    for (let i = 0; i < 4; i++) { x.save(); x.rotate(i * Math.PI / 2); x.beginPath(); x.moveTo(0, -8); x.quadraticCurveTo(14, -22, 0, -30); x.quadraticCurveTo(-14, -22, 0, -8); x.stroke(); x.restore(); }
+    x.fillStyle = 'rgba(255,240,200,.4)'; x.beginPath(); x.ellipse(-18, -20, 14, 7, -0.5, 0, 7); x.fill();
+  },
+  RABBIT(x) {
+    x.fillStyle = '#fbfbff'; x.strokeStyle = '#8a8ab0'; x.lineWidth = 3;
+    x.beginPath(); x.ellipse(8, 18, 46, 30, -0.1, 0, 7); x.fill(); x.stroke();
+    x.beginPath(); x.ellipse(-34, -6, 22, 20, 0, 0, 7); x.fill(); x.stroke();
+    for (const [ex, a] of [[-40, -0.35], [-28, -0.15]]) { x.save(); x.translate(ex, -22); x.rotate(a); x.beginPath(); x.ellipse(0, -24, 8, 26, 0, 0, 7); x.fill(); x.stroke(); x.fillStyle = '#ffb8c8'; x.beginPath(); x.ellipse(0, -24, 4, 18, 0, 0, 7); x.fill(); x.fillStyle = '#fbfbff'; x.restore(); }
+    x.fillStyle = '#c0101a'; x.beginPath(); x.arc(-40, -8, 3.5, 0, 7); x.fill(); x.fillStyle = '#ff9ab0'; x.beginPath(); x.arc(-54, 0, 3, 0, 7); x.fill();
+    x.strokeStyle = '#d82a2a'; x.lineWidth = 2; for (let i = 0; i < 4; i++) { x.beginPath(); x.arc(10 + i * 9, 12, 6, 0, Math.PI); x.stroke(); }
+  },
+  LADY(x) {
+    x.save(); rr(x, -70, -62, 140, 124, 10); x.clip();
+    x.fillStyle = lg(x, 0, -62, 0, 62, ['#1a1a6a', '#4a3aa8']); x.fillRect(-70, -62, 140, 124);
+    x.fillStyle = '#f0f0ff'; x.beginPath(); x.arc(44, -36, 16, 0, 7); x.fill();
+    x.fillStyle = '#1a0a0a'; x.beginPath(); x.ellipse(0, -14, 34, 36, 0, 0, 7); x.fill();
+    x.fillStyle = lg(x, 0, -30, 0, 30, ['#ffe8d8', '#f0c8a8']); x.beginPath(); x.ellipse(0, 2, 22, 28, 0, 0, 7); x.fill();
+    x.fillStyle = '#1a0a0a'; x.beginPath(); x.ellipse(-8, -2, 4, 2, 0, 0, 7); x.ellipse(8, -2, 4, 2, 0, 0, 7); x.fill();
+    x.fillStyle = '#c0101a'; x.beginPath(); x.ellipse(0, 16, 5, 2.5, 0, 0, 7); x.fill();
+    for (const s of [-1, 1]) { x.fillStyle = '#d8201a'; x.beginPath(); x.arc(s * 26, -38, 14, 0, 7); x.fill(); x.fillStyle = '#ff6a5a'; x.beginPath(); x.arc(s * 26, -40, 7, 0, 7); x.fill(); }
+    x.fillStyle = '#ffd84a'; x.beginPath(); x.moveTo(-14, -42); x.lineTo(0, -56); x.lineTo(14, -42); x.closePath(); x.fill(); x.fillStyle = '#3ad8c8'; for (let i = -2; i <= 2; i++) { x.beginPath(); x.arc(i * 6, -36 + Math.abs(i) * 2, 2.5, 0, 7); x.fill(); }
+    x.fillStyle = lg(x, -40, 30, 40, 62, ['#7ad8f0', '#ffb8d8', '#7ad8f0']); x.beginPath(); x.moveTo(-50, 62); x.quadraticCurveTo(-30, 30, 0, 32); x.quadraticCurveTo(30, 30, 50, 62); x.fill();
+    x.restore(); x.lineWidth = 5; x.strokeStyle = '#f6c445'; rr(x, -70, -62, 140, 124, 10); x.stroke();
+  },
+  FAN(x) {
+    for (let i = 0; i < 11; i++) { const a = -Math.PI * 0.85 + i * Math.PI * 0.7 / 10; x.fillStyle = i % 2 ? '#c0141a' : '#e8302a'; x.beginPath(); x.moveTo(0, 40); x.arc(0, 40, 84, a, a + Math.PI * 0.07); x.closePath(); x.fill(); }
+    x.strokeStyle = '#ffd84a'; x.lineWidth = 3; x.beginPath(); x.arc(0, 40, 84, -Math.PI * 0.85, -Math.PI * 0.15); x.stroke(); x.beginPath(); x.arc(0, 40, 40, -Math.PI * 0.85, -Math.PI * 0.15); x.stroke();
+    x.fillStyle = '#ffd84a'; x.beginPath(); x.arc(0, -10, 14, 0, 7); x.fill(); outlineText(x, '福', 0, -8, 18, '#c0141a', '#ffd84a', 1, 'serif');
+    x.fillStyle = '#5a2a0a'; x.beginPath(); x.arc(0, 40, 7, 0, 7); x.fill();
+  },
+  VASE(x) {
+    x.beginPath(); x.moveTo(-16, -60); x.lineTo(16, -60); x.quadraticCurveTo(12, -40, 30, -20); x.quadraticCurveTo(56, 10, 30, 50); x.lineTo(-30, 50); x.quadraticCurveTo(-56, 10, -30, -20); x.quadraticCurveTo(-12, -40, -16, -60); x.closePath();
+    x.fillStyle = lg(x, -50, 0, 50, 0, ['#c8d8f0', '#ffffff', '#b8c8e8']); x.fill(); x.lineWidth = 4; x.strokeStyle = '#1a2a6a'; x.stroke();
+    x.strokeStyle = '#2a4ab8'; x.lineWidth = 3; x.beginPath(); x.moveTo(-36, 0); x.quadraticCurveTo(-10, -20, 0, 6); x.quadraticCurveTo(14, 26, 36, 4); x.stroke();
+    for (const [px, py] of [[-14, 20], [18, -6], [-2, 34]]) { x.fillStyle = '#2a4ab8'; x.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * 7; x.ellipse(px + Math.cos(a) * 5, py + Math.sin(a) * 5, 4, 2.5, a, 0, 7); } x.fill(); }
+    x.fillStyle = '#ffd84a'; x.fillRect(-30, 44, 60, 8); x.fillRect(-18, -62, 36, 6);
+  },
+  WALL(x) {
+    x.save(); rr(x, -70, -60, 140, 120, 10); x.clip();
+    x.fillStyle = lg(x, 0, -60, 0, 60, ['#ffcf5a', '#ff8a2a', '#c04a1a']); x.fillRect(-70, -60, 140, 120);
+    x.fillStyle = '#ffeaa0'; x.beginPath(); x.arc(30, -20, 16, 0, 7); x.fill();
+    x.fillStyle = '#3a5a1a'; x.beginPath(); x.moveTo(-70, 60); x.lineTo(-70, 10); x.quadraticCurveTo(-30, -20, 0, 6); x.quadraticCurveTo(30, 26, 70, -6); x.lineTo(70, 60); x.fill();
+    x.strokeStyle = '#c8a878'; x.lineWidth = 9; x.beginPath(); x.moveTo(-70, 30); x.quadraticCurveTo(-34, -6, 0, 18); x.quadraticCurveTo(34, 40, 70, 8); x.stroke();
+    x.fillStyle = '#c8a878'; for (const [tx, ty] of [[-44, 4], [8, 18], [48, 22]]) { x.fillRect(tx - 7, ty - 16, 14, 16); x.fillStyle = '#8a6a48'; x.fillRect(tx - 7, ty - 18, 14, 3); x.fillStyle = '#c8a878'; }
+    x.restore(); x.lineWidth = 5; x.strokeStyle = '#f6c445'; rr(x, -70, -60, 140, 120, 10); x.stroke();
+  },
+  EMPEROR(x) {
+    x.save(); rr(x, -70, -62, 140, 124, 10); x.clip();
+    x.fillStyle = lg(x, 0, -62, 0, 62, ['#ffcf5a', '#e8781a']); x.fillRect(-70, -62, 140, 124);
+    x.fillStyle = lg(x, -50, 0, 50, 0, ['#c8901a', '#ffe27a', '#c8901a']); x.beginPath(); x.moveTo(-60, 62); x.quadraticCurveTo(-50, 22, 0, 24); x.quadraticCurveTo(50, 22, 60, 62); x.fill();
+    x.fillStyle = '#c0141a'; x.fillRect(-12, 26, 24, 36);
+    x.fillStyle = lg(x, 0, -30, 0, 30, ['#ffe0c0', '#e0b088']); x.beginPath(); x.ellipse(0, -2, 22, 27, 0, 0, 7); x.fill();
+    x.fillStyle = '#1a0a04'; x.beginPath(); x.moveTo(-6, 14); x.quadraticCurveTo(0, 44, 0, 52); x.quadraticCurveTo(0, 44, 6, 14); x.fill(); x.lineWidth = 2.5; x.strokeStyle = '#1a0a04'; x.beginPath(); x.moveTo(-3, 10); x.quadraticCurveTo(-18, 12, -22, 26); x.moveTo(3, 10); x.quadraticCurveTo(18, 12, 22, 26); x.stroke();
+    x.beginPath(); x.moveTo(-14, -6); x.lineTo(-5, -4); x.moveTo(14, -6); x.lineTo(5, -4); x.stroke();
+    x.fillStyle = '#1a1a1a'; x.fillRect(-34, -48, 68, 10); x.fillStyle = '#ffd84a'; x.fillRect(-10, -60, 20, 14);
+    x.strokeStyle = '#ffd84a'; x.lineWidth = 1.5; for (let i = -6; i <= 6; i++) { x.beginPath(); x.moveTo(i * 5, -38); x.lineTo(i * 5, -18); x.stroke(); x.fillStyle = '#ffd84a'; x.beginPath(); x.arc(i * 5, -18, 1.8, 0, 7); x.fill(); }
+    x.restore(); x.lineWidth = 5; x.strokeStyle = '#f6c445'; rr(x, -70, -62, 140, 124, 10); x.stroke();
+  },
+  LOTUS(x) {
+    for (let i = 0; i < 9; i++) { const a = -Math.PI / 2 + (i - 4) * 0.36; x.save(); x.rotate(a + Math.PI / 2); x.fillStyle = lg(x, 0, -60, 0, 0, ['#ffffff', '#ffe8f0', '#f0b8d0']); x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(-22, -30, 0, -60); x.quadraticCurveTo(22, -30, 0, 0); x.fill(); x.lineWidth = 2; x.strokeStyle = '#c87a9a'; x.stroke(); x.restore(); }
+    x.fillStyle = rg(x, 0, 0, 2, 18, ['#fff8a0', '#f0b81a']); x.beginPath(); x.arc(0, 0, 16, 0, 7); x.fill();
+    x.fillStyle = '#3a8a2a'; x.beginPath(); x.ellipse(0, 34, 60, 12, 0, 0, 7); x.fill();
+  },
+  JUNK(x) {
+    x.fillStyle = '#3a5aa8'; x.fillRect(-70, 36, 140, 26); x.strokeStyle = '#fff'; x.lineWidth = 2; for (let i = -3; i <= 3; i++) { x.beginPath(); x.arc(i * 22, 42, 9, Math.PI, 0); x.stroke(); }
+    x.fillStyle = lg(x, 0, 14, 0, 40, ['#8a4a1a', '#4a2204']); x.beginPath(); x.moveTo(-60, 14); x.lineTo(60, 10); x.lineTo(44, 40); x.lineTo(-48, 40); x.closePath(); x.fill();
+    x.fillStyle = '#4a2204'; x.fillRect(-2, -64, 4, 78); x.fillRect(-34, -40, 3, 54);
+    for (const [cx, w, h] of [[16, 46, 70], [-20, 32, 46]]) { x.fillStyle = lg(x, cx - w / 2, 0, cx + w / 2, 0, ['#e8c06a', '#f8e0a0']); x.beginPath(); x.moveTo(cx - w / 2, -64 + (70 - h)); x.lineTo(cx + w / 2, -60 + (70 - h)); x.lineTo(cx + w / 2 - 4, 8); x.lineTo(cx - w / 2 + 4, 8); x.closePath(); x.fill(); x.strokeStyle = '#8a5a1a'; x.lineWidth = 1.5; for (let k = 1; k < 5; k++) { const yy = -64 + (70 - h) + k * h / 5; x.beginPath(); x.moveTo(cx - w / 2 + 2, yy); x.lineTo(cx + w / 2 - 2, yy); x.stroke(); } }
+  },
+  PANDA(x) {
+    for (const s of [-1, 1]) { x.fillStyle = '#111'; x.beginPath(); x.arc(s * 42, -40, 18, 0, 7); x.fill(); }
+    x.fillStyle = rg(x, -10, -10, 6, 70, ['#ffffff', '#f0f0f0', '#c8c8c8']); x.beginPath(); x.ellipse(0, 0, 56, 50, 0, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = '#555'; x.stroke();
+    for (const s of [-1, 1]) { x.fillStyle = '#111'; x.save(); x.translate(s * 20, -6); x.rotate(s * 0.5); x.beginPath(); x.ellipse(0, 0, 13, 17, 0, 0, 7); x.fill(); x.restore(); x.fillStyle = '#fff'; x.beginPath(); x.arc(s * 19, -8, 4.5, 0, 7); x.fill(); x.fillStyle = '#111'; x.beginPath(); x.arc(s * 19, -8, 2.5, 0, 7); x.fill(); }
+    x.fillStyle = '#111'; x.beginPath(); x.ellipse(0, 14, 9, 6, 0, 0, 7); x.fill();
+    x.strokeStyle = '#111'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, 20); x.lineTo(0, 27); x.moveTo(-10, 30); x.quadraticCurveTo(0, 38, 10, 30); x.stroke();
+    x.fillStyle = '#4ab83a'; x.save(); x.translate(44, 30); x.rotate(-0.6); x.fillRect(-4, -34, 8, 60); x.restore();
   },
   LANTERN(x) {
     x.strokeStyle = '#ffd84a'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -66); x.lineTo(0, -50); x.stroke();
@@ -2438,6 +2589,21 @@ function drawBG(x, g, t) {
   x.save(); x.translate(SW / 2, 300); x.rotate(t * 0.08); x.globalAlpha = 0.07;
   for (let i = 0; i < 16; i++) { x.rotate(Math.PI / 8); x.fillStyle = '#fff'; x.beginPath(); x.moveTo(0, 0); x.lineTo(900, -70); x.lineTo(900, 70); x.closePath(); x.fill(); }
   x.restore(); x.globalAlpha = 1;
+  if (th.scene) drawScene(x, th.scene, t);
+}
+// painted backdrops for the Fortune Link games (sits behind the reels and the attract screen)
+function drawScene(x, scene, t) {
+  if (scene === 'moon') {
+    x.fillStyle = 'rgba(255,255,255,.8)'; for (let i = 0; i < 90; i++) { const sx = (i * 137.5) % SW, sy = (i * 71.3) % (SH * 0.7); x.globalAlpha = 0.4 + 0.4 * Math.sin(t * 2 + i); x.fillRect(sx, sy, 2, 2); }
+    x.globalAlpha = 1; x.fillStyle = rg(x, 830, 230, 20, 150, ['#ffffff', '#e8e8ff', 'rgba(200,200,255,0)']); x.beginPath(); x.arc(830, 230, 150, 0, 7); x.fill();
+    x.fillStyle = '#f4f2ff'; x.beginPath(); x.arc(830, 230, 88, 0, 7); x.fill(); x.fillStyle = 'rgba(160,160,200,.35)'; for (const [cx, cy, r] of [[800, 200, 18], [860, 250, 24], [820, 270, 10]]) { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); }
+  } else if (scene === 'sunset') {
+    x.fillStyle = 'rgba(255,240,160,.9)'; x.beginPath(); x.arc(820, 300, 70, Math.PI, 0); x.fill();
+    x.fillStyle = 'rgba(40,70,20,.7)'; x.beginPath(); x.moveTo(0, 520); for (let i = 0; i <= 10; i++) x.lineTo(i * SW / 10, 330 + Math.sin(i * 1.7) * 60); x.lineTo(SW, 768); x.lineTo(0, 768); x.fill();
+    x.strokeStyle = 'rgba(200,170,120,.8)'; x.lineWidth = 10; x.beginPath(); for (let i = 0; i <= 10; i++) x.lineTo(i * SW / 10, 350 + Math.sin(i * 1.7) * 60); x.stroke();
+  } else if (scene === 'bamboo') {
+    for (let i = 0; i < 14; i++) { const bx = (i * 79) % SW + 10, w = 14 + (i % 3) * 6; x.fillStyle = `rgba(${40 + (i % 3) * 20},${120 + (i % 4) * 20},${30},.55)`; x.fillRect(bx, 0, w, SH); x.fillStyle = 'rgba(20,60,10,.5)'; for (let k = 0; k < 6; k++) x.fillRect(bx - 2, k * 140 + (i * 37) % 140, w + 4, 5); }
+  }
 }
 function jpVal(name, bet) { return JP[name] * (bet ? jpFactor(bet) : 1); }
 function drawJackpotBar(x, g, bet, t, y = 104) {
@@ -2473,11 +2639,20 @@ function drawTopper(id) {
   const s = shared[id], g = GAMES[id], x = s.topper.getContext('2d');
   x.setTransform(0.5, 0, 0, 0.5, 0, 0);
   x.fillStyle = rg(x, SW / 2, 256, 30, 700, [g.theme.bg2, g.theme.bg1, '#000']); x.fillRect(0, 0, SW, 512);
+  if (g.link) { drawLinkTopper(x, g, s.t); s.tt.needsUpdate = true; return; }
   drawLogo(x, g, SW / 2, 120, 1.3, s.t);
   rr(x, 180, 300, 664, 150, 20); x.fillStyle = 'rgba(0,0,0,.6)'; x.fill(); x.lineWidth = 5; x.strokeStyle = g.theme.frame; x.stroke();
   outlineText(x, 'GRAND', SW / 2, 336, 40, '#ff6a7a', '#000', 6);
   outlineText(x, fmt$(JP.GRAND), SW / 2, 400, 80, '#ffe98a', '#000', 8, 'Bebas Neue, Impact, sans-serif');
   s.tt.needsUpdate = true;
+}
+function drawLinkTopper(x, g, t) {
+  x.fillStyle = '#0a0202'; x.fillRect(0, 0, SW, 512);
+  x.save(); x.shadowColor = '#ff7a10'; x.shadowBlur = 30; outlineText(x, 'FORTUNE LINK', SW / 2, 62, 86, lg(x, 0, 20, 0, 100, ['#ffe27a', '#ff6a10', '#a0100a']), '#2a0400', 12, 'Rye, serif'); x.restore();
+  const row = (label, val, y, w, cx, col, sz) => { rr(x, cx - w / 2, y, w, sz + 26, 12); x.fillStyle = '#000'; x.fill(); x.lineWidth = 5; x.strokeStyle = col; x.stroke(); outlineText(x, fmt$(val), cx + 28, y + (sz + 26) / 2 + 2, sz, col, '#000', 6, 'Bebas Neue, Impact'); x.fillStyle = rg(x, cx - w / 2 + 34, y + (sz + 26) / 2, 4, 40, ['#fff6a0', '#f0b81a', '#a06a04']); x.beginPath(); x.arc(cx - w / 2 + 34, y + (sz + 26) / 2, 34, 0, 7); x.fill(); outlineText(x, label, cx - w / 2 + 34, y + (sz + 26) / 2, 15, col, '#000', 3); };
+  row('GRAND', JP.GRAND, 120, 900, SW / 2, '#ff3a2a', 96);
+  row('MAJOR', JP.MAJOR, 262, 820, SW / 2, '#3aff4a', 78);
+  row('MINOR', JP.MINOR, 384, 470, SW / 2 - 250, '#3a8aff', 64); row('MINI', JP.MINI, 384, 470, SW / 2 + 250, '#ff9a1a', 64);
 }
 function drawJPBoard(t) {
   const b = dynamic.jpBoard, x = b.c.getContext('2d');
@@ -2975,8 +3150,8 @@ class Machine {
         const s = cache[choice(['COIN', 'COIN', g.syms[0]])].blur; x.globalAlpha = 0.25 + 0.15 * Math.sin(this.t * 30 + i); x.drawImage(s, X - 2, Y + ((this.t * 900 + i * 50) % CH) - CH / 2); x.globalAlpha = 1;
       }
     }
-    rr(x, SW / 2 - 200, RY + CH * 3 + 14, 400, 50, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
-    if (h.collect < 0) outlineText(x, `RESPINS: ${h.respins}`, SW / 2, RY + CH * 3 + 40, 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
+    const bw = g.link ? 820 : 400; rr(x, SW / 2 - bw / 2, RY + CH * 3 + 14, bw, 50, 12); x.fillStyle = 'rgba(0,0,0,.8)'; x.fill(); x.strokeStyle = g.theme.frame; x.lineWidth = 3; x.stroke();
+    if (h.collect < 0) outlineText(x, g.link ? `${h.shown.filter(Boolean).length} COLLECTED · 15 WINS THE GRAND · RESPINS ${h.respins}` : `RESPINS: ${h.respins}`, SW / 2, RY + CH * 3 + 40, g.link ? 22 : 30, h.respins === 3 ? '#8aff9a' : '#fff', '#000', 5);
     else outlineText(x, `COLLECTING: ${fmt$(h.acc || 0)}`, SW / 2, RY + CH * 3 + 40, 30, '#ffe27a', '#000', 5);
   }
   drawWheel(x) {
@@ -4053,13 +4228,13 @@ function setupInput() {
     Game.onKey(e.code, e);
   });
   addEventListener('keyup', e => { keys[e.code] = false; });
-  addEventListener('mousemove', e => { if (input.locked) { input.mx += e.movementX; input.my += e.movementY; } });
+  addEventListener('mousemove', e => { if (input.locked) { input.mx += e.movementX; input.my += e.movementY * (settings.invertY ? -1 : 1); } });
   document.addEventListener('pointerlockchange', () => { input.locked = document.pointerLockElement === renderer.domElement; Game.onLockChange(input.locked); });
   renderer.domElement.addEventListener('mousedown', e => Game.onCanvasClick(e));
   addEventListener('mouseup', e => { if (MG.active) MG.up(e); });
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 }
-function lockPointer() { try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+function lockPointer() { if (TOUCH.on) { input.locked = true; if (typeof Game !== 'undefined') Game.onLockChange(true); return; } try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
 
 // ---------- body for mirror reflection ----------
 let playerBody;
@@ -4266,24 +4441,25 @@ function updatePlayer(dt, t) {
   let moving = false;
   const wantFov = player.seated ? 55 : settings.fov;
   if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = damp(camera.fov, wantFov, 5, dt); camera.updateProjectionMatrix(); }
-  bloom.strength = damp(bloom.strength, player.seated ? 0.22 : (HIGH() ? 0.55 : 0.4), 4, dt);
+  bloom.strength = damp(bloom.strength, player.seated ? Math.min(0.22, settings.bloomStr) : settings.bloomStr, 4, dt);
   if (player.seated) {
     player.seatT += dt;
     const k = smooth(clamp(player.seatT / 0.8, 0, 1)), sc = seatCam();
     camera.position.lerpVectors(player.camFrom.pos, sc.pos, k);
     camera.quaternion.slerpQuaternions(player.camFrom.q, sc.q, k);
     // drunk sway even when seated
-    camera.rotateZ(Math.sin(t * 0.6) * 0.03 * drunk); camera.rotateX(Math.sin(t * 0.43) * 0.02 * drunk);
+    const swayK = settings.reduceMotion ? 0 : settings.drunkFx; camera.rotateZ(Math.sin(t * 0.6) * 0.03 * drunk * swayK); camera.rotateX(Math.sin(t * 0.43) * 0.02 * drunk * swayK);
     player.pos.copy(player.seated.seatW);
   } else {
     const fw = V3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)), rt = V3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
     const wish = V3();
     if (Game.canMove()) {
       if (keys.KeyW || keys.ArrowUp) wish.add(fw); if (keys.KeyS || keys.ArrowDown) wish.sub(fw);
+      if (TOUCH.on) { wish.addScaledVector(fw, -TOUCH.my); wish.addScaledVector(rt, TOUCH.mx); }
       if (keys.KeyD || keys.ArrowRight) wish.add(rt); if (keys.KeyA || keys.ArrowLeft) wish.sub(rt);
     }
     if (player.auto) { wish.set(player.auto.x - player.pos.x, 0, player.auto.z - player.pos.z); player.yaw += angleDiff(player.yaw, Math.atan2(-wish.x, -wish.z)) * Math.min(1, dt * 3); }
-    const run = keys.ShiftLeft || keys.ShiftRight;
+    const run = keys.ShiftLeft || keys.ShiftRight || (TOUCH.on && (TOUCH.run || Math.hypot(TOUCH.mx, TOUCH.my) > 0.97));
     const spd = (run ? 4.2 : 1.9) * (1 - drunk * 0.25);
     if (wish.lengthSq() > 0) { wish.normalize(); moving = true; }
     // drunk drift
@@ -4308,9 +4484,9 @@ function updatePlayer(dt, t) {
     player.groundY = damp(player.groundY ?? gy, gy, 12, dt);
     // footsteps
     if (sp > 0.4 && Math.floor(player.bob / Math.PI) !== player.lastStep) { player.lastStep = Math.floor(player.bob / Math.PI); SFX.step(surfaceAt(player.pos.x, player.pos.z, player.level), player.pos.clone()); }
-    const bobY = Math.abs(Math.sin(player.bob)) * 0.045 * Math.min(1, sp / 2), bobX = Math.cos(player.bob) * 0.025 * Math.min(1, sp / 2);
+    const bobK = settings.headBob && !settings.reduceMotion ? 1 : 0, bobY = Math.abs(Math.sin(player.bob)) * 0.045 * Math.min(1, sp / 2) * bobK, bobX = Math.cos(player.bob) * 0.025 * Math.min(1, sp / 2) * bobK;
     camera.position.set(player.pos.x + rt.x * bobX, player.groundY + player.eye - bobY + 0.02, player.pos.z + rt.z * bobX);
-    const sway = drunk * drunk;
+    const sway = drunk * drunk * (settings.reduceMotion ? 0 : settings.drunkFx);
     camera.rotation.set(player.pitch + Math.sin(t * 0.47) * 0.05 * sway, player.yaw + Math.sin(t * 0.31) * 0.06 * sway, Math.sin(t * 0.6) * 0.06 * sway + bobX * 0.15 - vm.lag.x * 0.5);
   }
   updateDrinkVM(dt, t, moving);
@@ -4414,6 +4590,7 @@ const Game = {
     $('dayCardInner').innerHTML = `
       <div class="dname">${D.name}</div><div class="dtime">${hh(start)} · DAY ${s.day + 1} OF 7 · ${dd.label.toUpperCase()}</div>
       <div class="event">${D.title}</div>
+      <div class="chapter"><small>${CHAPTERS[s.day].title.toUpperCase()}</small>${CHAPTERS[s.day].narr}</div>
       <p>${D.desc}</p>
       ${s.startHang ? '<p class="neg"><b>Hungover.</b> You got going an hour late and everything is a bit too loud.</p>' : ''}
       ${msgs.map(m => `<p style="margin:4px 0">${m}</p>`).join('')}
@@ -4440,12 +4617,12 @@ const Game = {
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
-    REG.spawnAll(); Shops.spawnStaff();
-    spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * (HIGH() ? 1 : 0.75)));
+    REG.spawnAll(); Shops.spawnStaff(); STORY.spawn();
+    spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
     RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
-    Music.song = D.event === 'sunday' ? 1 : randi(0, 3); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
+    Music.song = Music.pick(D.event); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
     // player on the far footpath, facing the pub
     player.pos.set(-7.5, 0, 21.2); player.yaw = 0.12; player.pitch = 0.04; player.vel.set(0, 0, 0);
     updateBoards(D);
@@ -4507,6 +4684,7 @@ const Game = {
       <tr><td>Jackpots / meat trays / trivia wins</td><td>${st.jackpots} / ${st.meat} / ${st.trivia}</td></tr><tr><td>Glasses smashed</td><td>${st.glasses}</td></tr><tr><td>ATM fees</td><td>${fmt$(-st.atmFees)}</td></tr>
       <tr class="tot"><td>Net for the week</td><td class="${net >= 0 ? 'pos' : 'neg'}">${fmt$(net)}</td></tr></table>
       <p class="note">Pokies returned ${st.wagered > 0 ? Math.round(st.won / st.wagered * 100) : 0}c in the dollar this week.</p>
+      ${STORY.epilogue()}
       <button class="cbtn" id="btnAgain">ANOTHER WEEK →</button>`;
     store('ld_save', null);
     $('btnAgain').onclick = () => { $('summary').classList.add('hidden'); this.toTitle(); };
@@ -4558,7 +4736,7 @@ const Game = {
       o = tips[D.event] || '';
       if (s.drunk > 75) o = 'You\'re very drunk. Bar staff may cut you off. Water\'s free.';
     }
-    const html = o + '<br><span style="opacity:.6">Leave early & sober = bonus tomorrow. Close: ' + (() => { const c = DAYS[s.day].close, h = Math.floor(c) % 24, m = Math.round((c % 1) * 60); return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`; })() + '</span>';
+    const html = `<span class="storygoal">★ ${STORY.goal()}</span><br>` + o + '<br><span style="opacity:.6">Leave early & sober = bonus tomorrow. Close: ' + (() => { const c = DAYS[s.day].close, h = Math.floor(c) % 24, m = Math.round((c % 1) * 60); return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`; })() + '</span>';
     if (this._hud.objective !== html) { this.objShownAt = elapsed; $('objective').style.opacity = 1; }
     this.setText('objective', html);
   },
@@ -4568,7 +4746,7 @@ const Game = {
     while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   },
   subT: 0,
-  subtitle(html, dur = 3) { $('subtitle').innerHTML = html; this.subT = dur; },
+  subtitle(html, dur = 3) { if (!settings.subtitles && !/^<i>/.test(html)) return; $('subtitle').innerHTML = html; this.subT = dur; },
   dayBarks() {
     return ({ monday: ['Mondays, eh.', 'Quiet one tonight.'], parma: ["Parma's ripper tonight.", 'Get the parma, mate. Trust me.'], trivia: ["Reckon we'll win trivia this week?", 'Who was the first PM again? Barton?', 'Bloody rain.'], jackpot: ["Grand's getting up there, isn't it?", 'Payday! Shout ya one later.'], knockoff: ['Thank God it\'s Friday.', 'Whose shout is it?', 'Big week. Big week.'], raffle: ['Come on the Pies!', "Ump, you're blind!", 'Got me raffle tickets. Feelin\' lucky.'], sunday: ['Sunday sesh, can\'t beat it.', 'Back to work tomorrow. Don\'t remind me.'] })[this.state.event] || [];
   },
@@ -4579,7 +4757,7 @@ const Game = {
     $('pBtns').innerHTML = ''; for (const b of btns) { const e = document.createElement('button'); e.className = 'pbtn'; e.textContent = b.label; e.onclick = b.fn; $('pBtns').appendChild(e); }
     $('panel').classList.remove('hidden');
   },
-  closePanel() { $('panel').classList.add('hidden'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated && !(MG.active && MG.active.cursor)) lockPointer(); } },
+  closePanel() { $('panel').classList.add('hidden'); $('panel').classList.remove('wide'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated && !(MG.active && MG.active.cursor)) lockPointer(); } },
   optList(opts) {
     const wrap = document.createElement('div'); wrap.className = 'opts';
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
@@ -4653,7 +4831,7 @@ const Game = {
     SFX.beep();
   },
   openJukebox() {
-    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: sg.name, d: `${sg.bpm} bpm · ${sg.feel}`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
+    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: (sg.file ? '★ ' : '') + sg.name, d: sg.file ? `${sg.artist} · ${sg.feel}` : `${sg.bpm} bpm · ${sg.feel} · house band`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
   },
   openKeno() {
     const s = this.state, k = this.keno;
@@ -4796,7 +4974,7 @@ const Game = {
     // last drinks + close
     if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
-    RANDOM.update(dt); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
+    RANDOM.update(dt); STORY.update(); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
     // arrivals
     this.arriveT -= dt;
     if (this.arrivals > 0 && this.arriveT <= 0 && s.time < D.close - 1) {
@@ -4825,7 +5003,7 @@ const Game = {
     const ask = () => {
       if (i >= qs.length) {
         const s = this.state; let prize = '';
-        if (score >= 4) { s.wallet += 50; s.night.extra += 50; s.stats.trivia++; s.mood = Math.min(100, s.mood + 15); prize = 'Your table WINS! $50 bar tab (cash).'; SFX.cheer(player.pos, 2); }
+        if (score >= 4) { s.wallet += 50; s.night.extra += 50; s.stats.trivia++; s.mood = Math.min(100, s.mood + 15); prize = 'Your table WINS! $50 bar tab (cash).'; SFX.cheer(player.pos, 2); if (s.day === 2) STORY.addFund(50, 'Bev matched your trivia prize'); }
         else if (score === 3) { prize = 'Second place — a free schooner on the house.'; bartenderOrder({ type: 'schooner', forZ: clamp(player.pos.z, BAR.z0 + .6, BAR.z1 - .6), cb: (it, sp) => this.placeItem(it, sp) }); }
         else prize = 'Wooden spoon. Better luck next week.';
         this.openPanel('TRIVIA RESULTS', `${score} / 5`, `<p>${prize}</p>`); return;
@@ -4933,9 +5111,9 @@ const Game = {
       <div class="setrow"><span>Wallet</span><b>${fmt$(s.wallet)}</b></div><div class="setrow"><span>Bank</span><b>${fmt$(s.bank)}</b></div>
       <div class="setrow"><span>Rent due Sunday</span><b>${fmt0(dd.rent)}</b></div><div class="setrow"><span>Tonight: drinks / pokies in / pokies won</span><b>${fmt$(n.spentDrinks)} / ${fmt$(n.wagered)} / ${fmt$(n.won)}</b></div>
       <div class="setrow"><span>Week so far: wagered / won</span><b>${fmt$(s.stats.wagered)} / ${fmt$(s.stats.won)}</b></div>
-      <p style="font-size:13px;opacity:.75;margin-top:10px">💬 <b>Mum:</b> Don't stay out too late love xx<br>💬 <b>Landlord:</b> Reminder rent is due Sunday.<br>${s.debts.length ? `💬 <b>You:</b> ${s.debts.map(d => d.name).join(', ')} owe${s.debts.length === 1 ? 's' : ''} you money.` : ''}</p>`);
+      <p style="font-size:13px;opacity:.75;margin-top:10px">💬 <b>Mum:</b> Don't stay out too late love xx<br>💬 <b>Landlord:</b> Reminder rent is due Sunday.<br>${['💬 <b>Jess (sis):</b> Heard the Royal\'s up for sale?? Isn\'t that your local?', '💬 <b>Bev:</b> There\'s a bloke in a suit sniffing around. Keep an eye out.', `💬 <b>Bev:</b> Jar\'s on the bar. ${fmt0(STORY.st().fund)} so far!`, '💬 <b>Old Mick:</b> (voicemail, 4 minutes long, mostly about 1977)', '💬 <b>Shazza:</b> KARAOKE TONIGHT!!! 🎤🎤🎤 every point = $1 for the jar', '💬 <b>Bev:</b> Petition\'s ready. Come see me.', '💬 <b>Bev:</b> Council\'s at the pub at 8. Don\'t be late.'][s.day]}<br>${s.debts.length ? `💬 <b>You:</b> ${s.debts.map(d => d.name).join(', ')} owe${s.debts.length === 1 ? 's' : ''} you money.` : ''}</p>`);
   },
-  timeScale: 0.8 / 60, // game hours per real second (0.8 game-min / sec)
+  timeScale: 0.8 / 60 * settings.timeSpeed, // game hours per real second (0.8 game-min / sec at normal speed)
 };
 
 function updateBoards(D) {
@@ -4971,7 +5149,7 @@ function frame() {
   // dynamic resolution: keep ~55-60fps by trading pixels for frames
   perf.ema = perf.ema * 0.95 + dt * 0.05; perf.t += dt;
   // one-way: only ever steps DOWN after sustained slowness, so it can't oscillate or pop back and forth
-  if (Game.mode === 'play' && perf.t > 3 && !window.__noDynRes) {
+  if (Game.mode === 'play' && perf.t > 3 && !window.__noDynRes && settings.dynres) {
     perf.t = 0;
     perf.slow = perf.ema > 1 / 42 ? perf.slow + 1 : 0;
     if (perf.slow >= 3 && renderScale > 0.62) { setRenderScale(renderScale - 0.15); perf.slow = 0; }
@@ -5016,7 +5194,7 @@ function simulate(dt) {
     if (Game.objShownAt != null && elapsed - Game.objShownAt > 9) $('objective').style.opacity = keys.Tab ? 1 : 0;
     if (Game.frameN % 6 === 0) { Game.updateHUD(); if (Game.frameN % 120 === 0) Game.objective(); }
     // FX uniforms
-    fxPass.uniforms.uDrunk.value = damp(fxPass.uniforms.uDrunk.value, clamp((s.drunk - 25) / 70, 0, 1), 1, dt);
+    fxPass.uniforms.uDrunk.value = damp(fxPass.uniforms.uDrunk.value, clamp((s.drunk - 25) / 70, 0, 1) * (settings.reduceMotion ? 0 : settings.drunkFx), 1, dt);
     fxPass.uniforms.uHang.value = s.startHang ? Math.max(0, 0.5 - (s.time - s.startTime) * 0.4) : 0;
   }
   if (Game.mode === 'play' || Game.mode === 'title' || Game.mode === 'card') {
@@ -5047,10 +5225,10 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt);
+    updateZones(dt); updateTraffic(dt); TOUCH.update();
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
-    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0), 2, dt);
+    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
     fxPass.uniforms.uSmoke.value = damp(fxPass.uniforms.uSmoke.value, onTerrace(camera.position.x, camera.position.z) ? 0.6 : 0, 1, dt);
     AudioSys.update(dt, { inside, gaming: inGaming(camera.position.x, camera.position.z), pos: camera.position, machinePositions: MACHINES.filter(m => m.mode !== 'idle' || Math.random() < 0.3).map(m => m.screenW), firePos: dynamic.firePos, jukePos: dynamic.jukePos });
   }
@@ -5074,22 +5252,8 @@ function wireUI() {
       <span class="kbd">SPACE</span><span>At a pokie: spin / slam-stop / pick</span><span class="kbd">↑ ↓</span><span>Change bet</span><span class="kbd">I</span><span>Insert cash</span><span class="kbd">ENTER</span><span>Collect a ticket</span><span class="kbd">G R B</span><span>Gamble a win: red or black</span><span class="kbd">Q</span><span>Stand up</span></div>
       <p style="font-size:13px;opacity:.75;line-height:1.5">Each night starts at a different time with its own event. Leave early & sober and you'll pick up overtime tomorrow. Get legless and you'll be docked pay and start late. The pokies are tuned like real ones — about 85–95% return. Over a week, the house wins.</p>`, [{ label: 'Back', fn: () => { Game.closePanel(); $('title').classList.remove('hidden'); } }]);
   };
-  const settingsPanel = (back) => {
-    Game.openPanel('SETTINGS', '', `
-      <div class="setrow"><span>Graphics</span><select id="sQ"><option value="high">High — reflections, soft shadows, light shafts</option><option value="low">Low — laptops &amp; integrated graphics</option></select></div>
-      <div class="setrow"><span>Mouse sensitivity</span><input type="range" id="sS" min="0.3" max="2.5" step="0.05"></div>
-      <div class="setrow"><span>Master volume</span><input type="range" id="sV" min="0" max="1" step="0.05"></div>
-      <div class="setrow"><span>Music volume</span><input type="range" id="sM" min="0" max="1" step="0.05"></div>
-      <div class="setrow"><span>Field of view</span><input type="range" id="sF" min="60" max="95" step="1"></div>`, [{ label: 'Done', fn: () => { Game.closePanel(); back(); } }]);
-    $('sQ').value = settings.quality; $('sS').value = settings.sens; $('sV').value = settings.vol; $('sM').value = settings.music; $('sF').value = settings.fov;
-    $('sQ').onchange = e => { settings.quality = e.target.value; saveSettings(); applyQuality(); };
-    $('sS').oninput = e => { settings.sens = +e.target.value; saveSettings(); };
-    $('sV').oninput = e => { settings.vol = +e.target.value; saveSettings(); AudioSys.setVolume(); };
-    $('sM').oninput = e => { settings.music = +e.target.value; saveSettings(); AudioSys.setVolume(); };
-    $('sF').oninput = e => { settings.fov = +e.target.value; saveSettings(); camera.fov = settings.fov; camera.updateProjectionMatrix(); };
-  };
-  $('btnSettings').onclick = () => { $('title').classList.add('hidden'); settingsPanel(() => $('title').classList.remove('hidden')); };
-  $('btnPauseSettings').onclick = () => { $('resume').classList.add('hidden'); settingsPanel(() => { $('resume').classList.remove('hidden'); }); };
+  $('btnSettings').onclick = () => { $('title').classList.add('hidden'); openSettings(() => $('title').classList.remove('hidden')); };
+  $('btnPauseSettings').onclick = () => { $('resume').classList.add('hidden'); openSettings(() => { $('resume').classList.remove('hidden'); }); };
   $('btnResume').onclick = () => { lockPointer(); };
   $('btnHome').onclick = () => { $('resume').classList.add('hidden'); Game.paused = false; Game.endNight('home'); };
   $('btnQuit').onclick = () => { $('resume').classList.add('hidden'); Game.paused = false; Game.save(); Game.mode = 'title'; Game.toTitle(); };
@@ -6689,6 +6853,7 @@ const Scratchie = {
     let down = false, scratchT = 0;
     const scratch = e => { if (!down) return; const b = over.getBoundingClientRect(), x = (e.clientX - b.left) * 330 / b.width, y = (e.clientY - b.top) * 330 / b.height; o.globalCompositeOperation = 'destination-out'; o.beginPath(); o.arc(x, y, 17, 0, 7); o.fill(); o.globalCompositeOperation = 'source-over'; if (performance.now() - scratchT > 60) { scratchT = performance.now(); SFX.noise(0.05, { freq: rand(2500, 4500), q: 1.2, gain: 0.05 }); } g.scratched = true; };
     over.onmousedown = e => { down = true; scratch(e); }; addEventListener('mouseup', this._up = () => { down = false; this.check(o); }); over.onmousemove = scratch;
+    over.addEventListener('touchstart', e => { e.preventDefault(); down = true; scratch(e.touches[0]); }, { passive: false }); over.addEventListener('touchmove', e => { e.preventDefault(); scratch(e.touches[0]); }, { passive: false }); over.addEventListener('touchend', () => { down = false; this.check(o); });
     wrap.querySelector('#scAll').onclick = () => { o.clearRect(0, 0, 330, 330); this.check(o, true); };
     wrap.querySelector('#scDone').onclick = () => { if (!g.done) { o.clearRect(0, 0, 330, 330); this.check(o, true); } MG.stop(); };
     this.el = wrap;
@@ -6878,7 +7043,7 @@ const Karaoke = {
       const n = this.scores.length === 0 ? REG.here('Shazza') : choice(NPCS.filter(o => o.role === 'patron' && o.state === 'idle' && !o.mg));
       if (!n) return;
       const sc = n.regular === 'Shazza' ? randi(80, 93) : randi(38, 82);
-      this.scores.push({ name: n.name, s: sc }); this.draw(`${n.name.toUpperCase()} IS SINGING`);
+      this.scores.push({ name: n.name, s: sc }); this.draw(`${n.name.toUpperCase()} IS SINGING`); STORY.st().fund += Math.round(sc / 3); STORY.refreshCoins();
       if (camera.position.distanceTo(V3(11.2, 1.5, -3.1)) < 14) { Game.subtitle(`<b>${n.name}:</b> ♪ ${choice(SONG.lines)} ♪`, 4); SFX.cheer(V3(11.2, 1.5, -3.1), 1); }
       n.cheerT = 3; setTimeout(() => this.draw(), 9000);
     }
@@ -6899,6 +7064,7 @@ const Karaoke = {
     if (this.el) this.el.remove(); this.el = null; Music.level = 0.9;
     const g = this.g, pct = Math.round(g.score / g.notes.length * 100);
     this.scores.push({ name: 'You', s: pct }); this.draw();
+    if (DAYS[Game.state.day].event === 'knockoff') STORY.addFund(pct, `The crowd chipped in $${pct} for your performance`);
     const s = Game.state; s.mood = Math.min(100, s.mood + (pct > 60 ? 15 : 5));
     Game.toast(`You scored ${pct}%. ${pct >= 85 ? 'The room is on its feet!' : pct >= 60 ? 'Solid effort. Shazza gives you a nod.' : 'The crowd was… supportive.'}`, true);
     player.pos.set(10.6, 0, -2.2); player.yaw = -2.4;
@@ -6983,7 +7149,7 @@ function buildToilets() {
   addBoxS(SB, MAT.white, -11.25, 0.82, -19.1, 0.4, 0.14, 0.5); addCylS(SB, MAT.chrome, -11.15, 0.95, -19.1, 0.012, 0.15, 6);
   addColBox(-11.5, -11.0, -19.4, -18.8);
   gentsMirror = new Reflector(new THREE.PlaneGeometry(0.55, 0.7), { clipBias: 0.003, textureWidth: 256, textureHeight: 320, color: 0x9a9890 });
-  gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror);
+  gentsMirror.position.set(-11.07, 1.62, -19.1); gentsMirror.rotation.y = -Math.PI / 2; scene.add(gentsMirror); window.__gentsMirror = gentsMirror;
   const mob = gentsMirror.onBeforeRender;
   gentsMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || !roomAt(c.x, c.z) || roomAt(c.x, c.z).id !== 'toilets') return; if (playerBody) playerBody.root.visible = true; mob.apply(this, a); if (playerBody) playerBody.root.visible = false; };
   const stick = mkTex(256, 320, (x, W, H) => { x.clearRect(0, 0, W, H); [['#e8c52a', 'PIES'], ['#c7352b', 'XXXX'], ['#1a3a8a', 'NRL'], ['#fff', 'LOVE YA MUM']].forEach(([c, t], i) => { x.save(); x.translate(30 + (i % 2) * 180, 30 + i * 80); x.rotate(rand(-0.4, 0.4)); x.fillStyle = c; x.fillRect(-26, -12, 70, 24); x.fillStyle = '#111'; x.font = 'bold 14px Inter'; x.fillText(t, -20, 5); x.restore(); }); });
@@ -7500,6 +7666,7 @@ const REG = {
     if (first) { s.tonight['talk_' + name] = 1; relUp(name, 5); s.mood = Math.min(100, s.mood + 3); }
     const opts = [];
     R.extra && R.extra(n, s, opts);
+    STORY.talkOpts(n, opts);
     const price = Game.drinkPrice('schooner');
     if (!s.tonight['shout_' + name]) opts.push({ label: `Shout ${name} a drink`, d: 'Mateship is a currency', price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentDrinks')) return; s.tonight['shout_' + name] = 1; relUp(name, 10); n.glass.fill = 1; Game.closePanel(); bark(n, choice(['You beauty! Cheers.', 'Ahh, you\'re a gentleman and a scholar.', 'Legend. Owe ya one.']), true); SFX.register(V3(-9, 1.2, -9)); } });
     opts.push({ label: 'See ya', fn: () => Game.closePanel() });
@@ -7592,6 +7759,337 @@ const RANDOM = {
   },
 };
 
+// ---- src/16-settings.js ----
+
+// =====================================================================
+//  SETTINGS: tabbed options menu (graphics, display, audio, controls, gameplay, accessibility)
+// =====================================================================
+// each row: [key, label, type, options, help, onChange]; type: select | range | toggle
+const SETTINGS_TABS = {
+  GRAPHICS: [
+    ['preset', 'Quality preset', 'select', [['low', 'Low — laptops & integrated graphics'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra — sharper image, bigger shadows, busier pub'], ['custom', 'Custom']], 'Sets everything below in one go.'],
+    ['resScale', 'Render resolution', 'range', [0.5, 1, 0.05, v => Math.round(v * 100) + '%'], 'Lower is faster. 100% is native.'],
+    ['dynres', 'Dynamic resolution', 'toggle', null, 'Drops the resolution a notch if the frame rate stays low.'],
+    ['shadows', 'Shadows', 'select', [['off', 'Off'], ['low', 'Low (hard)'], ['high', 'High (soft)']], ''],
+    ['aa', 'Anti-aliasing (MSAA 4×)', 'toggle', null, 'Applies after a reload.'],
+    ['reflections', 'Real-time mirror reflections', 'toggle', null, 'The back-bar and gents mirrors.'],
+    ['shafts', 'Light shafts & dust', 'toggle', null, ''],
+    ['bloom', 'Bloom (glow)', 'toggle', null, ''],
+    ['bloomStr', 'Bloom strength', 'range', [0.1, 1, 0.05, v => v.toFixed(2)], ''],
+    ['crowd', 'Crowd size', 'range', [0.5, 1.4, 0.05, v => Math.round(v * 100) + '%'], 'Applies from the next night.'],
+    ['showFps', 'Show performance (F3)', 'toggle', null, 'Frame rate, frame time and draw calls.'],
+  ],
+  DISPLAY: [
+    ['fov', 'Field of view', 'range', [60, 100, 1, v => v + '°'], ''],
+    ['brightness', 'Brightness', 'range', [0.6, 1.6, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['vignette', 'Vignette', 'range', [0, 1.5, 0.05, v => Math.round(v * 100) + '%'], 'Darkened screen edges.'],
+    ['headBob', 'Head bob', 'toggle', null, ''],
+    ['drunkFx', 'Drunk effects', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], 'Wobble, double vision and sway when you\'ve had a few.'],
+  ],
+  AUDIO: [
+    ['vol', 'Master volume', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['music', 'Music (jukebox)', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['sfx', 'Effects', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], 'Pokies, glasses, darts, footsteps.'],
+    ['amb', 'Ambience', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], 'Crowd murmur, rain, crickets, traffic.'],
+  ],
+  CONTROLS: [
+    ['sens', 'Mouse sensitivity', 'range', [0.2, 3, 0.05, v => v.toFixed(2)], ''],
+    ['invertY', 'Invert mouse Y', 'toggle', null, ''],
+    ['touch', 'Touch controls (mobile)', 'select', [['auto', 'Auto — on for phones & tablets'], ['on', 'On'], ['off', 'Off']], 'On-screen stick, look by dragging, action buttons.'],
+    ['_keys', 'Key bindings', 'keys', null, ''],
+  ],
+  GAMEPLAY: [
+    ['timeSpeed', 'Clock speed', 'select', [[0.6, 'Relaxed — nights last longer'], [1, 'Normal'], [1.5, 'Fast']], 'How quickly the pub clock runs.'],
+    ['subtitles', 'Dialogue subtitles', 'toggle', null, ''],
+    ['subSize', 'Subtitle size', 'range', [0.8, 1.6, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['hints', 'Control hints & objectives', 'toggle', null, ''],
+  ],
+  ACCESSIBILITY: [
+    ['reduceMotion', 'Reduce motion', 'toggle', null, 'Turns off head bob, camera sway and the drunk wobble.'],
+    ['drunkFx', 'Drunk effects', 'range', [0, 1, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['subSize', 'Subtitle size', 'range', [0.8, 1.6, 0.05, v => Math.round(v * 100) + '%'], ''],
+    ['timeSpeed', 'Clock speed', 'select', [[0.6, 'Relaxed'], [1, 'Normal'], [1.5, 'Fast']], ''],
+  ],
+};
+const PRESET_KEYS = ['quality', 'resScale', 'shadows', 'aa', 'bloom', 'bloomStr', 'reflections', 'shafts', 'crowd'];
+const KEYS_HELP = [['W A S D', 'Walk'], ['Shift', 'Run'], ['Mouse', 'Look'], ['E', 'Interact'], ['F', 'Sip your drink'], ['C', 'Smoke'], ['G', 'Drop your glass'], ['Tab', 'Phone'], ['Space', 'Spin / pick at a pokie'], ['↑ ↓', 'Change bet'], ['I', 'Insert cash'], ['Enter', 'Collect'], ['Q', 'Stand up / leave a game'], ['Esc', 'Pause'], ['F3', 'Performance overlay']];
+let settingsTab = 'GRAPHICS';
+function openSettings(back) {
+  const wrap = document.createElement('div'); wrap.className = 'settings';
+  const tabs = document.createElement('div'); tabs.className = 'stabs';
+  const body = document.createElement('div'); body.className = 'sbody';
+  wrap.append(tabs, body);
+  const render = () => {
+    tabs.innerHTML = ''; body.innerHTML = '';
+    for (const t in SETTINGS_TABS) { const b = document.createElement('button'); b.textContent = t; b.className = t === settingsTab ? 'on' : ''; b.onclick = () => { settingsTab = t; SFX.click(); render(); }; tabs.appendChild(b); }
+    for (const [key, label, type, opts, help] of SETTINGS_TABS[settingsTab]) {
+      const row = document.createElement('div'); row.className = 'srow';
+      row.innerHTML = `<div class="sl"><b>${label}</b>${help ? `<small>${help}</small>` : ''}</div>`;
+      const ctl = document.createElement('div'); ctl.className = 'sc';
+      if (type === 'keys') { row.classList.add('keys'); ctl.innerHTML = `<div class="kgrid2">${KEYS_HELP.map(([k, d]) => `<span class="kbd">${k}</span><span>${d}</span>`).join('')}</div>`; }
+      else if (type === 'select') {
+        const sel = document.createElement('select');
+        for (const [v, l] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); }
+        sel.value = String(settings[key]);
+        sel.onchange = () => { const v = isNaN(+sel.value) ? sel.value : +sel.value; set(key, v); };
+        ctl.appendChild(sel);
+      } else if (type === 'range') {
+        const [mn, mx, st, fmt] = opts, r = document.createElement('input'), val = document.createElement('span');
+        r.type = 'range'; r.min = mn; r.max = mx; r.step = st; r.value = settings[key]; val.className = 'sv'; val.textContent = fmt(+settings[key]);
+        r.oninput = () => { val.textContent = fmt(+r.value); set(key, +r.value, true); };
+        r.onchange = () => render();
+        ctl.append(r, val);
+      } else if (type === 'toggle') {
+        const b = document.createElement('button'); b.className = 'tog' + (settings[key] ? ' on' : ''); b.textContent = settings[key] ? 'ON' : 'OFF';
+        b.onclick = () => { set(key, !settings[key]); SFX.click(); };
+        ctl.appendChild(b);
+      }
+      row.appendChild(ctl); body.appendChild(row);
+    }
+  };
+  const set = (key, v, live) => {
+    if (key === 'preset') { if (v !== 'custom') applyPreset(v); else settings.preset = 'custom'; }
+    else { settings[key] = v; if (PRESET_KEYS.includes(key)) settings.preset = 'custom'; }
+    if (key === 'reduceMotion' && v) settings.headBob = false;
+    saveSettings(); applySettings();
+    if (!live) render();
+  };
+  render();
+  Game.openPanel('SETTINGS', 'Changes save automatically.', wrap, [
+    { label: 'Reset to defaults', fn: () => { localStorage.removeItem('ld_settings'); Object.assign(settings, { sens: 1, vol: 0.8, music: 0.6, sfx: 1, amb: 1, fov: 72, dynres: true, showFps: false, brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true }); applyPreset('high'); saveSettings(); applySettings(); render(); } },
+    { label: 'Done', fn: () => { Game.closePanel(); back && back(); } }]);
+  $('panel').classList.add('wide');
+}
+function applySettings() {
+  applyQuality();
+  AudioSys.setVolume();
+  if (settings.quality === 'low') (window.__optionalLights || []).forEach(l => l.visible = false);
+  TOUCH.apply();
+  $('hints').style.display = settings.hints && !TOUCH.on ? '' : 'none'; $('objective').style.display = settings.hints ? '' : 'none';
+}
+
+// ---- src/17-mainstory.js ----
+
+// =====================================================================
+//  MAIN STORY: "Save the Royal" — seven chapters, one per night, three endings
+// =====================================================================
+// The Royal's owner is selling to a developer. Over the week you can raise money,
+// dig up the pub's 1888 licence, gather signatures, and turn down a bribe.
+// On Sunday night the council comes to the pub and decides.
+const CHAPTERS = [
+  { title: 'Chapter 1 — New in Town', narr: 'Six months since you moved to Wattle Creek for the warehouse job. You don\'t know many people yet. Everyone, it turns out, knows the Royal.', goal: 'Meet the regulars. Bev runs the raffle and knows everything — she\'s in the lounge.' },
+  { title: 'Chapter 2 — The Suit', narr: 'Word\'s out: old Frank is selling the Royal. Tonight there\'s a bloke in a suit in the lounge, and he isn\'t here for the parma.', goal: 'There\'s a man in a suit in the lounge. Find out what he wants.' },
+  { title: 'Chapter 3 — The Jar', narr: 'Bev has had enough. A big jar has appeared on the bar with SAVE THE ROYAL written on it in texta. Trivia proceeds go in the jar tonight.', goal: 'Chip in to the Save the Royal jar on the bar. Win trivia and the prize goes in too.' },
+  { title: 'Chapter 4 — 1888', narr: 'Old Mick swears the pub\'s original 1888 licence still exists. Joan\'s grandfather framed it, and Frank hung a footy photo over the top years ago.', goal: 'Find the 1888 licence. Mick reckons it\'s behind an old footy photo on the front wall of the bar.' },
+  { title: 'Chapter 5 — The Big Night', narr: 'Friday. Karaoke\'s a fundraiser tonight — every point you score, the crowd puts a dollar in the jar. Shazza\'s been warming up since lunch.', goal: 'Karaoke fundraiser from 8:30pm: sing at the mic in the lounge. Points become dollars for the jar.' },
+  { title: 'Chapter 6 — Signatures', narr: 'The council will only heritage-list the Royal if the locals put their names to it. Bev has a petition. The suit is back, with a fatter envelope.', goal: 'Get the petition from Bev, then get the regulars to sign it.' },
+  { title: 'Chapter 7 — Last Drinks', narr: 'Sunday. The council is coming to the Royal at 8pm to decide its future. Rent\'s due tonight too. No pressure.', goal: 'The council meeting starts at 8pm in the bar. Be there.' },
+];
+const STORY = {
+  st() { const f = Game.state.flags; return f.story || (f.story = { fund: 0, letter: null, licence: false, sigs: {}, sheet: false, bribe2: null, ending: null, met: false }); },
+  chapter() { return CHAPTERS[Game.state.day]; },
+  goal() {
+    const s = Game.state, S = this.st(), d = s.day;
+    if (d === 0 && S.met) return 'Have a yarn with the regulars. Shout one a drink.';
+    if (d === 1 && S.letter) return S.letter === 'signed' ? 'You signed the suit\'s letter. Hope nobody finds out.' : 'You told the suit where to go. The regulars will hear about it.';
+    if (d === 2) return `Chip in to the Save the Royal jar on the bar. Fund: ${fmt0(S.fund)}.`;
+    if (d === 3 && S.licence) return 'You found the 1888 licence. Bev will want to see that.';
+    if (d === 5) { const n = Object.keys(S.sigs).length; return S.sheet ? `Get the regulars to sign the petition (${n}/6, including you).` : 'Get the petition from Bev in the lounge.'; }
+    if (d === 6 && S.ending) return 'The meeting\'s over. Enjoy the rest of the night.';
+    return this.chapter().goal;
+  },
+  // ---------------------------------------------------------- world bits
+  build() {
+    // the jar on the bar
+    const F = BAR.front, jar = new THREE.Group(); jar.position.set(F - 0.16, 1.112, -5.3); scene.add(jar);
+    const glass = new THREE.Mesh(new THREE.LatheGeometry([V3(0, 0), V3(0.075, 0), V3(0.08, 0.02), V3(0.08, 0.2), V3(0.06, 0.22), V3(0.06, 0.24)], 20), glassMat); jar.add(glass);
+    this.coins = new THREE.Group(); jar.add(this.coins);
+    const lbl = signTex(['SAVE THE', 'ROYAL!'], { w: 256, h: 160, bg: '#f4ead6', color: ['#c7352b', '#c7352b'], sizes: [56, 64], font: "'Permanent Marker', cursive" });
+    const lp = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.09), new THREE.MeshBasicMaterial({ map: lbl, transparent: true })); lp.position.set(0.083, 0.11, 0); lp.rotation.y = Math.PI / 2; jar.add(lp);
+    this.jar = jar; jar.visible = false;
+    addInteract({ id: 'jar', pos: V3(F - 0.16, 1.25, -5.3), r: 2.2, enabled: () => this.jar.visible && !MG.active, label: () => `Save the Royal jar — ${fmt0(this.st().fund)} so far`, action: () => this.donate() });
+    // the licence behind the footy photo
+    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => Game.state.day >= 3 && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
+  },
+  spawn() {
+    const s = Game.state, S = this.st();
+    this.jar.visible = s.day >= 2 && S.ending !== 'sold';
+    this.refreshCoins();
+    this.clive = null; this.meetingDone = !!S.ending;
+    if (s.day === 1 || s.day === 5) {
+      const n = mkNPC({ name: 'Clive Marsh', role: 'staff', shirt: { tile: 'collar', c: 0x2a2c34 }, pants: { tile: 'cloth', c: 0x2a2c34 }, hair: 0x8a8a8a, style: 'short', glasses: true, beard: null, skinI: 0, girth: 1.05 });
+      const p = V3(7.6, 0, -2.9); n.pos.copy(p); n.ry = Math.PI * 0.85; MG.lockNPC(n, p, Math.PI * 0.85, 'stand');
+      n.eventTalk = () => this.talkClive(n); this.clive = n;
+    }
+  },
+  refreshCoins() {
+    const c = this.coins; while (c.children.length) c.remove(c.children[0]);
+    const n = Math.min(60, Math.round(this.st().fund / 6));
+    for (let i = 0; i < n; i++) { const m = new THREE.Mesh(G.cyl8, i % 4 ? MAT.brass : M({ color: 0x3a8a4a, roughness: 0.8 })); const a = rand(0, 6.28), r = rand(0, 0.06); m.position.set(Math.cos(a) * r, 0.01 + i * 0.0028, Math.sin(a) * r); m.scale.set(i % 4 ? 0.013 : 0.03, 0.002, i % 4 ? 0.013 : 0.015); m.rotation.set(rand(-0.3, 0.3), rand(0, 3), 0); c.add(m); }
+  },
+  addFund(amt, why) { const S = this.st(); S.fund += amt; this.refreshCoins(); if (why) Game.toast(`${why} — the Save the Royal fund is at ${fmt0(S.fund)}.`); },
+  donate() {
+    const s = Game.state;
+    const give = a => () => { if (!Game.spend(a)) return; s.night.extra -= a; this.addFund(a, `You put ${fmt0(a)} in the jar`); relUp('Bev', Math.min(12, a / 5)); s.mood = Math.min(100, s.mood + 3); SFX.coin(V3(BAR.front, 1.2, -5.3)); Game.closePanel(); };
+    Game.openPanel('SAVE THE ROYAL', `Bev's jar. ${fmt0(this.st().fund)} so far. Every dollar goes to the community bid for the freehold.`, Game.optList([5, 20, 50, 100].map(a => ({ label: `Put in ${fmt0(a)}`, price: fmt0(a), disabled: s.wallet < a, fn: give(a) })).concat([{ label: 'Not right now', fn: () => Game.closePanel() }])));
+  },
+  findLicence() {
+    const S = this.st(); S.licence = true;
+    SFX.noise(0.4, { freq: 900, q: 0.8, gain: 0.08 });
+    achieve('historian');
+    Game.openPanel('THE 1888 LICENCE', '<i>Behind the footy photo, taped to the backing board, a brittle yellow document in copperplate:</i>', `<p style="font-family:Rye,serif;font-size:17px;line-height:1.6;text-align:center;padding:10px;background:#efe2c0;color:#3a2410;border-radius:4px">COLONY OF NEW SOUTH WALES<br>PUBLICAN'S GENERAL LICENSE<br><b>THE ROYAL HOTEL, WATTLE CREEK</b><br>granted this 14th day of March, 1888</p><p>That's exactly the kind of thing a heritage council loves. Mick's going to cry.</p>`);
+    const mick = REG.here('Old Mick'); if (mick) setTimeout(() => bark(mick, 'You FOUND it? Joanie\'s grandad\'s licence! Well I\'ll be…', true), 1500);
+  },
+  talkClive(n) {
+    const s = Game.state, S = this.st();
+    if (s.day === 1) {
+      if (S.letter) { Game.openPanel('CLIVE MARSH', '"Pleasure doing business." / "Your loss, champ."'); return; }
+      Game.openPanel('CLIVE MARSH', '<span style="opacity:.7">Marsh Living · "Boutique apartments for the modern country lifestyle"</span><br><br>"You look like a reasonable person. Frank\'s selling, the council\'s dithering, and I need a few locals to sign a little letter of support. Hundred and fifty bucks for your trouble. Cash."', Game.optList([
+        { label: 'Sign the letter', d: 'Easy money. Nobody will know. Probably.', price: '+$150', fn: () => { S.letter = 'signed'; s.wallet += 150; s.night.extra += 150; Game.closePanel(); bark(n, 'Smart. Very smart.', true); Game.toast('You signed. $150 cash. It feels heavier than it should.'); } },
+        { label: '"Not for sale, mate."', d: 'Turn him down', fn: () => { S.letter = 'refused'; achieve('incorruptible'); for (const k in REGULARS) relUp(k, 4); Game.closePanel(); bark(n, 'Suit yourself. Everyone\'s got a price.', true); } },
+        { label: '"Get out of our pub."', d: 'Loudly. In front of everyone.', fn: () => { S.letter = 'refused'; achieve('incorruptible'); for (const k in REGULARS) relUp(k, 7); s.mood = Math.min(100, s.mood + 8); Game.closePanel(); SFX.cheer(n.pos, 1); Game.subtitle('<b>Shazza:</b> YEAH! You tell him!', 3); bark(n, 'You\'ll regret this.', true); } }]), []);
+    } else {
+      if (S.bribe2) { Game.openPanel('CLIVE MARSH', '"…"'); return; }
+      Game.openPanel('CLIVE MARSH', '"Last offer. Five hundred dollars for that petition sheet. It gets lost, nobody\'s the wiser, everyone moves on."', Game.optList([
+        { label: 'Hand over the sheet', d: 'Five hundred dollars is five hundred dollars', price: '+$500', disabled: !S.sheet, fn: () => { S.bribe2 = 'took'; S.sheet = false; S.sigs = {}; s.wallet += 500; s.night.extra += 500; for (const k in REGULARS) relUp(k, -25); Game.closePanel(); bark(n, 'Pleasure.', true); Game.toast('The petition is gone. So is the trust of everyone who signed it.', true); } },
+        { label: '"Shove it, Clive."', fn: () => { S.bribe2 = 'refused'; achieve('incorruptible'); for (const k in REGULARS) relUp(k, 5); Game.closePanel(); bark(n, 'Fine. See you at the meeting.', true); } }]), []);
+    }
+  },
+  // extra options when you yarn with a regular
+  talkOpts(n, opts) {
+    const s = Game.state, S = this.st(), name = n.regular;
+    if (s.day === 0 && name === 'Bev') S.met = true;
+    if (s.day === 5 && name === 'Bev' && !S.sheet && S.bribe2 !== 'took') opts.unshift({ label: 'Take the petition', d: 'Get the regulars to sign it', fn: () => { S.sheet = true; S.sigs.Bev = true; Game.closePanel(); bark(n, 'Every name counts, love. Start with Mick — he\'d sign anything for this place.', true); } });
+    if (s.day >= 5 && S.sheet && !S.sigs[name]) {
+      const ok = rel(name) >= 15 || (name === 'Old Mick');
+      opts.unshift({ label: `Ask ${name} to sign the petition`, d: ok ? 'They\'ll sign' : 'They don\'t know you well enough yet', fn: () => { Game.closePanel(); if (ok) { S.sigs[name] = true; bark(n, choice(['Give it here. Where do I sign?', 'For the Royal? Too right.', 'Done. Bloody developers.']), true); SFX.tone(1400, 0.1, { gain: 0.04 }); } else bark(n, 'Dunno, mate. I barely know ya. Ask me after a schooner or two.', true); } });
+    }
+    if (s.day === 3 && name === 'Old Mick' && !S.licence) opts.unshift({ label: 'Ask about the 1888 licence', fn: () => { Game.closePanel(); bark(n, 'Front wall of the bar, by the door. Frank stuck a footy photo over it in \'92. It\'s still under there, I\'d put money on it.', true); } });
+    if (S.licence && name === 'Bev' && !S.showedBev) opts.unshift({ label: 'Show Bev the 1888 licence', fn: () => { S.showedBev = true; relUp('Bev', 15); Game.closePanel(); bark(n, 'Oh my word. Oh, that changes EVERYTHING. The council can\'t ignore this.', true); } });
+  },
+  // ---------------------------------------------------------- nightly hooks
+  update() {
+    const s = Game.state, S = this.st();
+    if (s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
+  },
+  score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
+  meeting() {
+    const S = this.st(), sc = this.score(), there = isInside(player.pos.x, player.pos.z) && player.level === 0;
+    S.ending = sc >= 7 ? 'saved' : sc >= 4 ? 'reprieve' : 'sold';
+    const sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0);
+    const lines = [
+      ['Councillor Hayes', 'Right. We\'re here to decide on the Marsh Living application for the Royal Hotel site.'],
+      ['Clive Marsh', 'Forty-two boutique apartments. Jobs. Progress. Frankly this building is past it.'],
+      ['Bev', `We've got a petition with ${sigs} signature${sigs === 1 ? '' : 's'}${S.fund ? `, and ${fmt0(S.fund)} raised by the people who drink here` : ''}.`],
+      S.licence ? ['Bev', 'And THIS. The original publican\'s licence. Eighteen eighty-eight. This pub is older than Federation.'] : ['Old Mick', 'This pub\'s older than all of us. That ought to count for something.'],
+      S.letter === 'signed' ? ['Clive Marsh', 'I also have letters of support from locals. Including one from somebody in this very room.'] : ['Shazza', 'And nobody in here took his dirty money, either!'],
+      ['Councillor Hayes', { saved: 'Given the heritage evidence and the community\'s support, council will list the Royal. The application is refused.', reprieve: 'Council will defer the decision for twelve months to look at the heritage question properly.', sold: 'I\'m sorry. Without more support, council can\'t stand in the way of the sale.' }[S.ending]],
+    ];
+    if (!there) { Game.toast(`📱 <b>Bev:</b> ${S.ending === 'saved' ? 'WE DID IT!!! The Royal is SAVED. Where ARE you?!' : S.ending === 'reprieve' ? 'Twelve months reprieve. We fight on. Missed you there, love.' : 'It\'s over. They\'re selling. Wish you\'d been there.'}`, true); this.finale(); return; }
+    Game.fade(0, 0.7); SFX.bell(V3(-9, 2.5, -8), 2);
+    let i = 0;
+    const next = () => {
+      if (i >= lines.length) { Game.closePanel(); Game.fade(0.7, 0); this.finale(); return; }
+      const [who, l] = lines[i++];
+      Game.openPanel('THE COUNCIL MEETING', `<span style="opacity:.6">The bar is packed. Even the pokies have gone quiet.</span>`, `<p style="font-size:18px;line-height:1.5"><b style="color:var(--gold)">${who}:</b> ${l}</p>`, [{ label: i < lines.length ? 'Continue' : 'And…', fn: next }]);
+    };
+    next();
+  },
+  finale() {
+    const S = this.st();
+    if (S.ending === 'saved') { achieve('saved'); SFX.cheer(V3(-5, 1.5, -8), 3); NPCS.forEach(n => { if (n.role === 'patron') n.cheerT = 3; }); Game.subtitle('<b>The whole pub:</b> ROYAL! ROYAL! ROYAL!', 5); Music.song = 0; Music.level = 1; Game.state.mood = 100; }
+    else if (S.ending === 'reprieve') { SFX.cheer(V3(-5, 1.5, -8), 1); Game.subtitle('<b>Bev:</b> Twelve months. We\'ll take it. Drinks are on me — well, one each.', 5); Game.state.mood = Math.min(100, Game.state.mood + 15); }
+    else { Game.subtitle('<b>Old Mick:</b> …Well. Last drinks, then.', 5); Game.state.mood = Math.max(0, Game.state.mood - 20); Music.song = 1; }
+  },
+  // shown in the end-of-week summary
+  epilogue() {
+    const S = this.st(), f = Game.state.flags, e = S.ending || (this.score() >= 7 ? 'saved' : this.score() >= 4 ? 'reprieve' : 'sold');
+    const head = { saved: ['THE ROYAL IS SAVED', 'Council heritage-listed the Royal. With the community fund behind her, Bev put in a bid for the freehold — and got it. The Royal pours on.'], reprieve: ['A TWELVE-MONTH REPRIEVE', 'The council kicked the can down the road. The fight for the Royal goes on, and so do the Thursday raffles.'], sold: ['LAST DRINKS', 'Marsh Living got its apartments. The Royal poured its final beer in March. Somebody nicked the bell on the way out.'] }[e];
+    const lines = [
+      ['Old Mick', e === 'sold' ? 'Drinks at the RSL now. Says the stools are wrong.' : 'Got his plaque back on the stool. Bolted down this time.'],
+      ['Davo', (f.davoGood || 0) >= 3 ? 'Four months off the pokies. Took the kids to the Gold Coast.' : 'Still says she\'s due.'],
+      ['Shazza', 'Went to Bali. Came back Tuesday. Telling everyone about it still.'],
+      ['Kenno', f.dartTip ? 'Reckons you\'re the only one who\'s ever been worth teaching.' : 'Won the Royal darts comp again. Third title.'],
+      ['Spud', 'Finished his apprenticeship. Still owes everyone money.'],
+      ['Bev', e === 'saved' ? 'The new licensee of the Royal Hotel. First rule: no suits.' : 'Still runs the raffle. Somewhere.'],
+    ];
+    return `<div class="epi"><h3>${head[0]}</h3><p>${head[1]}</p><ul>${lines.map(([n, l]) => `<li><b>${n}</b> — ${l}</li>`).join('')}</ul></div>`;
+  },
+};
+ACH_LIST.push(['historian', 'History Buff', 'Find the Royal\'s 1888 licence.'], ['incorruptible', 'Not For Sale', 'Turn down the developer\'s money.'], ['saved', 'Save the Royal', 'Win the council vote and save the pub.']);
+
+// ---- src/18-touch.js ----
+
+// =====================================================================
+//  TOUCH CONTROLS: left stick to walk, drag anywhere else to look, context buttons
+// =====================================================================
+const TOUCH = {
+  on: false, mx: 0, my: 0, run: false, stickId: null, lookId: null, lx: 0, ly: 0, mode: '',
+  detect() { return matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0; },
+  apply() {
+    this.on = settings.touch === 'on' || (settings.touch === 'auto' && this.detect());
+    document.body.classList.toggle('touchmode', this.on);
+    $('touch').classList.toggle('hidden', !this.on || Game.mode !== 'play');
+    if (this.on) { input.locked = true; }
+    this.mode = '';
+  },
+  build() {
+    const st = $('tStick'), knob = st.firstElementChild;
+    const stickMove = t => { const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2; let dx = (t.clientX - cx) / R, dy = (t.clientY - cy) / R; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } this.mx = dx; this.my = dy; knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`; };
+    st.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; this.stickId = t.identifier; stickMove(t); }, { passive: false });
+    addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === this.stickId) { e.preventDefault(); stickMove(t); }
+        else if (t.identifier === this.lookId) { e.preventDefault(); input.mx += (t.clientX - this.lx) * 1.7; input.my += (t.clientY - this.ly) * 1.7 * (settings.invertY ? -1 : 1); this.lx = t.clientX; this.ly = t.clientY; }
+      }
+    }, { passive: false });
+    const end = e => { for (const t of e.changedTouches) { if (t.identifier === this.stickId) { this.stickId = null; this.mx = this.my = 0; knob.style.transform = ''; } if (t.identifier === this.lookId) this.lookId = null; } };
+    addEventListener('touchend', end); addEventListener('touchcancel', end);
+    // drag on the 3D view to look (not while sat at a pokie or scratching a card — those need taps)
+    renderer.domElement.addEventListener('touchstart', e => {
+      if (!this.on || Game.mode !== 'play' || player.seated || (MG.active && MG.active.cursor)) return;
+      const t = e.changedTouches[0]; this.lookId = t.identifier; this.lx = t.clientX; this.ly = t.clientY; e.preventDefault();
+    }, { passive: false });
+    $('tMenu').onclick = () => { if (Game.mode !== 'play') return; if (!$('panel').classList.contains('hidden')) { Game.closePanel(); return; } Game.paused = true; $('resume').classList.remove('hidden'); };
+  },
+  // buttons change with what you're doing
+  buttons() {
+    let mode = 'walk';
+    if (Game.mode !== 'play') mode = 'none';
+    else if (player.seated) mode = 'pokie';
+    else if (MG.active) mode = MG.active === Darts ? 'darts' : MG.active === BarShift ? 'shift' : MG.active === Karaoke ? 'karaoke' : 'mg';
+    if (mode === this.mode) return;
+    this.mode = mode;
+    const B = $('tBtns'); B.innerHTML = '';
+    const btn = (label, cls, down, up) => { const b = document.createElement('button'); b.innerHTML = label; b.className = cls || ''; b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); AudioSys.init(); down && down(); }, { passive: false }); b.addEventListener('touchend', e => { e.preventDefault(); b.classList.remove('on'); up && up(); }, { passive: false }); b.onclick = () => { if (!('ontouchstart' in window)) { down && down(); up && up(); } }; B.appendChild(b); return b; };
+    const key = code => () => Game.onKey(code);
+    $('tStick').style.display = mode === 'walk' ? '' : 'none';
+    if (mode === 'walk') {
+      btn('USE<small>E</small>', 'big', key('KeyE'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('DROP', '', key('KeyG'));
+      const r = btn('RUN', 'tog', () => { this.run = !this.run; r.classList.toggle('lit', this.run); });
+      btn('📱', '', key('Tab'));
+    } else if (mode === 'darts') {
+      btn('THROW<small>hold, release in the gold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
+      btn('STEADY', '', () => { keys.ShiftLeft = true; }, () => { keys.ShiftLeft = false; });
+      btn('QUIT', '', key('KeyQ'));
+    } else if (mode === 'shift') {
+      btn('POUR<small>hold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
+      btn('POT', '', key('Digit1')); btn('SCHOONER', '', key('Digit2')); btn('PINT', '', key('Digit3'));
+      btn('SERVE', '', key('Space')); btn('CLOCK OFF', '', key('KeyQ'));
+    } else if (mode === 'karaoke') {
+      btn('SING!', 'big huge', key('Space')); btn('QUIT', '', key('KeyQ'));
+    } else if (mode === 'mg') {
+      btn('DONE', '', key('KeyQ'));
+    }
+  },
+  update() {
+    if (!this.on) return;
+    $('touch').classList.toggle('hidden', Game.mode !== 'play');
+    this.buttons();
+  },
+};
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -7613,7 +8111,7 @@ async function boot() {
     buildFacade(); buildDoors();
     setLoad(0.55, 'Tapping the kegs…'); await tick();
     buildShared(); buildInterior(); buildDartboard();
-    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build();
+    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build();
     setLoad(0.7, 'Wiring up the pokies…'); await tick();
     MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
     buildAtmosphere();
@@ -7624,7 +8122,7 @@ async function boot() {
       const mob = backMirror.onBeforeRender;
       backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };
     }
-    setupInput(); wireUI();
+    setupInput(); wireUI(); TOUCH.build();
     setTimeOfDay(18.4, 'clear');
     Game.state.day = 0; Game.state.event = 'monday';
     spawnPatrons(10);
@@ -7632,7 +8130,7 @@ async function boot() {
     // warm up shaders + bake interior reflections
     renderer.compile(scene, camera);
     captureInteriorEnv();
-    applyQuality();
+    applySettings();
     setLoad(1, 'Doors open.');
     await new Promise(r => setTimeout(r, 300));
     $('loading').classList.add('hidden');
@@ -7644,5 +8142,5 @@ async function boot() {
 }
 requestAnimationFrame(frame);
 boot();
-window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
+window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
 window.__game = { Game, REG, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

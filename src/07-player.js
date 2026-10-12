@@ -158,13 +158,13 @@ function setupInput() {
     Game.onKey(e.code, e);
   });
   addEventListener('keyup', e => { keys[e.code] = false; });
-  addEventListener('mousemove', e => { if (input.locked) { input.mx += e.movementX; input.my += e.movementY; } });
+  addEventListener('mousemove', e => { if (input.locked) { input.mx += e.movementX; input.my += e.movementY * (settings.invertY ? -1 : 1); } });
   document.addEventListener('pointerlockchange', () => { input.locked = document.pointerLockElement === renderer.domElement; Game.onLockChange(input.locked); });
   renderer.domElement.addEventListener('mousedown', e => Game.onCanvasClick(e));
   addEventListener('mouseup', e => { if (MG.active) MG.up(e); });
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 }
-function lockPointer() { try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+function lockPointer() { if (TOUCH.on) { input.locked = true; if (typeof Game !== 'undefined') Game.onLockChange(true); return; } try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
 
 // ---------- body for mirror reflection ----------
 let playerBody;
@@ -371,24 +371,25 @@ function updatePlayer(dt, t) {
   let moving = false;
   const wantFov = player.seated ? 55 : settings.fov;
   if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = damp(camera.fov, wantFov, 5, dt); camera.updateProjectionMatrix(); }
-  bloom.strength = damp(bloom.strength, player.seated ? 0.22 : (HIGH() ? 0.55 : 0.4), 4, dt);
+  bloom.strength = damp(bloom.strength, player.seated ? Math.min(0.22, settings.bloomStr) : settings.bloomStr, 4, dt);
   if (player.seated) {
     player.seatT += dt;
     const k = smooth(clamp(player.seatT / 0.8, 0, 1)), sc = seatCam();
     camera.position.lerpVectors(player.camFrom.pos, sc.pos, k);
     camera.quaternion.slerpQuaternions(player.camFrom.q, sc.q, k);
     // drunk sway even when seated
-    camera.rotateZ(Math.sin(t * 0.6) * 0.03 * drunk); camera.rotateX(Math.sin(t * 0.43) * 0.02 * drunk);
+    const swayK = settings.reduceMotion ? 0 : settings.drunkFx; camera.rotateZ(Math.sin(t * 0.6) * 0.03 * drunk * swayK); camera.rotateX(Math.sin(t * 0.43) * 0.02 * drunk * swayK);
     player.pos.copy(player.seated.seatW);
   } else {
     const fw = V3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)), rt = V3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
     const wish = V3();
     if (Game.canMove()) {
       if (keys.KeyW || keys.ArrowUp) wish.add(fw); if (keys.KeyS || keys.ArrowDown) wish.sub(fw);
+      if (TOUCH.on) { wish.addScaledVector(fw, -TOUCH.my); wish.addScaledVector(rt, TOUCH.mx); }
       if (keys.KeyD || keys.ArrowRight) wish.add(rt); if (keys.KeyA || keys.ArrowLeft) wish.sub(rt);
     }
     if (player.auto) { wish.set(player.auto.x - player.pos.x, 0, player.auto.z - player.pos.z); player.yaw += angleDiff(player.yaw, Math.atan2(-wish.x, -wish.z)) * Math.min(1, dt * 3); }
-    const run = keys.ShiftLeft || keys.ShiftRight;
+    const run = keys.ShiftLeft || keys.ShiftRight || (TOUCH.on && (TOUCH.run || Math.hypot(TOUCH.mx, TOUCH.my) > 0.97));
     const spd = (run ? 4.2 : 1.9) * (1 - drunk * 0.25);
     if (wish.lengthSq() > 0) { wish.normalize(); moving = true; }
     // drunk drift
@@ -413,9 +414,9 @@ function updatePlayer(dt, t) {
     player.groundY = damp(player.groundY ?? gy, gy, 12, dt);
     // footsteps
     if (sp > 0.4 && Math.floor(player.bob / Math.PI) !== player.lastStep) { player.lastStep = Math.floor(player.bob / Math.PI); SFX.step(surfaceAt(player.pos.x, player.pos.z, player.level), player.pos.clone()); }
-    const bobY = Math.abs(Math.sin(player.bob)) * 0.045 * Math.min(1, sp / 2), bobX = Math.cos(player.bob) * 0.025 * Math.min(1, sp / 2);
+    const bobK = settings.headBob && !settings.reduceMotion ? 1 : 0, bobY = Math.abs(Math.sin(player.bob)) * 0.045 * Math.min(1, sp / 2) * bobK, bobX = Math.cos(player.bob) * 0.025 * Math.min(1, sp / 2) * bobK;
     camera.position.set(player.pos.x + rt.x * bobX, player.groundY + player.eye - bobY + 0.02, player.pos.z + rt.z * bobX);
-    const sway = drunk * drunk;
+    const sway = drunk * drunk * (settings.reduceMotion ? 0 : settings.drunkFx);
     camera.rotation.set(player.pitch + Math.sin(t * 0.47) * 0.05 * sway, player.yaw + Math.sin(t * 0.31) * 0.06 * sway, Math.sin(t * 0.6) * 0.06 * sway + bobX * 0.15 - vm.lag.x * 0.5);
   }
   updateDrinkVM(dt, t, moving);

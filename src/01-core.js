@@ -32,7 +32,20 @@ function angleDiff(a, b) { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 
 const savedSettings = store('ld_settings');
-const settings = Object.assign({ quality: 'high', sens: 1, vol: 0.8, music: 0.6, fov: 72 }, savedSettings || {});
+const settings = Object.assign({
+  quality: 'high', preset: 'high', sens: 1, vol: 0.8, music: 0.6, sfx: 1, amb: 1, fov: 72,
+  resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1, dynres: true, showFps: false,
+  touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
+}, savedSettings || {});
+// graphics presets: each sets a bundle of individual options (changing one by hand makes it 'custom')
+const PRESETS = {
+  low: { quality: 'low', resScale: 0.85, shadows: 'low', aa: false, bloom: true, bloomStr: 0.4, reflections: false, shafts: false, crowd: 0.7 },
+  medium: { quality: 'high', resScale: 0.9, shadows: 'low', aa: false, bloom: true, bloomStr: 0.5, reflections: false, shafts: true, crowd: 0.85 },
+  high: { quality: 'high', resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1 },
+  ultra: { quality: 'high', resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.6, reflections: true, shafts: true, crowd: 1.25 },
+};
+function applyPreset(name) { if (PRESETS[name]) Object.assign(settings, PRESETS[name]); settings.preset = name; }
+if (savedSettings && !savedSettings.preset && savedSettings.quality) applyPreset(savedSettings.quality === 'low' ? 'low' : 'high');
 function saveSettings() { store('ld_settings', settings); }
 const HIGH = () => settings.quality === 'high';
 
@@ -70,7 +83,7 @@ function pbr(name) { const t = ASSETS.tex[name]; return t && t.c ? t : null; }
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: false, powerPreference: 'high-performance', stencil: false });
 // dynamic resolution: renderScale is adjusted at runtime to hold the frame rate
 let renderScale = 1;
-const basePR = () => Math.min(window.devicePixelRatio, HIGH() ? 1.25 : 0.8);
+const basePR = () => Math.min(window.devicePixelRatio, settings.preset === 'ultra' ? 1.6 : HIGH() ? 1.25 : 0.9) * settings.resScale;
 renderer.setPixelRatio(basePR());
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -79,7 +92,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 // first launch: pick Low automatically on integrated / mobile / software GPUs
 try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); window.__gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; } catch (e) { window.__gpu = ''; }
-if ((!savedSettings || !savedSettings.quality) && /intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(window.__gpu)) { settings.quality = 'low'; renderer.setPixelRatio(Math.min(window.devicePixelRatio, 0.8)); }
+if ((!savedSettings || !savedSettings.quality) && /intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(window.__gpu)) { applyPreset('low'); renderer.setPixelRatio(basePR()); }
 renderer.shadowMap.type = HIGH() ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false; // static world: shadow maps are refreshed on demand (big perf win)
 renderer.info.autoReset = false; // counted per frame across all post passes (see the F3 overlay)
@@ -91,7 +104,7 @@ const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeigh
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
-const composerRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: HIGH() ? 4 : 0 });
+const composerRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: settings.aa ? 4 : 0 });
 const composer = new EffectComposer(renderer, composerRT);
 composer.setPixelRatio(renderer.getPixelRatio());
 composer.setSize(innerWidth, innerHeight);
@@ -152,10 +165,17 @@ function applyQuality() {
   renderer.setPixelRatio(basePR() * renderScale);
   composer.setPixelRatio(renderer.getPixelRatio());
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
-  bloom.enabled = true; bloom.strength = HIGH() ? 0.55 : 0.4;
-  renderer.shadowMap.type = HIGH() ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-  if (window.__mirror) window.__mirror.visible = HIGH();
-  if (window.__mirrorFallback) window.__mirrorFallback.visible = !HIGH();
+  bloom.enabled = settings.bloom; bloom.strength = settings.bloomStr;
+  const shadowsOn = settings.shadows !== 'off', type = settings.shadows === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  if (renderer.shadowMap.enabled !== shadowsOn || renderer.shadowMap.type !== type) { renderer.shadowMap.enabled = shadowsOn; renderer.shadowMap.type = type; scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); }); }
+  if (window.__mirror) window.__mirror.visible = settings.reflections;
+  if (window.__mirrorFallback) window.__mirrorFallback.visible = !settings.reflections;
+  if (window.__gentsMirror) window.__gentsMirror.visible = settings.reflections;
+  fxPass.uniforms.uVig.value = 0.35 * settings.vignette;
+  camera.fov = settings.fov; camera.updateProjectionMatrix();
+  document.documentElement.style.setProperty('--subsize', settings.subSize);
+  if (typeof perf !== 'undefined') perf.show = settings.showFps || /[?&]perf/.test(location.search);
+  if (typeof Game !== 'undefined') Game.timeScale = 0.8 / 60 * settings.timeSpeed;
   // Low: drop the optional lights and the decorative light shafts/dust
   (window.__optionalLights || []).forEach(l => l.visible = HIGH());
   if (typeof shadowDirty !== 'undefined') shadowDirty = 2;
@@ -175,8 +195,8 @@ const AudioSys = (() => {
     comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
     master = ctx.createGain(); master.gain.value = settings.vol;
     master.connect(comp); comp.connect(ctx.destination);
-    sfx = ctx.createGain(); sfx.connect(master);
-    amb = ctx.createGain(); amb.connect(master);
+    sfx = ctx.createGain(); sfx.gain.value = settings.sfx; sfx.connect(master);
+    amb = ctx.createGain(); amb.gain.value = settings.amb; amb.connect(master);
     mus = ctx.createGain(); mus.gain.value = settings.music; mus.connect(master);
     // reverb
     verb = ctx.createConvolver();
@@ -357,7 +377,7 @@ const AudioSys = (() => {
     if (clinkT <= 0 && state.inside) { clinkT = rand(2, 7) / Math.max(0.3, crowd); S.clink(V3(rand(-10, 10), 1, rand(-16, 0))); }
     Music.update(dt, state);
   }
-  function setVolume() { if (master) master.gain.value = settings.vol; if (mus) mus.gain.value = settings.music; }
+  function setVolume() { if (master) master.gain.value = settings.vol; if (mus) mus.gain.value = settings.music; if (sfx) sfx.gain.value = settings.sfx; if (amb) amb.gain.value = settings.amb; }
   return { init, S, update, amp, setVolume, get ctx() { return ctx; }, get mus() { return mus; }, get started() { return started; }, spatial, tone, noise };
 })();
 const SFX = AudioSys.S;
@@ -370,7 +390,29 @@ const Music = (() => {
     { name: 'Knock-Off Boogie', bpm: 124, prog: ['E', 'E', 'A', 'B'], feel: 'straight' },
     { name: 'Sunday Arvo Shuffle', bpm: 104, prog: ['A', 'D', 'E', 'D'], feel: 'shuffle' },
     { name: 'Back of the Ute', bpm: 138, prog: ['G', 'C', 'D', 'C'], feel: 'straight' },
-    { name: 'Bush Telegraph', bpm: 96, prog: ['D', 'G', 'A', 'G'], feel: 'shuffle' }];
+    { name: 'Bush Telegraph', bpm: 96, prog: ['D', 'G', 'A', 'G'], feel: 'shuffle' },
+    // real recordings (assets/music) — the jukebox falls back to the synth band if a file can't load
+    { name: 'Friday Knock-Off', file: 'music/friday-knock-off.mp3', artist: 'cyelune', feel: '6 min · the Friday anthem' },
+    { name: 'Maccas Farm', file: 'music/maccas-farm.mp3', artist: 'cyelune', feel: '2:52' },
+    { name: 'The Uni People Have No Clue', file: 'music/the-uni-people-have-no-clue.mp3', artist: 'cyelune', feel: '3:10' },
+    { name: 'One Nation, Pauline', file: 'music/one-nation-pauline.mp3', artist: 'cyelune', feel: '3:46' }];
+  let audioEl = null, audioSrc = null, broken = {};
+  // play a recorded track through the same spatial jukebox chain as the synth band
+  function playFile(i) {
+    const S = SONGS[i];
+    if (!ctx || !S.file || broken[i]) return false;
+    if (!audioEl) { audioEl = new Audio(); audioEl.crossOrigin = 'anonymous'; audioEl.preload = 'auto'; audioSrc = ctx.createMediaElementSource(audioEl); audioSrc.connect(out); audioEl.onended = () => { const files = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0 && k !== song); setSong(files.length ? choice(files) : 0); }; }
+    audioEl.onerror = () => { broken[i] = true; if (song === i) setSong(0); };
+    audioEl.src = assetURL(S.file); audioEl.currentTime = 0;
+    const p = audioEl.play(); if (p && p.catch) p.catch(() => {});
+    return true;
+  }
+  function setSong(v) {
+    song = ((v % SONGS.length) + SONGS.length) % SONGS.length; bar = 0;
+    if (SONGS[song].file) { if (!playFile(song)) { pendingFile = true; } }
+    else if (audioEl) audioEl.pause();
+  }
+  let pendingFile = false;
   const ROOT = { E: 82.41, A: 110, B: 123.47, D: 73.42, G: 98, C: 65.41 };
   function ks(freq, dur, bright = 0.5) {
     const sr = ctx.sampleRate, n = Math.floor(sr * dur), b = new Float32Array(n);
@@ -433,11 +475,13 @@ const Music = (() => {
   let level = 0.5;
   function update(dt, state) {
     if (!ready) return;
-    while (nextBar < ctx.currentTime + 0.3) nextBar = scheduleBar(Math.max(nextBar, ctx.currentTime + 0.05));
+    if (pendingFile) { pendingFile = false; if (!playFile(song)) setSong(0); }
+    if (!SONGS[song].file) while (nextBar < ctx.currentTime + 0.3) nextBar = scheduleBar(Math.max(nextBar, ctx.currentTime + 0.05));
+    else nextBar = ctx.currentTime + 0.1;
     const sp = AudioSys.spatial(state.jukePos || V3(), 3);
     gainNode.gain.setTargetAtTime(level * sp.g * 0.6, ctx.currentTime, 0.2);
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, set song(v) { song = v % SONGS.length; bar = 0; }, get song() { return song; }, set level(v) { level = v; } };
+  return { init, update, SONGS, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();

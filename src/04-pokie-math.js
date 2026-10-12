@@ -65,6 +65,15 @@ const GAMES = {
   }
 };
 
+// ---- FORTUNE LINK series: hold & spin link games (6+ fireballs, 3 respins, fill all 15 for the Grand) ----
+const LINK_BASE = (hi) => ({ '9': 12, '10': 12, J: 11, Q: 11, K: 9, A: 9, [hi[0]]: 6, [hi[1]]: 5, [hi[2]]: 4.5, [hi[3]]: 3.5, WILD: 2.2, COIN: 11.3 });
+const LINK_PAYS = (hi) => Object.assign({}, ROYAL_PAYS, { [hi[0]]: [0,0,0,12,40,150], [hi[1]]: [0,0,0,15,50,200], [hi[2]]: [0,0,0,20,75,300], [hi[3]]: [0,0,0,30,120,600], WILD: [0,0,0,30,120,800] });
+for (const [id, name, hi, theme] of [
+  ['moon', 'MOON FESTIVAL', ['PIPA', 'MOONCAKE', 'RABBIT', 'LADY'], { bg1: '#0a0a3a', bg2: '#3a2a8a', frame: '#f6c445', accent: '#ff4a6a', glow: '#ffe9a0', text: '#fff3cf', scene: 'moon' }],
+  ['dynasty', 'GOLDEN DYNASTY', ['FAN', 'VASE', 'WALL', 'EMPEROR'], { bg1: '#3a1204', bg2: '#d8780a', frame: '#ffd84a', accent: '#c0141a', glow: '#fff0a0', text: '#fff3cf', scene: 'sunset' }],
+  ['panda', 'BAMBOO PANDA', ['LOTUS', 'JUNK', 'LANTERN', 'PANDA'], { bg1: '#06280a', bg2: '#2a8a2a', frame: '#f6c445', accent: '#e8201a', glow: '#eaffb0', text: '#f3ffe0', scene: 'bamboo' }],
+]) GAMES[id] = { id, name, sub: 'FORTUNE LINK', feature: 'holdspin', link: true, payScale: 5.5, theme, tag: '6 OR MORE FIREBALLS START HOLD & SPIN · FILL ALL 15 FOR THE GRAND', syms: ['9', '10', 'J', 'Q', 'K', 'A', ...hi, 'WILD', 'COIN'], pays: LINK_PAYS(hi), base: LINK_BASE(hi), noWild: [0], wild: 'WILD', bonusSym: 'COIN' };
+
 function reelWeights(game, reel, free) {
   const w = [];
   for (const s of game.syms) {

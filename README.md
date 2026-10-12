@@ -1,7 +1,11 @@
 # Last Drinks — A Week at the Royal Hotel
 
-An Aussie pub experience built with **three.js**, shipped as a **single HTML file** (`index.html`).
-Open it in a modern desktop browser (Chrome, Edge or Firefox). It loads three.js from a CDN, so you need an internet connection.
+An Aussie pub experience built with **three.js**. Play it in a modern browser (Chrome, Edge, Firefox or Safari, desktop or mobile).
+
+- **Hosted:** `index.html` + `game.js` + `assets/`. Serve the folder with any static web server, or turn on GitHub Pages for the repo.
+- **Offline:** `Last-Drinks-offline.html` is one self-contained file (songs and all) you can double-click.
+
+Both load three.js from a CDN, so you need an internet connection.
 
 > Fictional venue, machines and money. If gambling stops being a game for you or someone you know, free confidential help is available 24/7 through the Gambling Help service in your state.
 
@@ -27,6 +31,29 @@ You play one week, Monday to Sunday. Each night starts at a different time with 
 
 Three difficulties: **Tradie** (easy), **Shiftie** (normal), **Uni Student** (hard). They set your starting money, pay, rent, machine returns and how bad the hangovers are.
 
+## The story: Save the Royal
+
+Seven chapters, one per night. Old Frank is selling the Royal to a developer, Clive Marsh. Over the week you can:
+- turn down (or take) Clive's bribes on Tuesday and Saturday
+- chip in to the **Save the Royal** jar on the bar (trivia and karaoke nights add to it)
+- find the pub's **1888 licence** hidden behind an old footy photo (Mick has a hint on Thursday)
+- get the regulars to sign Bev's petition on Saturday (they only sign if they like you)
+
+On Sunday at 8pm the council meets in the bar. Depending on what you did, the Royal is **saved**, gets a **twelve-month reprieve**, or is **sold**. The week summary shows an epilogue for every regular.
+
+## Things to do
+
+- **Pokies:** seven original games. The back wall of the gaming room is the new **Fortune Link** bank (Moon Festival, Golden Dynasty, Bamboo Panda): 6+ fireballs start Hold & Spin, every fireball resets three respins, fill all 15 for the Grand.
+- **Darts** against a local or Kenno, the champ. Aim sways with how drunk you are.
+- **TAB** race betting with live races on the TVs, **Keno**, **scratchies** at the bottle-o.
+- **A shift behind the bar:** pour beers yourself (glass tilt, head, the line) for wages and tips.
+- **Friday karaoke**, Wednesday **trivia**, Saturday **meat raffle**.
+- **Six regulars** with their own stories (Old Mick, Shazza, Davo, Kenno, Bev, Spud), plus random events each night.
+- **Food & needs:** parma, roast, chips, kebabs over the road; hunger and bladder meters (the gents is out the back).
+- **Places:** the public bar, lounge, gaming room, smokers' terrace, beer garden, gents, TAB corner, drive-through bottle-o, Room 4 upstairs with a balcony over the street, and the kebab shop across the road. Catch a cab or walk home.
+- **Jukebox:** four recorded tracks by cyelune (Friday Knock-Off, Maccas Farm, The Uni People Have No Clue, One Nation Pauline) plus the synthesised house band.
+- **28+ achievements**, saved in your browser.
+
 ## Features
 
 - **Streetscape:** a deliberately bland, empty street with power lines, a parked ute and sodium streetlights. The pub is a two-storey Federation-style corner pub with cast-iron lace, a tiled facade, lightbox signs and a chalk A-frame. Swing doors use spring physics.
@@ -46,6 +73,14 @@ Three difficulties: **Tradie** (easy), **Shiftie** (normal), **Uni Student** (ha
 - **NPCs:** procedural skeletons with walk, sit, pokie, pool, darts, smoking, drinking and cheering animations. They navigate a waypoint graph, chat ("Machine four's due. Trust me."), look at you, come and go, and react to your wins and smashed glasses.
 - **Also:** Keno draws every few game minutes, Wednesday trivia, the Saturday meat raffle, and the jukebox. Audio is fully synthesised in WebAudio: crowd murmur, pokie chimes, crickets, rain, footsteps by surface, and Karplus-Strong pub rock from the jukebox.
 
+## Settings
+
+A tabbed options menu (title screen or pause menu): **Graphics** (Low / Medium / High / Ultra presets, render resolution, shadows, anti-aliasing, reflections, light shafts, bloom, crowd size, dynamic resolution, performance overlay), **Display** (FOV, brightness, vignette, head bob, drunk effects), **Audio** (master, music, effects, ambience), **Controls** (sensitivity, invert Y, touch controls, key list), **Gameplay** (clock speed, subtitles and size, hints) and **Accessibility** (reduce motion and more).
+
+## Mobile
+
+Touch controls switch on automatically on phones and tablets (Settings → Controls → Touch controls: Auto / On / Off). Left stick to walk (push all the way to run), drag anywhere else to look, and context buttons on the right change with what you're doing (USE, SIP, SMOKE, THROW, POUR, SING…). ☰ at the top opens the menu.
+
 ## Controls
 
 | Key | Action |
@@ -60,7 +95,7 @@ Three difficulties: **Tradie** (easy), **Shiftie** (normal), **Uni Student** (ha
 
 ## Project structure
 
-`index.html` is the game: one self-contained file you can double-click to play. It's **generated** from the source files in `src/`; don't edit it directly.
+`index.html`, `game.js` and `Last-Drinks-offline.html` are **generated** from the source files in `src/`; don't edit them directly.
 
 | File | What's in it |
 |---|---|
@@ -73,21 +108,33 @@ Three difficulties: **Tradie** (easy), **Shiftie** (normal), **Uni Student** (ha
 | `src/05-pokies.js` | Pokie artwork, screen rendering, machine state machine |
 | `src/06-actors.js` | Drinks/liquid physics, particles, NPC skeletons, AI, bartender |
 | `src/07-player.js` | First-person controller, hands, drinking, smoking, seating |
-| `src/08-game.js` | The week loop, menus, events, HUD, main loop, boot |
+| `src/08-game.js` | The week loop, menus, events, HUD, main loop |
+| `src/09-minigames.js` | Minigame framework + darts |
+| `src/10-pool-sim.js` | Pool physics, 8-ball rules and AI (table not hooked up yet) |
+| `src/13-activities.js` | Needs, shops, TAB racing, scratchies, bar shift, karaoke |
+| `src/14-world2.js` | Gents, beer garden, TAB corner, bottle-o, Room 4 + balcony, kebab shop, taxis, zone lights |
+| `src/15-story.js` | Achievements, the six regulars, random events |
+| `src/16-settings.js` | The settings menu |
+| `src/17-mainstory.js` | "Save the Royal" chapters and endings |
+| `src/18-touch.js` | Mobile touch controls |
+| `src/99-boot.js` | Boot sequence |
+| `assets/music/` | Jukebox recordings |
 
 After editing anything in `src/`, rebuild with:
 
 ```
-node build.mjs
+node build.mjs            # index.html + game.js
+node build.mjs --offline  # also Last-Drinks-offline.html
 ```
 
-The output stays a single file on purpose. Browsers block separate script files when a page is opened straight from disk, so a split build would need a local web server to run.
+Browsers block separate script files when a page is opened straight from disk, which is why the offline file exists.
 
 ## Performance
 
 - **Graphics → Low** is chosen automatically on first launch if your GPU looks integrated or mobile (Intel UHD/Iris, Mali, Adreno, software rendering). Low renders at 80% resolution with no anti-aliasing, uses cheaper shadows, drops three lights and the light shafts/dust, and has 25% fewer people. You can switch presets any time in Settings.
 - NPCs are single skinned meshes, and all static props, walls and pokie cabinets are merged into shared batches. A frame costs roughly 100–500 draw calls depending on where you're looking.
 - Shadow maps re-render only when the sun moves. The back-bar mirror updates every other frame, and only when you're inside and close enough to see it.
+- Press **F3** for frame rate, frame time and draw calls.
 - If the frame rate stays below about 42 fps, the resolution steps down a notch. It never steps back up on its own, so it can't flicker between sizes.
 
 ## Online assets

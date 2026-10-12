@@ -18,7 +18,7 @@ async function boot() {
     buildFacade(); buildDoors();
     setLoad(0.55, 'Tapping the kegs…'); await tick();
     buildShared(); buildInterior(); buildDartboard();
-    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build();
+    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build();
     setLoad(0.7, 'Wiring up the pokies…'); await tick();
     MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
     buildAtmosphere();
@@ -29,7 +29,7 @@ async function boot() {
       const mob = backMirror.onBeforeRender;
       backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };
     }
-    setupInput(); wireUI();
+    setupInput(); wireUI(); TOUCH.build();
     setTimeOfDay(18.4, 'clear');
     Game.state.day = 0; Game.state.event = 'monday';
     spawnPatrons(10);
@@ -37,7 +37,7 @@ async function boot() {
     // warm up shaders + bake interior reflections
     renderer.compile(scene, camera);
     captureInteriorEnv();
-    applyQuality();
+    applySettings();
     setLoad(1, 'Doors open.');
     await new Promise(r => setTimeout(r, 300));
     $('loading').classList.add('hidden');
@@ -49,5 +49,5 @@ async function boot() {
 }
 requestAnimationFrame(frame);
 boot();
-window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
+window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
 window.__game = { Game, REG, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

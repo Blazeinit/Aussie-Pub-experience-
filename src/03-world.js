@@ -817,7 +817,8 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
+  const link = ['moon', 'dynasty', 'panda'];
+  for (let i = 0; i < 6; i++) MACHINE_DEFS.push({ game: link[i % 3], pos: V3(4.4 + i * 1.1, 0, -17.45), ry: 0, smoke: false });
   for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false });
   for (let i = 0; i < 3; i++) MACHINE_DEFS.push({ game: games[(gi++) % 4], pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false });
   addColBox(5.0, 8.2, -12.75, -11.25);
@@ -929,7 +930,7 @@ function buildSky() {
   skyObj = new Sky(); skyObj.scale.setScalar(900); scene.add(skyObj);
   const u = skyObj.material.uniforms; u.turbidity.value = 6; u.rayleigh.value = 2.2; u.mieCoefficient.value = 0.005; u.mieDirectionalG.value = 0.82;
   sun = new THREE.DirectionalLight(0xffe2c0, 2.5);
-  sun.castShadow = true; sun.shadow.mapSize.set(HIGH() ? 2048 : 1024, HIGH() ? 2048 : 1024);
+  sun.castShadow = true; sun.shadow.mapSize.setScalar(settings.preset === 'ultra' ? 4096 : HIGH() ? 2048 : 1024);
   const sc = sun.shadow.camera; sc.left = -36; sc.right = 36; sc.top = 36; sc.bottom = -36; sc.near = 1; sc.far = 160; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   scene.add(sun); scene.add(sun.target); sun.target.position.set(0, 0, 4);
   hemi = new THREE.HemisphereLight(0xa8c0e0, 0x2a2018, 0.4); scene.add(hemi);
@@ -1170,13 +1171,13 @@ function buildAtmosphere() {
 }
 function updateAtmosphere(dt, t, camPos, inside) {
   // dust drifts slowly, only simulated when you can see it
-  if (inside && atmo.dust && HIGH()) {
+  if (inside && atmo.dust && settings.shafts) {
     const a = atmo.dust.geometry.attributes.position, b = atmo.dustBase;
     for (let i = 0; i < a.count; i++) { const k = i * 3; a.array[k] = b[k] + Math.sin(t * 0.13 + i) * 0.25; a.array[k + 1] = b[k + 1] + Math.sin(t * 0.09 + i * 1.7) * 0.18; a.array[k + 2] = b[k + 2] + Math.cos(t * 0.11 + i * 0.6) * 0.25; }
     a.needsUpdate = true;
   }
-  if (atmo.dust) atmo.dust.visible = inside && HIGH();
-  for (const c of atmo.cones) if (!atmo.streetCones.includes(c)) c.visible = HIGH();
+  if (atmo.dust) atmo.dust.visible = inside && settings.shafts;
+  for (const c of atmo.cones) if (!atmo.streetCones.includes(c)) c.visible = settings.shafts;
   const night = atmo.night;
   if (atmo.moths) {
     atmo.moths.visible = night > 0.5 && !inside;
@@ -1186,7 +1187,7 @@ function updateAtmosphere(dt, t, camPos, inside) {
       a.needsUpdate = true;
     }
   }
-  for (const c of atmo.streetCones) c.visible = night > 0.5 && HIGH();
+  for (const c of atmo.streetCones) c.visible = night > 0.5 && settings.shafts;
   for (const h of atmo.halosOut) h.visible = night > 0.5;
   for (const sp of atmo.spill) sp.material.opacity = 0.08 + 0.3 * atmo.nightF;
   if (atmo.flickerGlow) atmo.flickerGlow.visible = night > 0.5;

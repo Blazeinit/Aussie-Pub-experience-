@@ -228,6 +228,7 @@ const Scratchie = {
     let down = false, scratchT = 0;
     const scratch = e => { if (!down) return; const b = over.getBoundingClientRect(), x = (e.clientX - b.left) * 330 / b.width, y = (e.clientY - b.top) * 330 / b.height; o.globalCompositeOperation = 'destination-out'; o.beginPath(); o.arc(x, y, 17, 0, 7); o.fill(); o.globalCompositeOperation = 'source-over'; if (performance.now() - scratchT > 60) { scratchT = performance.now(); SFX.noise(0.05, { freq: rand(2500, 4500), q: 1.2, gain: 0.05 }); } g.scratched = true; };
     over.onmousedown = e => { down = true; scratch(e); }; addEventListener('mouseup', this._up = () => { down = false; this.check(o); }); over.onmousemove = scratch;
+    over.addEventListener('touchstart', e => { e.preventDefault(); down = true; scratch(e.touches[0]); }, { passive: false }); over.addEventListener('touchmove', e => { e.preventDefault(); scratch(e.touches[0]); }, { passive: false }); over.addEventListener('touchend', () => { down = false; this.check(o); });
     wrap.querySelector('#scAll').onclick = () => { o.clearRect(0, 0, 330, 330); this.check(o, true); };
     wrap.querySelector('#scDone').onclick = () => { if (!g.done) { o.clearRect(0, 0, 330, 330); this.check(o, true); } MG.stop(); };
     this.el = wrap;
@@ -417,7 +418,7 @@ const Karaoke = {
       const n = this.scores.length === 0 ? REG.here('Shazza') : choice(NPCS.filter(o => o.role === 'patron' && o.state === 'idle' && !o.mg));
       if (!n) return;
       const sc = n.regular === 'Shazza' ? randi(80, 93) : randi(38, 82);
-      this.scores.push({ name: n.name, s: sc }); this.draw(`${n.name.toUpperCase()} IS SINGING`);
+      this.scores.push({ name: n.name, s: sc }); this.draw(`${n.name.toUpperCase()} IS SINGING`); STORY.st().fund += Math.round(sc / 3); STORY.refreshCoins();
       if (camera.position.distanceTo(V3(11.2, 1.5, -3.1)) < 14) { Game.subtitle(`<b>${n.name}:</b> ♪ ${choice(SONG.lines)} ♪`, 4); SFX.cheer(V3(11.2, 1.5, -3.1), 1); }
       n.cheerT = 3; setTimeout(() => this.draw(), 9000);
     }
@@ -438,6 +439,7 @@ const Karaoke = {
     if (this.el) this.el.remove(); this.el = null; Music.level = 0.9;
     const g = this.g, pct = Math.round(g.score / g.notes.length * 100);
     this.scores.push({ name: 'You', s: pct }); this.draw();
+    if (DAYS[Game.state.day].event === 'knockoff') STORY.addFund(pct, `The crowd chipped in $${pct} for your performance`);
     const s = Game.state; s.mood = Math.min(100, s.mood + (pct > 60 ? 15 : 5));
     Game.toast(`You scored ${pct}%. ${pct >= 85 ? 'The room is on its feet!' : pct >= 60 ? 'Solid effort. Shazza gives you a nod.' : 'The crowd was… supportive.'}`, true);
     player.pos.set(10.6, 0, -2.2); player.yaw = -2.4;

@@ -84,6 +84,7 @@ const Game = {
     $('dayCardInner').innerHTML = `
       <div class="dname">${D.name}</div><div class="dtime">${hh(start)} · DAY ${s.day + 1} OF 7 · ${dd.label.toUpperCase()}</div>
       <div class="event">${D.title}</div>
+      <div class="chapter"><small>${CHAPTERS[s.day].title.toUpperCase()}</small>${CHAPTERS[s.day].narr}</div>
       <p>${D.desc}</p>
       ${s.startHang ? '<p class="neg"><b>Hungover.</b> You got going an hour late and everything is a bit too loud.</p>' : ''}
       ${msgs.map(m => `<p style="margin:4px 0">${m}</p>`).join('')}
@@ -110,12 +111,12 @@ const Game = {
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
-    REG.spawnAll(); Shops.spawnStaff();
-    spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * (HIGH() ? 1 : 0.75)));
+    REG.spawnAll(); Shops.spawnStaff(); STORY.spawn();
+    spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
     RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
-    Music.song = D.event === 'sunday' ? 1 : randi(0, 3); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
+    Music.song = Music.pick(D.event); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
     // player on the far footpath, facing the pub
     player.pos.set(-7.5, 0, 21.2); player.yaw = 0.12; player.pitch = 0.04; player.vel.set(0, 0, 0);
     updateBoards(D);
@@ -177,6 +178,7 @@ const Game = {
       <tr><td>Jackpots / meat trays / trivia wins</td><td>${st.jackpots} / ${st.meat} / ${st.trivia}</td></tr><tr><td>Glasses smashed</td><td>${st.glasses}</td></tr><tr><td>ATM fees</td><td>${fmt$(-st.atmFees)}</td></tr>
       <tr class="tot"><td>Net for the week</td><td class="${net >= 0 ? 'pos' : 'neg'}">${fmt$(net)}</td></tr></table>
       <p class="note">Pokies returned ${st.wagered > 0 ? Math.round(st.won / st.wagered * 100) : 0}c in the dollar this week.</p>
+      ${STORY.epilogue()}
       <button class="cbtn" id="btnAgain">ANOTHER WEEK →</button>`;
     store('ld_save', null);
     $('btnAgain').onclick = () => { $('summary').classList.add('hidden'); this.toTitle(); };
@@ -228,7 +230,7 @@ const Game = {
       o = tips[D.event] || '';
       if (s.drunk > 75) o = 'You\'re very drunk. Bar staff may cut you off. Water\'s free.';
     }
-    const html = o + '<br><span style="opacity:.6">Leave early & sober = bonus tomorrow. Close: ' + (() => { const c = DAYS[s.day].close, h = Math.floor(c) % 24, m = Math.round((c % 1) * 60); return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`; })() + '</span>';
+    const html = `<span class="storygoal">★ ${STORY.goal()}</span><br>` + o + '<br><span style="opacity:.6">Leave early & sober = bonus tomorrow. Close: ' + (() => { const c = DAYS[s.day].close, h = Math.floor(c) % 24, m = Math.round((c % 1) * 60); return `${h % 12 || 12}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`; })() + '</span>';
     if (this._hud.objective !== html) { this.objShownAt = elapsed; $('objective').style.opacity = 1; }
     this.setText('objective', html);
   },
@@ -238,7 +240,7 @@ const Game = {
     while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   },
   subT: 0,
-  subtitle(html, dur = 3) { $('subtitle').innerHTML = html; this.subT = dur; },
+  subtitle(html, dur = 3) { if (!settings.subtitles && !/^<i>/.test(html)) return; $('subtitle').innerHTML = html; this.subT = dur; },
   dayBarks() {
     return ({ monday: ['Mondays, eh.', 'Quiet one tonight.'], parma: ["Parma's ripper tonight.", 'Get the parma, mate. Trust me.'], trivia: ["Reckon we'll win trivia this week?", 'Who was the first PM again? Barton?', 'Bloody rain.'], jackpot: ["Grand's getting up there, isn't it?", 'Payday! Shout ya one later.'], knockoff: ['Thank God it\'s Friday.', 'Whose shout is it?', 'Big week. Big week.'], raffle: ['Come on the Pies!', "Ump, you're blind!", 'Got me raffle tickets. Feelin\' lucky.'], sunday: ['Sunday sesh, can\'t beat it.', 'Back to work tomorrow. Don\'t remind me.'] })[this.state.event] || [];
   },
@@ -249,7 +251,7 @@ const Game = {
     $('pBtns').innerHTML = ''; for (const b of btns) { const e = document.createElement('button'); e.className = 'pbtn'; e.textContent = b.label; e.onclick = b.fn; $('pBtns').appendChild(e); }
     $('panel').classList.remove('hidden');
   },
-  closePanel() { $('panel').classList.add('hidden'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated && !(MG.active && MG.active.cursor)) lockPointer(); } },
+  closePanel() { $('panel').classList.add('hidden'); $('panel').classList.remove('wide'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated && !(MG.active && MG.active.cursor)) lockPointer(); } },
   optList(opts) {
     const wrap = document.createElement('div'); wrap.className = 'opts';
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
@@ -323,7 +325,7 @@ const Game = {
     SFX.beep();
   },
   openJukebox() {
-    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: sg.name, d: `${sg.bpm} bpm · ${sg.feel}`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
+    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: (sg.file ? '★ ' : '') + sg.name, d: sg.file ? `${sg.artist} · ${sg.feel}` : `${sg.bpm} bpm · ${sg.feel} · house band`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
   },
   openKeno() {
     const s = this.state, k = this.keno;
@@ -466,7 +468,7 @@ const Game = {
     // last drinks + close
     if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
-    RANDOM.update(dt); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
+    RANDOM.update(dt); STORY.update(); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
     // arrivals
     this.arriveT -= dt;
     if (this.arrivals > 0 && this.arriveT <= 0 && s.time < D.close - 1) {
@@ -495,7 +497,7 @@ const Game = {
     const ask = () => {
       if (i >= qs.length) {
         const s = this.state; let prize = '';
-        if (score >= 4) { s.wallet += 50; s.night.extra += 50; s.stats.trivia++; s.mood = Math.min(100, s.mood + 15); prize = 'Your table WINS! $50 bar tab (cash).'; SFX.cheer(player.pos, 2); }
+        if (score >= 4) { s.wallet += 50; s.night.extra += 50; s.stats.trivia++; s.mood = Math.min(100, s.mood + 15); prize = 'Your table WINS! $50 bar tab (cash).'; SFX.cheer(player.pos, 2); if (s.day === 2) STORY.addFund(50, 'Bev matched your trivia prize'); }
         else if (score === 3) { prize = 'Second place — a free schooner on the house.'; bartenderOrder({ type: 'schooner', forZ: clamp(player.pos.z, BAR.z0 + .6, BAR.z1 - .6), cb: (it, sp) => this.placeItem(it, sp) }); }
         else prize = 'Wooden spoon. Better luck next week.';
         this.openPanel('TRIVIA RESULTS', `${score} / 5`, `<p>${prize}</p>`); return;
@@ -603,9 +605,9 @@ const Game = {
       <div class="setrow"><span>Wallet</span><b>${fmt$(s.wallet)}</b></div><div class="setrow"><span>Bank</span><b>${fmt$(s.bank)}</b></div>
       <div class="setrow"><span>Rent due Sunday</span><b>${fmt0(dd.rent)}</b></div><div class="setrow"><span>Tonight: drinks / pokies in / pokies won</span><b>${fmt$(n.spentDrinks)} / ${fmt$(n.wagered)} / ${fmt$(n.won)}</b></div>
       <div class="setrow"><span>Week so far: wagered / won</span><b>${fmt$(s.stats.wagered)} / ${fmt$(s.stats.won)}</b></div>
-      <p style="font-size:13px;opacity:.75;margin-top:10px">💬 <b>Mum:</b> Don't stay out too late love xx<br>💬 <b>Landlord:</b> Reminder rent is due Sunday.<br>${s.debts.length ? `💬 <b>You:</b> ${s.debts.map(d => d.name).join(', ')} owe${s.debts.length === 1 ? 's' : ''} you money.` : ''}</p>`);
+      <p style="font-size:13px;opacity:.75;margin-top:10px">💬 <b>Mum:</b> Don't stay out too late love xx<br>💬 <b>Landlord:</b> Reminder rent is due Sunday.<br>${['💬 <b>Jess (sis):</b> Heard the Royal\'s up for sale?? Isn\'t that your local?', '💬 <b>Bev:</b> There\'s a bloke in a suit sniffing around. Keep an eye out.', `💬 <b>Bev:</b> Jar\'s on the bar. ${fmt0(STORY.st().fund)} so far!`, '💬 <b>Old Mick:</b> (voicemail, 4 minutes long, mostly about 1977)', '💬 <b>Shazza:</b> KARAOKE TONIGHT!!! 🎤🎤🎤 every point = $1 for the jar', '💬 <b>Bev:</b> Petition\'s ready. Come see me.', '💬 <b>Bev:</b> Council\'s at the pub at 8. Don\'t be late.'][s.day]}<br>${s.debts.length ? `💬 <b>You:</b> ${s.debts.map(d => d.name).join(', ')} owe${s.debts.length === 1 ? 's' : ''} you money.` : ''}</p>`);
   },
-  timeScale: 0.8 / 60, // game hours per real second (0.8 game-min / sec)
+  timeScale: 0.8 / 60 * settings.timeSpeed, // game hours per real second (0.8 game-min / sec at normal speed)
 };
 
 function updateBoards(D) {
@@ -641,7 +643,7 @@ function frame() {
   // dynamic resolution: keep ~55-60fps by trading pixels for frames
   perf.ema = perf.ema * 0.95 + dt * 0.05; perf.t += dt;
   // one-way: only ever steps DOWN after sustained slowness, so it can't oscillate or pop back and forth
-  if (Game.mode === 'play' && perf.t > 3 && !window.__noDynRes) {
+  if (Game.mode === 'play' && perf.t > 3 && !window.__noDynRes && settings.dynres) {
     perf.t = 0;
     perf.slow = perf.ema > 1 / 42 ? perf.slow + 1 : 0;
     if (perf.slow >= 3 && renderScale > 0.62) { setRenderScale(renderScale - 0.15); perf.slow = 0; }
@@ -686,7 +688,7 @@ function simulate(dt) {
     if (Game.objShownAt != null && elapsed - Game.objShownAt > 9) $('objective').style.opacity = keys.Tab ? 1 : 0;
     if (Game.frameN % 6 === 0) { Game.updateHUD(); if (Game.frameN % 120 === 0) Game.objective(); }
     // FX uniforms
-    fxPass.uniforms.uDrunk.value = damp(fxPass.uniforms.uDrunk.value, clamp((s.drunk - 25) / 70, 0, 1), 1, dt);
+    fxPass.uniforms.uDrunk.value = damp(fxPass.uniforms.uDrunk.value, clamp((s.drunk - 25) / 70, 0, 1) * (settings.reduceMotion ? 0 : settings.drunkFx), 1, dt);
     fxPass.uniforms.uHang.value = s.startHang ? Math.max(0, 0.5 - (s.time - s.startTime) * 0.4) : 0;
   }
   if (Game.mode === 'play' || Game.mode === 'title' || Game.mode === 'card') {
@@ -717,10 +719,10 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt);
+    updateZones(dt); updateTraffic(dt); TOUCH.update();
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
-    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0), 2, dt);
+    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
     fxPass.uniforms.uSmoke.value = damp(fxPass.uniforms.uSmoke.value, onTerrace(camera.position.x, camera.position.z) ? 0.6 : 0, 1, dt);
     AudioSys.update(dt, { inside, gaming: inGaming(camera.position.x, camera.position.z), pos: camera.position, machinePositions: MACHINES.filter(m => m.mode !== 'idle' || Math.random() < 0.3).map(m => m.screenW), firePos: dynamic.firePos, jukePos: dynamic.jukePos });
   }
@@ -744,22 +746,8 @@ function wireUI() {
       <span class="kbd">SPACE</span><span>At a pokie: spin / slam-stop / pick</span><span class="kbd">↑ ↓</span><span>Change bet</span><span class="kbd">I</span><span>Insert cash</span><span class="kbd">ENTER</span><span>Collect a ticket</span><span class="kbd">G R B</span><span>Gamble a win: red or black</span><span class="kbd">Q</span><span>Stand up</span></div>
       <p style="font-size:13px;opacity:.75;line-height:1.5">Each night starts at a different time with its own event. Leave early & sober and you'll pick up overtime tomorrow. Get legless and you'll be docked pay and start late. The pokies are tuned like real ones — about 85–95% return. Over a week, the house wins.</p>`, [{ label: 'Back', fn: () => { Game.closePanel(); $('title').classList.remove('hidden'); } }]);
   };
-  const settingsPanel = (back) => {
-    Game.openPanel('SETTINGS', '', `
-      <div class="setrow"><span>Graphics</span><select id="sQ"><option value="high">High — reflections, soft shadows, light shafts</option><option value="low">Low — laptops &amp; integrated graphics</option></select></div>
-      <div class="setrow"><span>Mouse sensitivity</span><input type="range" id="sS" min="0.3" max="2.5" step="0.05"></div>
-      <div class="setrow"><span>Master volume</span><input type="range" id="sV" min="0" max="1" step="0.05"></div>
-      <div class="setrow"><span>Music volume</span><input type="range" id="sM" min="0" max="1" step="0.05"></div>
-      <div class="setrow"><span>Field of view</span><input type="range" id="sF" min="60" max="95" step="1"></div>`, [{ label: 'Done', fn: () => { Game.closePanel(); back(); } }]);
-    $('sQ').value = settings.quality; $('sS').value = settings.sens; $('sV').value = settings.vol; $('sM').value = settings.music; $('sF').value = settings.fov;
-    $('sQ').onchange = e => { settings.quality = e.target.value; saveSettings(); applyQuality(); };
-    $('sS').oninput = e => { settings.sens = +e.target.value; saveSettings(); };
-    $('sV').oninput = e => { settings.vol = +e.target.value; saveSettings(); AudioSys.setVolume(); };
-    $('sM').oninput = e => { settings.music = +e.target.value; saveSettings(); AudioSys.setVolume(); };
-    $('sF').oninput = e => { settings.fov = +e.target.value; saveSettings(); camera.fov = settings.fov; camera.updateProjectionMatrix(); };
-  };
-  $('btnSettings').onclick = () => { $('title').classList.add('hidden'); settingsPanel(() => $('title').classList.remove('hidden')); };
-  $('btnPauseSettings').onclick = () => { $('resume').classList.add('hidden'); settingsPanel(() => { $('resume').classList.remove('hidden'); }); };
+  $('btnSettings').onclick = () => { $('title').classList.add('hidden'); openSettings(() => $('title').classList.remove('hidden')); };
+  $('btnPauseSettings').onclick = () => { $('resume').classList.add('hidden'); openSettings(() => { $('resume').classList.remove('hidden'); }); };
   $('btnResume').onclick = () => { lockPointer(); };
   $('btnHome').onclick = () => { $('resume').classList.add('hidden'); Game.paused = false; Game.endNight('home'); };
   $('btnQuit').onclick = () => { $('resume').classList.add('hidden'); Game.paused = false; Game.save(); Game.mode = 'title'; Game.toTitle(); };
