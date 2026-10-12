@@ -573,6 +573,8 @@ function chooseNextSpot(n) {
   const list = wpick(w.map(x => x[0]), w.map(x => x[1]));
   return choice(list);
 }
+// people walking in from the street go round the parked ute / planter in front of the pub (box x -7.7..-2.7, z 10.4..12.3)
+function streetApproach(n) { const w = [V3(-8.6, 0, 13.0), V3(-8.6, 0, 9.4), NODES.S2.clone(), NODES.S0.clone()]; if (n.pos.z < 12.9 || n.pos.x < -9) return w.slice(2); return w; }
 function sendTo(n, s) {
   claim(n, s);
   n.path = findPath(n.pos, s.pos); n.path.push(s.pos.clone());

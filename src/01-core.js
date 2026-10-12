@@ -118,10 +118,10 @@ composer.addPass(new ShaderPass({
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.55, 0.45, 0.82);
 composer.addPass(bloom);
 const fxPass = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uDrunk: { value: 0 }, uVig: { value: 0.35 }, uRes: { value: new THREE.Vector2(innerWidth, innerHeight) }, uSmoke: { value: 0 }, uHang: { value: 0 }, uWarm: { value: 0 }, uNight: { value: 1 } },
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uDrunk: { value: 0 }, uVig: { value: 0.35 }, uRes: { value: new THREE.Vector2(innerWidth, innerHeight) }, uSmoke: { value: 0 }, uHang: { value: 0 }, uWarm: { value: 0 }, uNight: { value: 1 }, uDim: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime,uDrunk,uVig,uSmoke,uHang,uWarm,uNight; uniform vec2 uRes; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uTime,uDrunk,uVig,uSmoke,uHang,uWarm,uNight,uDim; uniform vec2 uRes; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
     void main(){
       vec2 uv=vUv; float d=uDrunk;
@@ -140,7 +140,7 @@ const fxPass = new ShaderPass({
       // smoke haze
       c = mix(c, vec3(dot(c,vec3(.3,.5,.2)))*1.05+0.02, uSmoke*.25);
       vec2 q = vUv-.5; float vig = 1. - dot(q,q)*(uVig*2.2 + d*1.2 + uHang*1.5);
-      c *= clamp(vig,0.,1.);
+      c *= clamp(vig,0.,1.) * (1. - uDim);
       gl_FragColor = vec4(c,1.);
     }`
 });
@@ -483,5 +483,5 @@ const Music = (() => {
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
+  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get level() { return level; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();

@@ -180,7 +180,7 @@ const REG = {
   get(name) { return REGULARS[name] || null; },
   here(name) { return NPCS.find(n => n.regular === name && !n.gone) || null; },
   bump(name, k) { if (REGULARS[name]) relUp(name, k); },
-  dartBonus() { return Game.state.flags.dartTip ? 0.004 : 0; },
+  dartBonus() { return (Game.state.flags.dartTip ? 0.004 : 0) + (Night.hasPerk(4) ? 0.004 : 0); },
   spawnAll() {
     for (const name in REGULARS) {
       const R = REGULARS[name];
@@ -193,7 +193,7 @@ const REG = {
     }
   },
   talk(n) {
-    const s = Game.state, R = REGULARS[n.regular], name = n.regular;
+    const s = Game.state, R = REGULARS[n.regular], name = n.regular; Night.ev('talk', name);
     const line = (R.line ? R.line(s) : R.lines[s.day]) || choice(BARKS.any);
     const first = !s.tonight['talk_' + name];
     if (first) { s.tonight['talk_' + name] = 1; relUp(name, 5); s.mood = Math.min(100, s.mood + 3); }
@@ -201,7 +201,7 @@ const REG = {
     R.extra && R.extra(n, s, opts);
     STORY.talkOpts(n, opts);
     const price = Game.drinkPrice('schooner');
-    if (!s.tonight['shout_' + name]) opts.push({ label: `Shout ${name} a drink`, d: 'Mateship is a currency', price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentDrinks')) return; s.tonight['shout_' + name] = 1; relUp(name, 10); n.glass.fill = 1; Game.closePanel(); bark(n, choice(['You beauty! Cheers.', 'Ahh, you\'re a gentleman and a scholar.', 'Legend. Owe ya one.']), true); SFX.register(V3(-9, 1.2, -9)); } });
+    if (!s.tonight['shout_' + name]) opts.push({ label: `Shout ${name} a drink`, d: 'Mateship is a currency', price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentDrinks')) return; s.tonight['shout_' + name] = 1; Night.ev('shouted'); Night.log('🍺', `Shouted ${name} a drink`); relUp(name, 10); n.glass.fill = 1; Game.closePanel(); bark(n, choice(['You beauty! Cheers.', 'Ahh, you\'re a gentleman and a scholar.', 'Legend. Owe ya one.']), true); SFX.register(V3(-9, 1.2, -9)); } });
     opts.push({ label: 'See ya', fn: () => Game.closePanel() });
     const hearts = '♥'.repeat(Math.round(rel(name) / 20)) + '♡'.repeat(5 - Math.round(rel(name) / 20));
     Game.openPanel(name.toUpperCase(), `<span style="opacity:.7">${R.bio} · <span style="color:#ff8a9a">${hearts}</span></span><br><br>"${line}"`, Game.optList(opts), []);

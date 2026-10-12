@@ -290,10 +290,10 @@ function updateDrinkVM(dt, t, moving) {
   if (player.cig && (player.cig.phase === 'light')) target.y -= 0.5;
   if (player.sip > 0) {
     player.sip -= dt;
-    const k = 1 - player.sip / 1.7, s = Math.sin(clamp(k, 0, 1) * Math.PI);
+    const SD = player.chug ? 0.85 : 1.7, k = 1 - player.sip / SD, s = Math.sin(clamp(k, 0, 1) * Math.PI);
     target.lerp(V3(0.01, -0.125, -0.2), s);
     tilt = s * (0.95 + (1 - (d ? d.fill : 0)) * 0.75);
-    if (k > 0.35 && k < 0.7 && d && d.fill > 0) { const take = Math.min(d.fill, dt * 0.28); d.fill -= take; Game.onSipAmount(take * d.D.std, take); if (Math.random() < dt * 4) SFX.gulp(); }
+    if (k > 0.35 && k < 0.7 && d && d.fill > 0) { const take = Math.min(d.fill, dt * (player.chug ? 0.6 : 0.28)); d.fill -= take; Game.onSipAmount(take * d.D.std, take); if (Math.random() < dt * 4) SFX.gulp(); }
     if (player.sip <= 0) { SFX.ahh(); if (d && seated && d.wasLedge) { placeOnLedge(); } }
   }
   if (vm.pressT > 0) { vm.pressT -= dt; const k = Math.sin((1 - vm.pressT / 0.25) * Math.PI); target.add(V3(0, -0.018 * k, -0.004 * k)); }
@@ -322,7 +322,7 @@ function sipDrink() {
   if (player.sip > 0 || (player.cig && ['mouth', 'mouth2', 'light', 'inhale'].includes(player.cig.phase))) return;
   if (d.fill < 0.02) { Game.toast('Glass is empty. Grab another at the bar, or G to drop it.'); return; }
   if (d.onLedge) takeFromLedge();
-  player.sip = 1.7; SFX.clink(camera.position);
+  player.sip = player.chug ? 0.85 : 1.7; SFX.clink(camera.position);
 }
 function dropHeld() {
   const d = player.drink; if (!d) return;

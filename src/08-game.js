@@ -88,7 +88,7 @@ const Game = {
       <p>${D.desc}</p>
       ${s.startHang ? '<p class="neg"><b>Hungover.</b> You got going an hour late and everything is a bit too loud.</p>' : ''}
       ${msgs.map(m => `<p style="margin:4px 0">${m}</p>`).join('')}
-      <div class="stats"><div>Wallet<b>${fmt0(s.wallet)}</b></div><div>Bank<b>${fmt0(s.bank)}</b></div><div>Smokes<b>${s.cigs}</b></div><div>Rent (Sun)<b>${fmt0(dd.rent)}</b></div></div>
+      <div class="stats"><div>Wallet<b>${fmt0(s.wallet)}</b></div><div>Bank<b>${fmt0(s.bank)}</b></div><div>Smokes<b>${s.cigs}</b></div><div>Standing<b style="font-size:15px">${Night.tier().name}</b></div><div>Rent (Sun)<b>${fmt0(dd.rent)}</b></div></div>
       <div class="note">Pub shuts at ${hh(D.close)}. Leave early & sober for a bonus tomorrow.</div>
       <div style="margin-top:18px"><button class="cbtn" id="btnGo">HEAD TO THE PUB →</button></div>`;
     $('title').classList.add('hidden'); $('summary').classList.add('hidden'); $('dayCard').classList.remove('hidden');
@@ -113,7 +113,7 @@ const Game = {
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
     REG.spawnAll(); Shops.spawnStaff(); STORY.spawn();
     spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
-    RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
+    Night.start(); RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
     Music.song = Music.pick(D.event); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
@@ -123,7 +123,7 @@ const Game = {
     setTimeOfDay(s.time, D.weather);
     this.mode = 'play'; this.paused = false;
     $('hud').classList.remove('hidden'); $('deck').classList.add('hidden');
-    this.fade(1, 0); lockPointer();
+    this.fade(1, 0); lockPointer(); this.useTab = false;
     this.objective();
     setTimeout(() => this.subtitle(s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is the Royal.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is the Royal.</i>', 5), 600);
   },
@@ -132,7 +132,7 @@ const Game = {
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
     if (MG.active) MG.stop(true);
     if (player.seated) this.collect(true), standUp();
-    this.mode = 'ending'; this.fade(0, 1); document.exitPointerLock && document.exitPointerLock();
+    Moments.cleanup(); this.mode = 'ending'; this.fade(0, 1); document.exitPointerLock && document.exitPointerLock();
     setTimeout(() => {
       $('hud').classList.add('hidden'); $('deck').classList.add('hidden'); this.closePanel();
       const early = s.time < 22 && s.drunk < 35 && ['home', 'taxi', 'room'].includes(reason);
@@ -142,6 +142,7 @@ const Game = {
       const n = s.night, tick = s.tickets.reduce((a, b) => a + b, 0);
       const worthNow = s.wallet + s.bank + tick, worthStart = n.startWallet + n.startBank + n.startTickets;
       const isSunday = s.day === 6;
+      const tabHtml = Night.settleTab(); const nsum = Night.finish(reason);
       const reasonTxt = { home: early ? 'You called it early and walked home under the streetlights.' : 'You wandered home.', close: '"Righto folks, time to go!" — you got turfed out at close.', kicked: 'The bouncer walked you out. Not your finest hour.', broke: 'Skint. Nothing left but the walk home.', taxi: 'You caught a cab home. The driver had opinions about the footy.', room: 'You crashed in Room 4 upstairs. The pub hummed through the floorboards.' }[reason] || '';
       const rows = [['Started with (wallet + bank)', fmt$(n.startWallet + n.startBank)], ['Drinks (' + n.drinks + ')', fmt$(-n.spentDrinks)], ['Food', fmt$(-n.spentFood)], ['Smokes', fmt$(-n.spentSmokes)], ['Pokies — wagered', fmt$(-n.wagered)], ['Pokies — won', fmt$(n.won)], ['Keno / raffle / trivia', fmt$(n.keno + n.extra)], ['ATM fees', fmt$(-n.fees)]];
       let rentHtml = '';
@@ -155,7 +156,8 @@ const Game = {
         <div class="dname">${D.name} NIGHT</div><div class="dtime">${this.clockText()} · ${reasonTxt}</div>
         <table class="ledger">${rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}
         <tr class="tot"><td>Net for the night</td><td class="${worthNow - worthStart >= 0 ? 'pos' : 'neg'}">${fmt$(worthNow - worthStart)}</td></tr></table>
-        ${rentHtml}
+        ${rentHtml}${tabHtml}
+        ${nsum}
         <p>${hung ? '<span class="neg">You\'re going to feel this tomorrow.</span>' : early ? '<span class="pos">Early night — you\'ll be fresh tomorrow (bonus).</span>' : 'You\'ll be right tomorrow.'}</p>
         <div class="stats"><div>Wallet<b>${fmt0(s.wallet)}</b></div><div>Bank<b>${fmt0(s.bank)}</b></div><div>Tickets<b>${fmt0(tick)}</b></div><div>Mood<b>${Math.round(s.mood)}</b></div></div>
         <button class="cbtn" id="btnNext">${isSunday ? 'SEE YOUR WEEK →' : 'SLEEP IT OFF →'}</button>`;
@@ -257,12 +259,15 @@ const Game = {
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
     return wrap;
   },
-  spend(amt, cat) { const s = this.state; if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } if (amt > 0) CashFX.pay(amt); return true; },
+  spend(amt, cat) { const s = this.state; if (this.useTab && amt > 0 && (cat === 'spentDrinks' || cat === 'spentFood') && Night.tabOK(amt)) { Night.tabAdd(amt); s.night[cat] += amt; s.stats[cat] += amt; this.toast(`On the tab: ${fmt$(Night.tab())} of ${fmt0(Night.tabLimit())}.`); return true; }
+    if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } if (amt > 0) CashFX.pay(amt); return true; },
   drinkPrice(type) {
     const s = this.state, D = DRINKS[type];
     if (s.event === 'knockoff' && type === 'schooner' && s.time >= 16 && s.time < 18) return 8;
-    if (s.event === 'monday' && type === 'pot' && s.time < 21) return 6.5;
-    return D.price;
+    let p = D.price;
+    if (s.event === 'monday' && type === 'pot' && s.time < 21) p = 6.5;
+    if (p > 1 && Night.hasPerk(2)) p = Math.max(1, p - 0.5);
+    return p;
   },
   openBar() {
     const s = this.state;
@@ -282,16 +287,21 @@ const Game = {
     opts.push({ label: 'Bowl of chips', d: 'With chicken salt, obviously', price: '$9.00', fn: () => this.order(null, 9, 'chips', 'spentFood') });
     opts.push({ label: 'Pack of smokes (20)', d: `You have ${s.cigs}. Yes, they're really this much.`, price: '$45.00', fn: () => { if (this.spend(45, 'spentSmokes')) { s.cigs += 20; SFX.register(V3(-9, 1.2, -9)); this.toast('20 smokes. Your wallet weeps.'); this.closePanel(); } } });
     if (s.event === 'raffle' && !this.raffle.drawn) opts.push({ label: 'Meat raffle tickets ×3', d: `Draw at 5pm. You have ${this.raffle.tickets}.`, price: '$5.00', fn: () => { if (this.spend(5)) { s.night.extra -= 5; this.raffle.tickets += 3; SFX.register(V3(-9, 1.2, -9)); this.toast('Three raffle tickets. Come on, meat tray!'); this.closePanel(); } } });
-    if (s.event === 'knockoff') opts.push({ label: 'Shout the crew a round', d: 'Five schooners. Mateship +, wallet −', price: '$45.00', fn: () => { if (this.spend(45, 'spentDrinks')) { s.stats.shouts++; s.mood = Math.min(100, s.mood + 18); this.crewOwes = true; SFX.cheer(V3(-5, 1.5, -6), 1); this.toast('"Legend!" — the crew owes you one.', true); this.closePanel(); } } });
+    if (s.event === 'knockoff') opts.push({ label: 'Shout the crew a round', d: 'Five schooners. Mateship +, wallet −', price: '$45.00', fn: () => { if (this.spend(45, 'spentDrinks')) { s.stats.shouts++; s.mood = Math.min(100, s.mood + 18); this.crewOwes = true; Night.ev('shouted'); SFX.cheer(V3(-5, 1.5, -6), 1); this.toast('"Legend!" — the crew owes you one.', true); this.closePanel(); } } });
+    Moments.barOptions(opts, holding, rsa);
+    if (Night.tabLimit() > 0) opts.push({ label: this.useTab ? 'Paying: on the TAB' : 'Paying: cash', d: `Tab ${fmt$(Night.tab())} of ${fmt0(Night.tabLimit())} — settled from your account at the end of the night`, fn: () => { this.useTab = !this.useTab; this.closePanel(); this.openBar(); } });
+    if (Night.hasPerk(3) && s.flags.lastDrink && !holding && !rsa && DRINKS[s.flags.lastDrink]) { const t = s.flags.lastDrink, pr = this.drinkPrice(t); opts.unshift({ label: `The usual (${DRINKS[t].name})`, d: `${bartender.name} already has the glass out`, price: pr ? fmt$(pr) : 'FREE', fn: () => this.order(t, pr) }); }
+    if (Night.hasPerk(4) && !s.night.freeUsed && !holding && !rsa) opts.unshift({ label: 'Your free schooner', d: 'Local Legend perk: on the house, once a night', price: 'FREE', fn: () => { s.night.freeUsed = true; this.order('schooner', 0); } });
     this.openPanel('THE BAR', rsa ? '<span style="color:#ff8a7a">"Sorry mate, I can\'t serve you any more alcohol. Have a water."</span>' : `Wallet ${fmt$(s.wallet)} · ${bartender.name}'s behind the bar`, this.optList(opts));
   },
   order(type, price, food, cat = 'spentDrinks') {
     if (price > 0 && !this.spend(price, cat)) return;
+    this.useTab = false; if (type === 'water') Night.ev('water');
     this.closePanel();
     SFX.register(V3(-9, 1.2, player.pos.z));
     if (player.drink && player.drink.fill <= 0.08) { const g = player.drink; player.drink = null; g.group.parent && g.group.parent.remove(g.group); vm.R.curl(0.2); this.toast('Handed back your empty.'); }
     const z = clamp(player.pos.z, BAR.z0 + 0.6, BAR.z1 - 0.6);
-    if (type) { if (DRINKS[type].std) { this.state.night.drinks++; this.state.stats.drinks++; } bartenderOrder({ type, forZ: z, cb: (item, spot) => this.placeItem(item, spot) }); }
+    if (type) { if (DRINKS[type].std) { this.state.night.drinks++; this.state.stats.drinks++; this.state.flags.lastDrink = type; } bartenderOrder({ type, forZ: z, cb: (item, spot) => this.placeItem(item, spot) }); }
     if (food) setTimeout(() => bartenderOrder({ food, forZ: z + (type ? 0.35 : 0), cb: (item, spot) => this.placeItem(item, spot) }), 400);
     this.subtitle(`<b>${bartender.name}:</b> ${choice(['No worries.', 'Coming right up.', 'Yep, can do.', 'Easy.'])}`, 2);
   },
@@ -306,7 +316,7 @@ const Game = {
   },
   eat(item) {
     const s = this.state, kind = item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma';
-    Needs.eat(kind);
+    Needs.eat(kind); Night.ev('ate');
     // eaten bite by bite: chips and salad go first, then the parma itself shrinks away
     const m = item.mesh, bites = (m.userData.bites || []).slice().sort(() => Math.random() - 0.5), main = m.userData.main || [];
     let k = 0; const n = 8;
@@ -407,10 +417,10 @@ const Game = {
   },
   onGamble(win, amt) { const s = this.state; if (win) { s.night.won += amt; s.stats.won += amt; s.mood = Math.min(100, s.mood + 4); } else { s.night.won -= amt; s.stats.won -= amt; s.mood = Math.max(0, s.mood - 8); } },
   onFeature(f, m) { this.state.mood = Math.min(100, this.state.mood + 6); },
-  onBigWin(m, lvl) { $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
+  onBigWin(m, lvl) { Night.log('🎰', `${lvl} on ${m.game.name} (${fmt$(m.win || 0)})`); $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
   onJackpot(m, name, amt) {
     const who = m.mode === 'player' ? 'You' : (m.occupiedBy && m.occupiedBy.name) || 'Someone';
-    if (m.mode === 'player') { this.state.stats.jackpots++; SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
+    if (m.mode === 'player') { this.state.stats.jackpots++; Night.log('🔔', `${name} jackpot: ${fmt$(amt)}`); SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
     else if (name !== 'MINI') { SFX.jackpotBell(); this.toast(`🔔 ${who} just hit the ${name} — ${fmt$(amt)} on ${m.game.name}!`, name === 'GRAND' || name === 'MAJOR'); SFX.cheer(m.screenW, 2); }
   },
   onDrag() { const s = this.state; s.crave = Math.max(0, s.crave - 12); s.mood = Math.min(100, s.mood + 2.5); s.cigsTonight++; },
@@ -420,16 +430,16 @@ const Game = {
   onSpill(a) { if (a > 0.05) this.toast(choice(['Whoa — sloshed half your beer.', 'Steady! You\'re wearing it.', 'That\'s a waste of good beer.'])); },
   onBump() { this.state.mood = Math.max(0, this.state.mood - 2); },
   onGlassSmash(pos) {
-    const s = this.state; s.stats.glasses++; s.night.glasses++; s.mood = Math.max(0, s.mood - 3);
+    const s = this.state; s.stats.glasses++; s.night.glasses++; if (s.night.glasses === 1) Night.log('🥴', 'Smashed a glass. WAHEY!'); s.mood = Math.max(0, s.mood - 3);
     if (isInside(pos.x, pos.z)) {
       setTimeout(() => { SFX.cheer(pos, 3); NPCS.forEach(n => { if (n.role !== 'bartender' && n.pos.distanceTo(pos) < 14) n.cheerT = 1.6; }); this.subtitle('<b>The whole pub:</b> WAHEYYYYY!', 2.5); }, 350);
       if (s.night.glasses >= 3) setTimeout(() => this.subtitle(`<b>${bartender.name}:</b> Right, that's three. Maybe call it a night, champ.`, 3), 3000);
     }
   },
-  kickOut() { this.closePanel(); this.subtitle('<b>Bouncer:</b> Alright mate, you\'ve had enough. Out you go.', 3); this.state.kicked = true; setTimeout(() => this.endNight('kicked'), 2200); },
+  kickOut() { Night.log('🚪', 'Bouncer walked you out'); this.closePanel(); this.subtitle('<b>Bouncer:</b> Alright mate, you\'ve had enough. Out you go.', 3); this.state.kicked = true; setTimeout(() => this.endNight('kicked'), 2200); },
   // -------------------------------------------------- talking
   talkTo(n) {
-    const s = this.state; n.a.talk = 2;
+    const s = this.state; n.a.talk = 2; Night.ev('talk', n.regular || n.name);
     if (n.regular) { REG.talk(n); return; }
     if (n.eventTalk) { n.eventTalk(); return; }
     const line = choice((BARKS[n.spot ? (n.spot.kind === 'pokie' ? 'pokie' : n.a.smoking ? 'smoke' : n.spot.area) : 'any'] || BARKS.any).concat(this.dayBarks()));
@@ -459,15 +469,15 @@ const Game = {
     // footy noise on Saturday
     if (s.event === 'raffle' && s.time < 18 && isInside(player.pos.x, player.pos.z)) { this.footyT -= dt; if (this.footyT <= 0) { this.footyT = rand(25, 60); SFX.cheer(V3(0, 2.5, 0), 2); bark(choice(NPCS.filter(n => n.role !== 'bartender')) || bartender, choice(['GOOOAL!', 'Ump! Are you blind?!', 'Kick it!', 'BALL!']), true); } }
     // last drinks + close
-    if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
+    if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; Night.lastCall(); SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
-    RANDOM.update(dt); STORY.update(); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
+    Night.update(dt); Moments.update(dt); RANDOM.update(dt); STORY.update(); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
     // arrivals
     this.arriveT -= dt;
     if (this.arrivals > 0 && this.arriveT <= 0 && s.time < D.close - 1) {
       this.arriveT = rand(25, 70); this.arrivals--;
       const n = mkNPC({ pos: V3(rand(-20, 20), 0, 21) }); const sp = chooseNextSpot(n);
-      if (sp) { sendTo(n, sp); n.path.unshift(NODES.S2.clone(), NODES.S0.clone()); } else { scene.remove(n.h.root); NPCS.pop(); }
+      if (sp) { sendTo(n, sp); n.path.unshift(...streetApproach(n)); } else { scene.remove(n.h.root); NPCS.pop(); }
     }
     // gone NPCs
     for (let i = NPCS.length - 1; i >= 0; i--) if (NPCS[i].gone) { scene.remove(NPCS[i].h.root); NPCS.splice(i, 1); }
@@ -493,6 +503,7 @@ const Game = {
         if (score >= 4) { s.wallet += 50; s.night.extra += 50; s.stats.trivia++; s.mood = Math.min(100, s.mood + 15); prize = 'Your table WINS! $50 bar tab (cash).'; SFX.cheer(player.pos, 2); if (s.day === 2) STORY.addFund(50, 'Bev matched your trivia prize'); }
         else if (score === 3) { prize = 'Second place — a free schooner on the house.'; bartenderOrder({ type: 'schooner', forZ: clamp(player.pos.z, BAR.z0 + .6, BAR.z1 - .6), cb: (it, sp) => this.placeItem(it, sp) }); }
         else prize = 'Wooden spoon. Better luck next week.';
+        Night.ev('trivia', score); Night.log('❓', `Trivia: ${score}/5`);
         this.openPanel('TRIVIA RESULTS', `${score} / 5`, `<p>${prize}</p>`); return;
       }
       const [q, a] = qs[i], right = a[0], opts = a.slice().sort(() => Math.random() - 0.5);
@@ -595,6 +606,7 @@ const Game = {
   phone() {
     const s = this.state, dd = DIFF[s.diff], n = s.night;
     this.openPanel('YOUR PHONE', `${DAYS[s.day].name} ${this.clockText()} · 23% battery`, `
+      ${Night.phoneHTML()}
       <div class="setrow"><span>Wallet</span><b>${fmt$(s.wallet)}</b></div><div class="setrow"><span>Bank</span><b>${fmt$(s.bank)}</b></div>
       <div class="setrow"><span>Rent due Sunday</span><b>${fmt0(dd.rent)}</b></div><div class="setrow"><span>Tonight: drinks / pokies in / pokies won</span><b>${fmt$(n.spentDrinks)} / ${fmt$(n.wagered)} / ${fmt$(n.won)}</b></div>
       <div class="setrow"><span>Week so far: wagered / won</span><b>${fmt$(s.stats.wagered)} / ${fmt$(s.stats.won)}</b></div>
@@ -710,12 +722,12 @@ function simulate(dt) {
     const gam = inGaming(camera.position.x, camera.position.z);
     atmo.iF = damp(atmo.iF || 0, inside ? 1 : 0, 3, dt);
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
-    fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
+    fxPass.uniforms.uWarm.value = atmo.iF * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
     updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
-    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
+    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? (1.15 + Night.house * 0.55) * (1 - Night.dark * 0.8) : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
     fxPass.uniforms.uSmoke.value = damp(fxPass.uniforms.uSmoke.value, onTerrace(camera.position.x, camera.position.z) ? 0.6 : 0, 1, dt);
     AudioSys.update(dt, { inside, gaming: inGaming(camera.position.x, camera.position.z), pos: camera.position, machinePositions: MACHINES.filter(m => m.mode !== 'idle' || Math.random() < 0.3).map(m => m.screenW), firePos: dynamic.firePos, jukePos: dynamic.jukePos });
   }

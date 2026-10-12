@@ -165,7 +165,7 @@ const Racing = {
     const list = document.createElement('div'); list.className = 'opts';
     r.runners.forEach(h => { const b = document.createElement('button'); b.className = 'opt'; b.innerHTML = `<span><b style="color:${SILKS[h.no - 1]};text-shadow:0 0 2px #000">■</b> ${h.no}. ${h.name}<span class="d">Win $${h.div.toFixed(2)} · Place $${Math.max(1.1, 1 + (h.div - 1) / 3.5).toFixed(2)}</span></span>`; b.onclick = () => { sel = h.no; list.querySelectorAll('.opt').forEach(o => o.style.outline = ''); b.style.outline = '2px solid var(--gold)'; SFX.click(); }; list.appendChild(b); });
     wrap.appendChild(list);
-    const place = amt => () => { if (!sel) { Game.toast('Pick a runner first.'); return; } if (!Game.spend(amt)) return; s.night.extra -= amt; this.bets.push({ race: r.no, runner: sel, type, amt }); SFX.print(); Game.toast(`TAB ticket: R${r.no} #${sel} ${r.runners[sel - 1].name} — ${type.toUpperCase()} ${fmt0(amt)}`); Game.closePanel(); };
+    const place = amt => () => { if (!sel) { Game.toast('Pick a runner first.'); return; } if (!Game.spend(amt)) return; s.night.extra -= amt; this.bets.push({ race: r.no, runner: sel, type, amt }); SFX.print(); Night.ev('horse'); Game.toast(`TAB ticket: R${r.no} #${sel} ${r.runners[sel - 1].name} — ${type.toUpperCase()} ${fmt0(amt)}`); Game.closePanel(); };
     Game.openPanel('TAB', 'Pick a runner, then a bet. <span style="opacity:.6">Odds are fixed when you bet. Gamble responsibly.</span>', wrap, [
       { label: 'Win / Place: WIN', fn: e => { type = type === 'win' ? 'place' : 'win'; $('pBtns').firstChild.textContent = 'Win / Place: ' + type.toUpperCase(); } },
       { label: '$5', fn: place(5) }, { label: '$10', fn: place(10) }, { label: '$20', fn: place(20) }, { label: '$50', fn: place(50) }, { label: 'Close', fn: () => Game.closePanel() }]);
@@ -438,7 +438,7 @@ const Karaoke = {
   exit() {
     if (this.el) this.el.remove(); this.el = null; Music.level = 0.9;
     const g = this.g, pct = Math.round(g.score / g.notes.length * 100);
-    this.scores.push({ name: 'You', s: pct }); this.draw();
+    this.scores.push({ name: 'You', s: pct }); this.draw(); Night.ev('sang'); Night.log('🎤', `Karaoke: ${pct}%`);
     if (DAYS[Game.state.day].event === 'knockoff') STORY.addFund(pct, `The crowd chipped in $${pct} for your performance`);
     const s = Game.state; s.mood = Math.min(100, s.mood + (pct > 60 ? 15 : 5));
     Game.toast(`You scored ${pct}%. ${pct >= 85 ? 'The room is on its feet!' : pct >= 60 ? 'Solid effort. Shazza gives you a nod.' : 'The crowd was… supportive.'}`, true);

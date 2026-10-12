@@ -361,7 +361,7 @@ const Darts = {
     MG.lockNPC(gm.opp, V3(-7.6, 0, DARTS.OCHE_Z + 0.6), Math.PI * 0.75);
     if (won) {
       if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; }
-      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts');
+      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts'); Night.ev('dartsWon'); Night.log('🎯', `Beat ${gm.opp.name} at darts`);
       gm.msg = `<b>YOU WIN</b> ${gm.total(0)} to ${gm.total(1)}${gm.stake ? ` — +$${gm.stake}` : ''}`;
       bark(gm.opp, choice(['Fair play. Good arrows.', 'Bloody hell. Rematch next week.', 'Beginner\'s luck, that.']), true); SFX.cheer(DARTS.C, 1);
       if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4);
