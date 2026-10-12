@@ -17,7 +17,8 @@ const Moments = {
     this.started = false; this.id = null;
     if (s.day === 6) return;   // Sunday is the council meeting
     const used = f.momentsUsed || (f.momentsUsed = []);
-    let pool = this.names.filter(n => !used.includes(n)); if (!pool.length) { used.length = 0; pool = this.names.slice(); }
+    const allowed = VENUE.moments ? this.names.filter(n => VENUE.moments.includes(n)) : this.names;
+    let pool = allowed.filter(n => !used.includes(n)); if (!pool.length) { used.length = 0; pool = allowed.slice(); }
     this.id = window.__moment || choice(pool);
     const D = DAYS[s.day]; this.at = s.startTime + (D.close - s.startTime) * rand(0.3, 0.5);
     window.__moment = null;

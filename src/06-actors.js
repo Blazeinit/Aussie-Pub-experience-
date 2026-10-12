@@ -724,7 +724,7 @@ function bark(n, line, loud = false) {
 // ---------------- bartender: serves & pours ----------------
 let bartender = null, beerStream = null;
 function makeBartender() {
-  bartender = mkNPC({ name: choice(['Jacko', 'Rhonda', 'Mick']), shirt: { tile: 'collar', c: 0x161616 }, pants: { tile: 'cloth', c: 0x161616 }, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
+  bartender = mkNPC({ name: choice(VENUE.bartenders), shirt: { tile: 'collar', c: 0x161616 }, pants: { tile: 'cloth', c: 0x161616 }, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
   bartender.glass.group.visible = false;
   // apron
   const ap = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), cm(0x1f4d34, 0.9)); ap.position.set(0, -0.05, 0.135); bartender.h.J.spine.add(ap);

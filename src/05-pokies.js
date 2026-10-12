@@ -440,7 +440,7 @@ function deckMat() {
   const c = mkCanvas(512, 264), x = c.getContext('2d');
   x.fillStyle = lg(x, 0, 0, 0, 264, ['#1c1c22', '#0c0c10']); x.fillRect(0, 0, 512, 264);
   x.fillStyle = '#05050a'; rr(x, 14, 14, 484, 40, 8); x.fill();
-  x.fillStyle = '#ff6a3a'; x.font = 'bold 22px Bungee, Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('THE ROYAL · GAMING · 1c', 256, 35);
+  x.fillStyle = '#ff6a3a'; x.font = 'bold 22px Bungee, Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(VENUE.deckLine, 256, 35, 470);
   for (const b of DECK_BTNS) {
     x.fillStyle = '#000'; rr(x, b.x - 37, 140, 74, 78, 12); x.fill();
     x.fillStyle = lg(x, 0, 146, 0, 212, ['#ffffff', b.c]); rr(x, b.x - 32, 145, 64, 66, 10); x.fill();

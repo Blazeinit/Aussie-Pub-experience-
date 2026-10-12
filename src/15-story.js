@@ -182,6 +182,7 @@ const REG = {
   bump(name, k) { if (REGULARS[name]) relUp(name, k); },
   dartBonus() { return (Game.state.flags.dartTip ? 0.004 : 0) + (Night.hasPerk(4) ? 0.004 : 0); },
   spawnAll() {
+    if (!VENUE.story) return;   // the Royal's locals drink at the Royal
     for (const name in REGULARS) {
       const R = REGULARS[name];
       const n = mkNPC(Object.assign({ name, smoker: name === 'Davo', gambler: name === 'Davo' }, R.look));

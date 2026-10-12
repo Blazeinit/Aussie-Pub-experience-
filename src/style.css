@@ -266,3 +266,11 @@ body.seated.touchmode #deck{opacity:1}
 @media(max-width:700px){.nsum{grid-template-columns:1fr}#goals{font-size:11.5px;max-width:230px}}
 /* the end-of-night card is paper: use ink colours */
 .nsum h4{color:#8a5a1a}.nsname{color:#7a1f18}.nsname small{color:#5a4a3a}.nsbar{background:#d8c8a4}.nsum li b{color:#1d7a35}.nsum li.ok span{color:#1d7a35}.nsum li.no span{color:#b3382b}.nsrel .ok{color:#1d7a35}.nsrel .no{color:#b3382b}
+
+/* ---------- venue picker on the day card ---------- */
+.venues{margin:12px 0 4px;text-align:left}.venues>small{display:block;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:.24em;color:var(--gold);font-size:14px;margin-bottom:6px}
+.vchip{display:block;width:100%;text-align:left;background:rgba(255,255,255,.55);border:1px solid #bba;border-radius:5px;padding:7px 10px;margin:0 0 6px;color:#2a1a0a;transition:all .15s}
+.vchip b{display:block;font-family:Rye,serif;font-size:15px;color:#6a1a10;font-weight:400}.vchip span{display:block;font-size:12px;opacity:.8;line-height:1.35}.vchip i{display:block;font-size:11px;font-style:normal;opacity:.55;margin-top:2px;letter-spacing:.06em}
+.vchip:hover:not(.on):not(.off){background:#fff;border-color:#8a5a1a;transform:translateX(3px)}.vchip.on{background:#f4dfa8;border-color:#8a5a1a}.vchip.off{opacity:.45;cursor:default}
+.venues>small{color:#8a5a1a!important}
+#dayCardInner{max-height:94vh;overflow-y:auto;scrollbar-width:thin}

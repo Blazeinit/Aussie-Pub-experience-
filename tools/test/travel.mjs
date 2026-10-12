@@ -1,0 +1,16 @@
+import { launch, done } from './harness.mjs';
+const g = await launch({ quality: 'low', port: 8160 });
+await g.page.click('#btnNew'); await g.page.click('.dcard[data-diff=normal]'); await g.page.waitForTimeout(500);
+console.log('chips', await g.ev(`JSON.stringify([...document.querySelectorAll('.vchip')].map(b=>[b.dataset.v, b.disabled, b.className]))`));
+console.log('venue before', await g.ev(`window.__game.VENUE.id`), 'wallet', await g.ev(`window.__game.Game.state.wallet`));
+await g.shot('travel', '01_daycard_venues');
+await g.page.click('.vchip[data-v=rsl]');
+await g.page.waitForNavigation({ timeout: 60000 }).catch(() => {});
+await g.page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 240000 });
+await g.page.waitForTimeout(1500);
+console.log('venue after', await g.ev(`window.__game.VENUE.id`), 'wallet', await g.ev(`window.__game.Game.state.wallet`), 'mode', await g.ev(`window.__game.Game.mode`), 'day', await g.ev(`window.__game.Game.state.day`));
+await g.shot('travel', '02_resumed_daycard');
+await g.page.click('#btnGo'); await g.page.waitForTimeout(800); await g.ev('window.__sim(2)');
+console.log('lineup', await g.ev(`window.__game.MACHINES.slice(0,4).map(m=>m.def.game).join(',')`), 'mode', await g.ev(`window.__game.Game.mode`));
+console.log('errors', g.errs.filter(e => !/Failed to load resource|BiquadFilter|willReadFrequently|CORS/.test(e)).join('\n'));
+await g.close(); done();

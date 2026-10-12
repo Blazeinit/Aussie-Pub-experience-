@@ -1,0 +1,9 @@
+dive boot ok
+dive {"lineup":"qotn,qotn,bigred,bigred,buffalo,dragon,outback,sevens,reef,sevens,dragon,am,pm,gc,outback,reef,qotn,bigred","npcs":15,"bartender":"Shaz","price":4.5,"goal":"A night out at THE RUSTY ANCHOR. The Royal's story can wait "}
+shot dive_01_street
+shot dive_02_facade
+shot dive_03_inside
+shot dive_04_gaming
+shot dive_05_bar
+dive errors 
+DONE

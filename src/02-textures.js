@@ -89,20 +89,20 @@ function texTiles(base = '#1f5a3a', w = 256) {
   return canvasTex(c);
 }
 function texCarpet() {
-  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d');
-  x.fillStyle = '#3b0c14'; x.fillRect(0, 0, W, W);
+  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d'), P = VENUE.pal.carpet;
+  x.fillStyle = P[0]; x.fillRect(0, 0, W, W);
   const cell = 128;
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
     const cx = i * cell + cell / 2, cy = j * cell + cell / 2;
     x.save(); x.translate(cx, cy);
     // diamond lattice
-    x.strokeStyle = '#c99a2e'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -cell / 2); x.lineTo(cell / 2, 0); x.lineTo(0, cell / 2); x.lineTo(-cell / 2, 0); x.closePath(); x.stroke();
+    x.strokeStyle = P[1]; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -cell / 2); x.lineTo(cell / 2, 0); x.lineTo(0, cell / 2); x.lineTo(-cell / 2, 0); x.closePath(); x.stroke();
     // floral rosette
-    for (let p = 0; p < 8; p++) { x.rotate(Math.PI / 4); x.fillStyle = p % 2 ? '#1b6d73' : '#d6a838'; x.beginPath(); x.ellipse(0, -20, 7, 18, 0, 0, 7); x.fill(); }
-    x.fillStyle = '#7a1424'; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill();
-    x.fillStyle = '#e8c35a'; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill();
+    for (let p = 0; p < 8; p++) { x.rotate(Math.PI / 4); x.fillStyle = p % 2 ? P[2] : P[3]; x.beginPath(); x.ellipse(0, -20, 7, 18, 0, 0, 7); x.fill(); }
+    x.fillStyle = P[4]; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill();
+    x.fillStyle = P[5]; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill();
     // swirls
-    x.strokeStyle = '#2a8a7f'; x.lineWidth = 2.5;
+    x.strokeStyle = P[6]; x.lineWidth = 2.5;
     for (let q = 0; q < 4; q++) { x.rotate(Math.PI / 2); x.beginPath(); x.arc(cell / 2 - 18, 0, 12, Math.PI * .5, Math.PI * 1.8); x.stroke(); }
     x.restore();
   }
@@ -229,12 +229,12 @@ function signTex(lines, o = {}) {
 
 // Victorian damask wallpaper: cream ground, gilt motif, two motifs per tile
 function texDamask() {
-  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d');
-  x.fillStyle = '#d6c49a'; x.fillRect(0, 0, W, W);
+  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d'), P = VENUE.pal.damask;
+  x.fillStyle = P[0]; x.fillRect(0, 0, W, W);
   for (let i = 0; i < 4000; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '90,60,20' : '255,245,220'},${Math.random() * 0.05})`; x.fillRect(Math.random() * W, Math.random() * W, 2, 2); }
   const motif = (cx, cy, s) => {
     x.save(); x.translate(cx, cy); x.scale(s, s);
-    x.fillStyle = 'rgba(150,108,40,.55)'; x.strokeStyle = 'rgba(120,80,25,.5)'; x.lineWidth = 3;
+    x.fillStyle = `rgba(${P[1]},.55)`; x.strokeStyle = `rgba(${P[2]},.5)`; x.lineWidth = 3;
     for (const m of [1, -1]) {
       x.save(); x.scale(m, 1);
       x.beginPath(); x.moveTo(0, -110); x.bezierCurveTo(40, -90, 60, -40, 20, -10); x.bezierCurveTo(70, 10, 70, 70, 0, 110); x.bezierCurveTo(30, 60, 30, 20, 0, 0); x.closePath(); x.fill(); x.stroke();
@@ -242,7 +242,7 @@ function texDamask() {
       x.beginPath(); x.arc(46, 40, 12, 0, 7); x.stroke();
       x.restore();
     }
-    x.fillStyle = 'rgba(170,125,50,.6)'; x.beginPath(); x.ellipse(0, 0, 12, 22, 0, 0, 7); x.fill();
+    x.fillStyle = `rgba(${P[3]},.6)`; x.beginPath(); x.ellipse(0, 0, 12, 22, 0, 0, 7); x.fill();
     x.restore();
   };
   motif(W / 4, W / 4, 0.95); motif(W * 3 / 4, W * 3 / 4, 0.95); motif(W * 3 / 4, W / 4, 0.45); motif(W / 4, W * 3 / 4, 0.45);

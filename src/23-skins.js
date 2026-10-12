@@ -166,7 +166,8 @@ function skinScreen(add, S) {
 function buildSkinSigns() {
   const img = SLOTSKIN.bannerImg; if (!img) return;
   const t = new THREE.Texture(img); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true;
-  const w = 4.36, h = w * img.height / img.width;
-  signPlane(t, w, h, 10.44, 2.8, -17.82, 0, { toneMapped: false, intensity: 1.1 });
-  addBoxS(SB, MAT.blackPlastic, 10.44, 2.8, -17.86, w + 0.08, h + 0.08, 0.04);
+  const row = VENUE.machines.back, i0 = row.indexOf('ldl1'); if (i0 < 0 || row[i0 + 3] !== 'ldl4') return;   // only over a Lightning Dollar Link run
+  const w = 4.36, h = w * img.height / img.width, cx = 4.5 + (i0 + 1.5) * 1.08;
+  signPlane(t, w, h, cx, 2.8, -17.82, 0, { toneMapped: false, intensity: 1.1 });
+  addBoxS(SB, MAT.blackPlastic, cx, 2.8, -17.86, w + 0.08, h + 0.08, 0.04);
 }

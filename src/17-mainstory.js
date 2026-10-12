@@ -19,6 +19,7 @@ const STORY = {
   chapter() { return CHAPTERS[Game.state.day]; },
   goal() {
     const s = Game.state, S = this.st(), d = s.day;
+    if (!VENUE.story) return `A night out at ${VENUE.name}. The Royal's story can wait a night. Make some mates, back a few winners.`;
     if (d === 0 && S.met) return 'Have a yarn with the regulars. Shout one a drink.';
     if (d === 1 && S.letter) return S.letter === 'signed' ? 'You signed the suit\'s letter. Hope nobody finds out.' : 'You told the suit where to go. The regulars will hear about it.';
     if (d === 2) return `Chip in to the Save the Royal jar on the bar. Fund: ${fmt0(S.fund)}.`;
@@ -38,14 +39,14 @@ const STORY = {
     this.jar = jar; jar.visible = false;
     addInteract({ id: 'jar', pos: V3(F - 0.16, 1.25, -5.3), r: 2.2, enabled: () => this.jar.visible && !MG.active, label: () => `Save the Royal jar — ${fmt0(this.st().fund)} so far`, action: () => this.donate() });
     // the licence behind the footy photo
-    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => Game.state.day >= 3 && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
+    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => VENUE.story && Game.state.day >= 3 && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
   },
   spawn() {
     const s = Game.state, S = this.st();
-    this.jar.visible = s.day >= 2 && S.ending !== 'sold';
+    this.jar.visible = VENUE.story && s.day >= 2 && S.ending !== 'sold';
     this.refreshCoins();
     this.clive = null; this.meetingDone = !!S.ending;
-    if (s.day === 1 || s.day === 5) {
+    if (VENUE.story && (s.day === 1 || s.day === 5)) {
       const n = mkNPC({ name: 'Clive Marsh', role: 'staff', shirt: { tile: 'collar', c: 0x2a2c34 }, pants: { tile: 'cloth', c: 0x2a2c34 }, hair: 0x8a8a8a, style: 'short', glasses: true, beard: null, skinI: 0, girth: 1.05 });
       const p = V3(7.6, 0, -2.9); n.pos.copy(p); n.ry = Math.PI * 0.85; MG.lockNPC(n, p, Math.PI * 0.85, 'stand');
       n.eventTalk = () => this.talkClive(n); this.clive = n;
@@ -99,7 +100,7 @@ const STORY = {
   // ---------------------------------------------------------- nightly hooks
   update() {
     const s = Game.state, S = this.st();
-    if (s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
+    if (VENUE.story && s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
   },
   score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
   meeting() {

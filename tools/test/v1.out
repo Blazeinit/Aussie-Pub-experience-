@@ -1,0 +1,8 @@
+rsl boot ok
+rsl {"lineup":"ldl1,ldl2,ldl3,ldl4,te1,te2,fm,fm,fm,te1,te2,am,gc,hp,bigred,qotn,buffalo,dragon","npcs":16,"bartender":"Digger","price":5.25,"goal":"A night out at WATTLE CREEK RSL. The Royal's story can wait "}
+shot rsl_01_street
+shot rsl_02_facade
+shot rsl_03_inside
+shot rsl_04_gaming
+shot rsl_05_bar
+rsl errors 

@@ -112,6 +112,7 @@ function buildMaterials() {
   MAT.litWindow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.1, 0.55) });
   MAT.shutter = M({ map: TEX.corr, color: 0x5c6060, metalness: 0.6, roughness: 0.6 }, false);
   // online upgrades (keep procedural if blocked/offline)
+  applyVenueMaterials();
   tryOnline(ONLINE + 'hardwood2_diffuse.jpg', t => { t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(1, 1); t.rotation = Math.PI / 2; MAT.timber.map = t; MAT.timber.color.set(0xd8b090); MAT.timber.needsUpdate = true; });
   tryOnline(ONLINE + 'hardwood2_roughness.jpg', t => { MAT.timber.roughnessMap = t; t.rotation = Math.PI / 2; MAT.timber.roughness = 0.7; MAT.timber.needsUpdate = true; });
   tryOnline(ONLINE + 'brick_diffuse.jpg', t => { t.colorSpace = THREE.SRGBColorSpace; MAT.brick.map = t; MAT.brick.needsUpdate = true; });
@@ -373,9 +374,9 @@ function buildFacade() {
   // pediment
   const ped = new THREE.Shape(); ped.moveTo(-3.2, 0); ped.lineTo(3.2, 0); ped.lineTo(0, 1.5); ped.lineTo(-3.2, 0);
   const pg = new THREE.ExtrudeGeometry(ped, { depth: 0.3, bevelEnabled: false }); const pm = new THREE.Mesh(pg, MAT.creamPaint); pm.position.set(0, H2 + 1.6, 1.85); pm.castShadow = true; scene.add(pm);
-  const est = signTex(['EST. 1888'], { w: 512, h: 128, color: '#6b2a18', font: "Rye, serif", size: 72 });
+  const est = signTex([VENUE.est], { w: 512, h: 128, color: '#6b2a18', font: "Rye, serif", size: 72 });
   signPlane(est, 1.8, 0.45, 0, H2 + 2.05, 2.17, 0, { transparent: true });
-  const name = signTex(['ROYAL HOTEL'], { w: 2048, h: 256, color: '#7a1f14', font: "Rye, serif", size: 200, stroke: '#f3e2b8', strokeW: 6 });
+  const name = signTex([VENUE.hotel], { w: 2048, h: 256, color: VENUE.roof, font: "Rye, serif", size: VENUE.hotel.length > 12 ? 170 : 200, stroke: VENUE.roofStroke, strokeW: 6 });
   signPlane(name, 14, 1.75, 0, H2 + 0.92, 2.16, 0, { transparent: true });
   // rear/upper volume so the building has depth from the street
   // (stops short of the front rooms upstairs so the real room behind the facade isn't buried in it)
@@ -425,11 +426,11 @@ function buildFacade() {
     s1.position.z = 7.2; s2.position.z = 7.16; dynamic.neon.push(s1, s2);
   });
   // fascia sign over the door
-  const fas = signTex(['THE ROYAL'], { w: 1024, h: 200, bg: ['#1f4d34', '#123222'], color: '#f0cf6a', font: 'Rye, serif', size: 130, border: '#f0cf6a', borderW: 8 });
+  const fas = signTex([VENUE.name], { w: 1024, h: 200, bg: [VENUE.fascia[0], VENUE.fascia[1]], color: VENUE.fascia[2], font: 'Rye, serif', size: VENUE.name.length > 12 ? 92 : 130, border: VENUE.fascia[2], borderW: 8 });
   signPlane(fas, 3.4, 0.66, 0, 3.4, 2.17, 0, { intensity: 1.3, toneMapped: false });
   // door frame + front step (terrazzo)
   addBoxS(SBX, MAT.greenPaint, -1.38, 1.4, 2.0, 0.12, 2.8, 0.36); addBoxS(SBX, MAT.greenPaint, 1.38, 1.4, 2.0, 0.12, 2.8, 0.36); addBoxS(SBX, MAT.greenPaint, 0, 2.8, 2.0, 2.9, 0.1, 0.36);
-  const terr = signTex(['ROYAL'], { w: 512, h: 256, bg: '#b9ae9a', color: '#7a1f14', font: 'Rye, serif', size: 100, border: '#2f4a3a', borderW: 16 });
+  const terr = signTex([VENUE.terrazzo], { w: 512, h: 256, bg: '#b9ae9a', color: '#7a1f14', font: 'Rye, serif', size: 100, border: '#2f4a3a', borderW: 16 });
   const step = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshStandardMaterial({ map: terr, roughness: 0.3 })); step.rotation.x = -Math.PI / 2; step.position.set(0, 0.006, 2.8); step.receiveShadow = true; scene.add(step);
   // A-frame chalk board (updated each day)
   const ab = new THREE.Group(); ab.position.set(2.6, 0, 6.2); ab.rotation.y = -0.4; scene.add(ab);
@@ -724,7 +725,7 @@ function buildPublicBar() {
   const fb = mesh(new THREE.PlaneGeometry(mw, mh), MAT.mirrorFake, mx, my, -17.845); window.__mirrorFallback = fb; fb.visible = false;
   const frameM = M({ color: 0xb8902e, metalness: 1, roughness: 0.35 });
   for (const [fx, fy, fw, fh] of [[0, mh / 2 + 0.08, mw + 0.3, 0.16], [0, -mh / 2 - 0.08, mw + 0.3, 0.16], [-mw / 2 - 0.08, 0, 0.16, mh], [mw / 2 + 0.08, 0, 0.16, mh]]) SB.add(G.box, frameM, mx + fx, my + fy, -17.82, 0, 0, 0, fw, fh, 0.06);
-  const mt = signTex(['THE ROYAL HOTEL', 'FINE ALES · WINES · SPIRITS'], { w: 1024, h: 256, color: ['#f3d27a', '#e8dcc0'], font: 'Rye, serif', sizes: [86, 40] });
+  const mt = signTex([VENUE.id === 'royal' ? 'THE ROYAL HOTEL' : VENUE.name, VENUE.sub], { w: 1024, h: 256, color: ['#f3d27a', '#e8dcc0'], font: 'Rye, serif', sizes: [86, 40] });
   signPlane(mt, 2.4, 0.6, mx, my + 0.35, -17.83, 0, { transparent: true });
   // TVs: racing above bar end, footy over door
   const tvA = makeTV(-8.65, 3.0, -0.6, Math.PI / 2 * 0 + Math.PI, 'racing'); // facing -z? placed near bar return
@@ -820,11 +821,10 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  // back wall: a Dragon Link bank (Autumn Moon, Golden Century, Panda Magic, Happy & Prosperous) beside a Lightning Dollar Link bank
-  ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
-  // island: Konami Fire Mountain and the Thunder Empire pair on the front, the house classics on the back
-  ['fm', 'te1', 'te2'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
-  ['qotn', 'bigred', 'buffalo'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
+  // lineup comes from the venue: back wall bank of 8, the island (front / rear faces) and the terrace
+  VENUE.machines.back.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
+  VENUE.machines.front.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
+  VENUE.machines.rear.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
   addColBox(5.0, 8.2, -12.75, -11.25);
   SB.add(G.box, MAT.blackPlastic, 6.7, 1.0, -12, 0, 0, 0, 3.4, 2.0, 0.12);
   // jackpot LED board above island
@@ -864,7 +864,7 @@ function buildTerrace() {
   const ss = signTex(['GAMING TERRACE', 'Smoking permitted in this area'], { w: 1024, h: 256, bg: ['#1a3a1a', '#0e220e'], color: ['#e8c56a', '#ddd'], sizes: [96, 44], border: '#e8c56a', borderW: 6 });
   signPlane(ss, 1.6, 0.4, 16.3, 2.5, -17.9, 0);
   // machines along slatted wall facing -x
-  for (let i = 0; i < 4; i++) MACHINE_DEFS.push({ game: ['dragon', 'outback', 'reef', 'sevens'][i], pos: V3(19.0, 0, -16.9 + i * 1.1), ry: -Math.PI / 2, smoke: true });
+  for (let i = 0; i < 4; i++) MACHINE_DEFS.push({ game: VENUE.machines.terrace[i], pos: V3(19.0, 0, -16.9 + i * 1.1), ry: -Math.PI / 2, smoke: true });
   // mushroom heater
   const hx = 15.6, hz = -10.5;
   addCylS(SB, MAT.chrome, hx, 1.1, hz, 0.05, 2.2, 8); addCylS(SB, MAT.chrome, hx, 0.15, hz, 0.25, 0.3, 16);
