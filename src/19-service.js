@@ -61,6 +61,68 @@ const CashFX = {
 // ---------------------------------------------------------------- the ATM: card, PIN, menu, dispense
 const ATM = {
   pos: V3(12.6, 0, -3.3), FEE: 2.5,
+  // the machine: charcoal cabinet, lit topper, hooded screen that mirrors what you're doing, keypad deck, slots
+  build(ax, az) {
+    const g = new THREE.Group(); g.position.set(ax, 0, az); g.rotation.y = -Math.PI / 2; scene.add(g); this.root = g;   // local +z faces the room
+    const body = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.55 }), dark = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.3, metalness: 0.3 });
+    const blue = new THREE.MeshStandardMaterial({ color: 0x0b4fb3, roughness: 0.35, metalness: 0.3 }), steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: 0.22, metalness: 1 });
+    interiorMats.push(body, dark, blue, steel);
+    const add = (geo, mat, x, y, z, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.x = rx; m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+    const rb = (w, h, d, r = 0.02) => new RoundedBoxGeometry(w, h, d, 2, r);
+    add(rb(0.64, 0.08, 0.56, 0.01), dark, 0, 0.04, 0);                        // plinth
+    add(rb(0.62, 0.92, 0.55), body, 0, 0.52, 0);                               // lower safe
+    add(rb(0.62, 0.62, 0.42), body, 0, 1.28, -0.065);                         // upper head, set back
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.012, 1.5, 0.5), blue, sx * 0.311, 0.78, -0.02);   // brand stripes down the sides
+    // lit topper
+    add(rb(0.64, 0.2, 0.46), blue, 0, 1.69, -0.06);
+    const topT = signTex(['ATM', 'ROYAL CREDIT UNION'], { w: 512, h: 160, bg: ['#1065e0', '#0a3c8e'], color: '#fff', sizes: [86, 26] });
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.18), new THREE.MeshBasicMaterial({ map: topT, toneMapped: false })); top.material.color.setScalar(1.4); top.position.set(0, 1.69, 0.172); g.add(top);
+    // screen hood + screen (tilted back a touch)
+    add(rb(0.46, 0.38, 0.1, 0.015), dark, 0, 1.33, 0.17, -0.12);
+    const c = mkCanvas(512, 400); this.scr = { c, tex: canvasTex(c, 1, 1) };
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.28), new THREE.MeshBasicMaterial({ map: this.scr.tex, toneMapped: false })); scr.position.set(0, 1.335, 0.222); scr.rotation.x = -0.12; g.add(scr);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.3), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.03, metalness: 1, transparent: true, opacity: 0.18, depthWrite: false })); glass.position.set(0, 1.335, 0.224); glass.rotation.x = -0.12; g.add(glass);
+    // keypad deck: angled shelf with a printed keypad
+    add(rb(0.62, 0.05, 0.22, 0.01), body, 0, 1.0, 0.27, 0.35);
+    const kc = mkCanvas(256, 160), k = kc.getContext('2d');
+    k.fillStyle = '#1a1c20'; k.fillRect(0, 0, 256, 160);
+    const keys = ['1', '2', '3', 'X', '4', '5', '6', '<', '7', '8', '9', 'O', '', '0', '', ''];
+    keys.forEach((t, i) => { const cx = 18 + (i % 4) * 58, cy = 8 + Math.floor(i / 4) * 37; if (i === 12 || i === 14 || i === 15) return;
+      k.fillStyle = t === 'X' ? '#c0282d' : t === '<' ? '#d6b21c' : t === 'O' ? '#1f9a46' : '#9ea3ab'; k.fillRect(cx, cy, 48, 30); k.fillStyle = 'rgba(255,255,255,.35)'; k.fillRect(cx, cy, 48, 4);
+      k.fillStyle = t === 'X' || t === 'O' ? '#fff' : '#111'; k.font = 'bold 20px sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(t, cx + 24, cy + 16); });
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.125), new THREE.MeshStandardMaterial({ map: canvasTex(kc, 1, 1), roughness: 0.4, metalness: 0.4 })); pad.position.set(-0.04, 1.03, 0.27); pad.rotation.x = -Math.PI / 2 + 0.35; g.add(pad);
+    add(new THREE.BoxGeometry(0.26, 0.05, 0.012), steel, -0.04, 1.075, 0.2, -0.2);   // privacy shield lip behind the keypad
+    // card slot with a breathing green light, receipt slot
+    add(new THREE.BoxGeometry(0.11, 0.035, 0.03), dark, 0.2, 1.06, 0.31, 0.35);
+    this.cardLed = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.008, 0.006), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2, 0.6), toneMapped: false })); this.cardLed.position.set(0.2, 1.076, 0.33); this.cardLed.rotation.x = 0.35; g.add(this.cardLed);
+    add(new THREE.BoxGeometry(0.1, 0.012, 0.012), dark, 0.2, 0.97, 0.36);
+    // cash slot: steel bezel, black mouth, amber light
+    add(rb(0.3, 0.07, 0.03, 0.008), steel, 0, 0.86, 0.285);
+    add(new THREE.BoxGeometry(0.22, 0.022, 0.02), dark, 0, 0.86, 0.297);
+    this.cashLed = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.006, 0.004), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.2, 0.05), toneMapped: false })); this.cashLed.position.set(0, 0.84, 0.302); g.add(this.cashLed);
+    // safe door seam, lock and a sticker
+    add(new THREE.BoxGeometry(0.5, 0.004, 0.004), dark, 0, 0.72, 0.277); add(new THREE.BoxGeometry(0.004, 0.62, 0.004), dark, 0.25, 0.41, 0.277);
+    add(new THREE.CylinderGeometry(0.018, 0.018, 0.012, 16), steel, 0.2, 0.5, 0.28, Math.PI / 2);
+    const stT = signTex(['FEE $2.50', 'per withdrawal'], { w: 256, h: 128, bg: ['#f2c230', '#e0a81a'], color: '#1a1405', sizes: [44, 22] });
+    const st = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.085), new THREE.MeshStandardMaterial({ map: stT, roughness: 0.6 })); st.position.set(-0.13, 0.62, 0.277); g.add(st);
+    this.slot = V3(ax - 0.29, 0.86, az);
+    this.drawScreen(); this.scrT = 0;
+  },
+  // the 3D screen mirrors the panel, so the machine looks alive from across the room
+  drawScreen() {
+    if (!this.scr) return;
+    const x = this.scr.c.getContext('2d'), W = 512, H = 400, st = this.st || null, t = performance.now() / 1000;
+    const gr = x.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0f4fae'); gr.addColorStop(1, '#06224f'); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(0, 0, W, 54); x.fillStyle = '#fff'; x.font = 'bold 22px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('ROYAL CREDIT UNION', W / 2, 28);
+    const stage = this.disp ? 'take' : this.active ? st && st.stage : 'idle';
+    const msg = { idle: ['WELCOME', 'Insert your card to begin'], card: ['WELCOME', 'Please insert your card'], reading: ['PLEASE WAIT', 'Reading card…'], pin: ['ENTER PIN', '●'.repeat(st ? st.pin.length : 0) + '○'.repeat(4 - (st ? st.pin.length : 0))], menu: ['SELECT', 'Withdrawal · Balance'], balance: ['BALANCE', st ? fmt$(Game.state.bank) : ''], amount: ['WITHDRAWAL', 'Select an amount'], confirm: ['FEE NOTICE', `$${this.FEE.toFixed(2)} fee applies`], processing: ['PROCESSING', 'Please wait…'], take: ['PLEASE TAKE', 'YOUR CASH'] }[stage] || ['WELCOME', ''];
+    x.font = 'bold 60px sans-serif'; x.fillText(msg[0], W / 2, 170); x.font = '32px sans-serif'; x.fillStyle = '#cfe0ff'; x.fillText(msg[1], W / 2, 240);
+    if (stage === 'idle' && Math.sin(t * 3) > 0) { x.fillStyle = '#ffd34d'; x.beginPath(); x.moveTo(W / 2 - 18, 300); x.lineTo(W / 2 + 18, 300); x.lineTo(W / 2, 330); x.fill(); }
+    if (stage === 'processing' || stage === 'reading') { x.strokeStyle = '#fff'; x.lineWidth = 6; x.beginPath(); x.arc(W / 2, 315, 22, t * 6, t * 6 + 4.2); x.stroke(); }
+    x.fillStyle = 'rgba(255,255,255,.5)'; x.font = '16px sans-serif'; x.fillText('Visa · Mastercard · eftpos · fees apply', W / 2, H - 22);
+    this.scr.tex.needsUpdate = true;
+  },
   open() {
     const s = Game.state; this.st = { stage: 'card', pin: '', amt: 0 };
     const wrap = document.createElement('div'); wrap.className = 'atm';
@@ -69,10 +131,10 @@ const ATM = {
     this.el = wrap;
     wrap.querySelectorAll('.atmpad button').forEach(b => b.onclick = () => this.key(b.dataset.k));
     Game.openPanel('ATM', 'Royal Credit Union · this machine charges $2.50 per withdrawal', wrap, []);
-    this.render(); SFX.beep();
+    this.active = true; this.render(); SFX.beep();
   },
   render() {
-    const s = Game.state, st = this.st, body = this.el.querySelector('.atmbody');
+    const s = Game.state, st = this.st, body = this.el.querySelector('.atmbody'); this.drawScreen();
     const opt = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = 'atmopt ' + cls; b.innerHTML = label; b.onclick = () => { SFX.beep(); fn(); }; return b; };
     body.innerHTML = '';
     if (st.stage === 'card') { body.innerHTML = '<p class="big">WELCOME</p><p>Please insert your card</p><div class="cardslot"></div>'; body.appendChild(opt('Insert card ▸', () => { SFX.noise(0.4, { freq: 600, q: 1, gain: 0.08 }); st.stage = 'reading'; this.render(); setTimeout(() => { st.stage = 'pin'; this.render(); }, 900); })); }
@@ -105,15 +167,15 @@ const ATM = {
     const s = Game.state, st = this.st, a = st.amt;
     s.bank -= a + this.FEE; s.night.atm = (s.night.atm || 0) + a; s.night.fees += this.FEE; s.stats.atmFees += this.FEE;
     st.stage = 'processing'; this.render(); SFX.atm();
-    setTimeout(() => { st.stage = 'take'; this.render(); setTimeout(() => { Game.closePanel(); this.dispense(a); }, 600); }, 1500);
+    setTimeout(() => { st.stage = 'take'; this.render(); setTimeout(() => { this.active = false; Game.closePanel(); this.dispense(a); }, 600); }, 1500);
   },
-  close() { Game.closePanel(); SFX.noise(0.3, { freq: 600, q: 1, gain: 0.06 }); },
+  close() { this.active = false; this.drawScreen(); Game.closePanel(); SFX.noise(0.3, { freq: 600, q: 1, gain: 0.06 }); },
   // notes slide out of the slot, then you take them
   dispense(a) {
-    const slot = V3(this.pos.x - 0.36, 0.95, this.pos.z);
+    const slot = (this.slot || V3(this.pos.x - 0.29, 0.86, this.pos.z)).clone();
     const stack = new THREE.Group(); scene.add(stack);
     notesFor(a).forEach((d, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.002, 0.075), [0, 1, 2, 3, 4, 5].map(f => f === 2 || f === 3 ? new THREE.MeshStandardMaterial({ map: noteTex(d), roughness: 0.7 }) : new THREE.MeshStandardMaterial({ color: NOTE_COL[d][0], roughness: 0.7 }))); m.position.y = i * 0.0025; m.rotation.y = rand(-0.05, 0.05); stack.add(m); });
-    stack.position.copy(slot); stack.rotation.y = Math.PI / 2;
+    stack.position.copy(slot); stack.rotation.y = -Math.PI / 2;   // notes read the right way up from the front
     this.disp = { stack, t: 0, a, from: slot.clone(), state: 'out' };
     for (let i = 0; i < 14; i++) SFX.noise(0.04, { delay: 0.1 + i * 0.05, freq: 2200, q: 2, gain: 0.05, pos: slot });
     const ia = addInteract({ id: 'cash', temp: true, pos: slot.clone().add(V3(-0.1, 0.1, 0)), r: 2.4, label: () => `Take your ${fmt0(a)}`, action: () => { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } });
@@ -121,6 +183,11 @@ const ATM = {
     setTimeout(() => { if (this.disp && this.disp.state === 'out') { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } }, 6000);
   },
   update(dt) {
+    // screen + lights tick over a few times a second; the cash light flashes while notes are waiting
+    this.scrT = (this.scrT || 0) + dt; if (this.scrT > 0.2) { this.scrT = 0; if ($('panel').classList.contains('hidden')) this.active = false; this.drawScreen(); }
+    const tt = performance.now() / 1000;
+    if (this.cardLed) this.cardLed.material.color.setRGB(0.2, 1.1 + Math.sin(tt * 3) * 0.9, 0.5);
+    if (this.cashLed) this.cashLed.material.color.setRGB(this.disp ? (Math.sin(tt * 10) > 0 ? 2.4 : 0.4) : 0.3, this.disp ? (Math.sin(tt * 10) > 0 ? 1.5 : 0.25) : 0.2, 0.05);
     const d = this.disp; if (!d) return;
     d.t += dt;
     if (d.state === 'out') { const k = easeOut(clamp(d.t / 0.9, 0, 1)); d.stack.position.copy(d.from).add(V3(-0.1 * k, 0, 0)); }

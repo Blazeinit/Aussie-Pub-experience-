@@ -129,7 +129,7 @@ const fxPass = new ShaderPass({
       vec2 off = vec2(sin(uTime*.7), cos(uTime*.53))*0.012*d*d;
       vec3 c = texture2D(tDiffuse, uv).rgb;
       if(d>0.05){ vec3 c2 = texture2D(tDiffuse, uv+off).rgb; c = mix(c, c2, .45*smoothstep(.05,.8,d)); }
-      float ca = 0.0015 + 0.004*d;
+      float ca = (0.0015 + 0.004*d) * smoothstep(.12, .7, length(vUv-.5)*1.4);   // fringe only toward the edges: the centre (pokie screen, faces) stays crisp
       c.r = mix(c.r, texture2D(tDiffuse, uv+vec2(ca,0.)).r, .6);
       c.b = mix(c.b, texture2D(tDiffuse, uv-vec2(ca,0.)).b, .6);
       // grade: warm amber pub interior, cool sodium-and-moonlight night outside

@@ -403,9 +403,24 @@ function gameMats(id) {
     strip: new THREE.BoxGeometry(0.015, 1.4, 0.03), crown: new THREE.BoxGeometry(0.62, 0.05, 0.2), topper: new THREE.PlaneGeometry(0.56, 0.28), belly: new THREE.PlaneGeometry(0.58, 0.29),
     bezH: new THREE.BoxGeometry(0.61, 0.012, 0.012), bezV: new THREE.BoxGeometry(0.012, 0.46, 0.012), bezB: new THREE.BoxGeometry(0.6, 0.012, 0.012), note: new THREE.BoxGeometry(0.12, 0.05, 0.04),
     ledge: new THREE.BoxGeometry(0.2, 0.025, 0.24), ashtray: new THREE.CylinderGeometry(0.06, 0.05, 0.03, 16), seat: new THREE.CylinderGeometry(0.22, 0.22, 0.1, 18), back: new RoundedBoxGeometry(0.4, 0.35, 0.06, 2, 0.03),
-    leg: new THREE.CylinderGeometry(0.03, 0.03, 0.62, 8), base: new THREE.CylinderGeometry(0.22, 0.22, 0.03, 16), screen: new THREE.PlaneGeometry(0.58, 0.435), deck: new THREE.PlaneGeometry(0.62, 0.32), spin: new RoundedBoxGeometry(0.105, 0.135, 0.026, 3, 0.012)
+    leg: new THREE.CylinderGeometry(0.03, 0.03, 0.62, 8), base: new THREE.CylinderGeometry(0.22, 0.22, 0.03, 16), screen: new THREE.PlaneGeometry(0.58, 0.435), plate: new THREE.PlaneGeometry(0.6, 0.13), deck: new THREE.PlaneGeometry(0.62, 0.32), spin: new RoundedBoxGeometry(0.105, 0.135, 0.026, 3, 0.012)
   };
-  return (_gameMats[id] = { accent: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.accent).multiplyScalar(1.5) }), bez: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.frame).multiplyScalar(1.25) }), topper, belly });
+  // the panel between the screen and the deck: speaker grilles either side of the game's badge
+  const pc = mkCanvas(512, 128), px = pc.getContext('2d'), G0 = GAMES[id];
+  px.fillStyle = lg(px, 0, 0, 0, 128, ['#26262c', '#0e0e12']); px.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 512; i += 2) { px.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.02})`; px.fillRect(i, 0, 1, 128); }   // brushed metal
+  for (const cx of [62, 450]) {
+    const ring = px.createRadialGradient(cx, 64, 30, cx, 64, 50); ring.addColorStop(0, '#111'); ring.addColorStop(0.8, '#9a9aa4'); ring.addColorStop(1, '#2a2a30');
+    px.fillStyle = ring; px.beginPath(); px.arc(cx, 64, 50, 0, 7); px.fill(); px.fillStyle = '#08080a'; px.beginPath(); px.arc(cx, 64, 42, 0, 7); px.fill();
+    px.fillStyle = '#2c2c34'; for (let y = -38; y <= 38; y += 7) for (let x = -38; x <= 38; x += 7) if (x * x + y * y < 38 * 38) { px.beginPath(); px.arc(cx + x, 64 + y, 2.2, 0, 7); px.fill(); }
+  }
+  px.textAlign = 'center'; px.textBaseline = 'middle';
+  px.fillStyle = 'rgba(0,0,0,.6)'; rr(px, 128, 22, 256, 84, 14); px.fill(); px.strokeStyle = th.frame; px.lineWidth = 3; rr(px, 128, 22, 256, 84, 14); px.stroke();
+  px.font = 'bold 34px Bungee, Impact, sans-serif'; px.lineWidth = 6; px.strokeStyle = th.accent; px.strokeText(G0.name, 256, 56, 236); px.fillStyle = th.glow; px.fillText(G0.name, 256, 56, 236);
+  px.font = 'bold 15px Inter, sans-serif'; px.fillStyle = th.text || '#fff'; px.fillText((G0.sub || '').toUpperCase(), 256, 90, 230);
+  const plateT = new THREE.CanvasTexture(pc); plateT.colorSpace = THREE.SRGBColorSpace; plateT.anisotropy = maxAniso;
+  const plate = new THREE.MeshBasicMaterial({ map: plateT }); plate.color.setScalar(0.9);
+  return (_gameMats[id] = { plate, accent: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.accent).multiplyScalar(1.5) }), bez: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.frame).multiplyScalar(1.25) }), topper, belly });
 }
 function cabMat() { if (!_cab) { _cab = new THREE.MeshStandardMaterial({ color: 0x17171c, metalness: 0.65, roughness: 0.28 }); interiorMats.push(_cab); } return _cab; }
 function spinMat() { return _spinMat || (_spinMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 1.7, 0.55) })); }
@@ -451,6 +466,7 @@ function buildMachineMesh(def, idx) {
   addS(MGEO.crown, gm.accent, 0, 2.32, -0.15);
   addS(MGEO.topper, gm.topper, 0, 2.08, -0.035);
   addS(MGEO.belly, gm.belly, 0, 0.6, 0.312);
+  addS(MGEO.plate, gm.plate, 0, 1.148, 0.0315);
   for (const [x, y, k] of [[0, 1.664, 'bezH'], [0, 1.216, 'bezH'], [-0.299, 1.44, 'bezV'], [0.299, 1.44, 'bezV'], [0, 0.75, 'bezB'], [0, 0.45, 'bezB']]) addS(MGEO[k], gm.bez, x, y, y < 1 ? 0.312 : 0.044);
   addS(MGEO.note, MAT.chrome, 0.2, 0.86, 0.32);
   addS(MGEO.ledge, MAT.darkWood, -0.45, 0.98, 0.18);

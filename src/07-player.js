@@ -335,14 +335,14 @@ function dropHeld() {
 function sitAt(m) {
   player.seated = m; player.seatT = 0;
   player.camFrom = { pos: camera.position.clone(), q: camera.quaternion.clone() };
-  m.occupiedBy = 'player'; m.setMode('player'); PokieFX.attach(m);
+  m.occupiedBy = 'player'; m.setMode('player'); PokieFX.attach(m); document.body.classList.add('seated');
   if (player.drink && !player.drink.onLedge) placeOnLedge();
 }
 function standUp() {
   const m = player.seated; if (!m) return;
   if (player.drink && player.drink.onLedge) takeFromLedge();
   if (player.drink) player.drink.wasLedge = false;
-  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach();
+  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
   player.seated = null;
   player.pos.copy(m.seatW).addScaledVector(m.fw, 0.45);
   player.yaw = Math.atan2(m.fw.x, m.fw.z); player.pitch = -0.1;

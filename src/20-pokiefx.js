@@ -32,6 +32,9 @@ const PokieFX = {
     const vg = x.createRadialGradient(128, 128, 60, 128, 128, 190); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.35)'); x.fillStyle = vg; x.fillRect(0, 0, 256, 256);
     this.glareMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false, blending: THREE.NormalBlending });
     this.glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.02, metalness: 0.9, transparent: true, opacity: 0.12, depthWrite: false }); interiorMats.push(this.glassMat);
+    // button geometry: the cap's top face is the legend (a box with the label on +z), sat in a thin chrome bezel
+    this.capGeo = new THREE.BoxGeometry(0.066, 0.068, 0.016); this.bezGeo = new RoundedBoxGeometry(0.08, 0.082, 0.008, 2, 0.004);
+    this._legend = {};
     addEventListener('mousemove', e => { this.mx = e.clientX / innerWidth * 2 - 1; this.my = e.clientY / innerHeight * 2 - 1; });
   },
   attach(m) {
@@ -46,13 +49,16 @@ const PokieFX = {
     // glass + glare over the screen
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glassMat); glass.position.set(0, 1.44, 0.047); glass.renderOrder = 3; g.add(glass);
     const glare = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glareMat); glare.position.set(0, 1.44, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
-    // proper glowing buttons on the deck (sit over the printed ones)
+    // real illuminated push-buttons on the deck: a chrome bezel, a solid lit cap and its printed legend
     this.caps = [];
     for (const b of DECK_BTNS) {
-      const col = new THREE.Color(b.c);
-      const cap = new THREE.Mesh(new RoundedBoxGeometry(0.074, 0.076, 0.014, 2, 0.006), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.25, transparent: true, opacity: 0.5 }));
-      cap.position.set((b.x / 512 - 0.5) * 0.62, (0.5 - 178 / 264) * 0.32, 0.008); m.deck.add(cap); cap.userData.id = b.id; this.caps.push(cap);
+      const x = (b.x / 512 - 0.5) * 0.62, y = (0.5 - 178 / 264) * 0.32;
+      const bez = new THREE.Mesh(this.bezGeo, MAT.chrome); bez.position.set(x, y, 0.003); m.deck.add(bez); this.caps.push(bez);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: this.legend(b), emissive: 0xffffff, emissiveMap: this.legend(b), emissiveIntensity: 0.45, roughness: 0.2, metalness: 0 });
+      const cap = new THREE.Mesh(this.capGeo, mat); cap.position.set(x, y, 0.012); m.deck.add(cap); cap.userData.id = b.id; cap.userData.lit = true; this.caps.push(cap);
     }
+    // this machine's SPIN gets its own material so its pulse doesn't light up the whole room's machines
+    if (m.btns[5]) { this.spinShared = m.btns[5].material; m.btns[5].material = this.spinShared.clone(); }
     // note acceptor bezel that blinks green
     this.acceptor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2.2, 0.6), toneMapped: false })); this.acceptor.position.set(0.2, 0.89, 0.342); g.add(this.acceptor);
     // the screen's own light
@@ -61,12 +67,25 @@ const PokieFX = {
   },
   detach() {
     if (!this.m) return;
-    this.m.root.remove(this.group); this.caps.forEach(c => this.m.deck.remove(c));
-    this.group.traverse(o => { if (o.geometry && o.geometry !== MGEO.screen) o.geometry.dispose(); });
+    this.m.root.remove(this.group); this.caps.forEach(c => { this.m.deck.remove(c); if (c.material !== MAT.chrome) c.material.dispose(); });
+    if (this.spinShared && this.m.btns[5]) { this.m.btns[5].material.dispose(); this.m.btns[5].material = this.spinShared; this.spinShared = null; }
+    this.group.traverse(o => { if (o.geometry && o.geometry !== MGEO.screen) o.geometry.dispose(); }); this.caps = [];
     this.m = null; this.light.intensity = 0; this.shake = 0;
   },
+  // printed legend for a deck button: glossy gradient in the button's colour with its label
+  legend(b) {
+    if (this._legend[b.id]) return this._legend[b.id];
+    const c = mkCanvas(128, 128), x = c.getContext('2d');
+    x.fillStyle = lg(x, 0, 0, 0, 128, ['#ffffff', b.c, b.c]); x.fillRect(0, 0, 128, 128);
+    x.fillStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.ellipse(64, 22, 54, 16, 0, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(0,0,0,.35)'; x.lineWidth = 6; x.strokeRect(3, 3, 122, 122);
+    x.fillStyle = '#111'; x.font = 'bold 26px Inter, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const words = b.label.split(' '); words.forEach((w, i) => x.fillText(w, 64, 70 + (i - (words.length - 1) / 2) * 28, 116));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
+    return (this._legend[b.id] = t);
+  },
   celebrate(level) { this.shake = Math.min(1, 0.4 + level / 60); this.flash = 1; this.burstT = 2.5 + Math.min(4, level / 20); },
-  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.003; c.material.emissiveIntensity = 1.4; setTimeout(() => { c.position.z = 0.008; c.material.emissiveIntensity = 0.35; }, 140); } },
+  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.006; c.userData.pressT = 0.14; } },
   update(dt) {
     const m = this.m; if (!m) return;
     this.t += dt; const u = this.ledMat.uniforms; u.uT.value = this.t;
@@ -80,7 +99,14 @@ const PokieFX = {
     if (bigWin) this.light.color.setHSL((this.t * 0.8) % 1, 0.8, 0.6); else this.light.color.lerp(_c1.set(m.game.theme.glow), Math.min(1, dt * 3));
     this.acceptor.material.color.setRGB(0.2, (Math.sin(this.t * 4) > 0 ? 2.2 : 0.4), 0.6);
     // deck buttons: SPIN pulses when it's your go; gamble glows when it's on offer
-    for (const c of this.caps) { const on = c.userData.id === 'gamble' ? (m.gambleOK && m.lastWin > 0 && st === 'showWin') : c.userData.id === 'collect' ? m.credit > 0 : true; c.material.opacity = on ? 0.55 : 0.18; }
+    for (const c of this.caps) {
+      const id = c.userData.id; if (!id) continue;
+      const on = id === 'gamble' ? (m.gambleOK && m.lastWin > 0 && st === 'showWin') : id === 'collect' ? m.credit > 0 : true;
+      if (c.userData.pressT > 0) { c.userData.pressT -= dt; if (c.userData.pressT <= 0) c.position.z = 0.012; }
+      const pulse = id === 'gamble' && on ? 0.5 + 0.5 * Math.sin(this.t * 8) : 0;
+      c.material.emissiveIntensity = damp(c.material.emissiveIntensity, c.userData.pressT > 0 ? 1.6 : on ? 0.45 + pulse : 0.04, 14, dt);
+      c.material.color.setScalar(on ? 1 : 0.35);
+    }
     if (m.btns[5] && m.btns[5].material) m.btns[5].material.color.setRGB(0.35, (m.canSpin() ? 1.4 + Math.sin(this.t * 5) * 0.5 : 0.6), 0.55);
     // coins fountain on a big win
     if (bigWin && Math.random() < dt * 40) { const p = m.screenW.clone().addScaledVector(m.fw, 0.3).add(V3(rand(-0.25, 0.25), -0.45, rand(-0.05, 0.05))); sparkFX.emit(p, m.fw.clone().multiplyScalar(rand(0.3, 0.9)).add(V3(rand(-0.4, 0.4), rand(1.6, 2.6), 0)), 0.012, 1.4, 1, [1, 0.82, 0.25]); }

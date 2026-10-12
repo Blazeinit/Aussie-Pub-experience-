@@ -790,11 +790,8 @@ function buildLounge() {
   dynamic.firePos = V3(fx - 0.4, 0.5, fz);
   // ATM
   const ax = 12.6, az = -3.3;
-  SB.add(new RoundedBoxGeometry(0.7, 1.6, 0.6, 2, 0.05), MAT.greyPlastic, ax, 0.8, az);
-  const atmT = signTex(['ATM', 'CASH OUT'], { w: 256, h: 256, bg: ['#0a4aa8', '#062a6a'], color: '#fff', sizes: [90, 40] });
-  const atmS = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.32), new THREE.MeshBasicMaterial({ map: atmT, toneMapped: false })); atmS.position.set(ax - 0.31, 1.25, az); atmS.rotation.y = -Math.PI / 2; scene.add(atmS);
-  SB.add(G.box, MAT.blackPlastic, ax - 0.32, 0.95, az, 0, 0, 0, 0.06, 0.08, 0.35);
-  addCol(ax, az, 0.75, 0.65);
+  ATM.build(ax, az);   // the machine itself lives with the ATM logic (19-service.js)
+  addCol(ax, az, 0.62, 0.7);
   addInteract({ id: 'atm', pos: V3(ax - 0.3, 1.2, az), r: 1.8, label: () => 'Use ATM', action: () => Game.openATM() });
   // lounge standing spot + fireside
   addSpot({ kind: 'stand', pos: V3(11.4, 0, -2.6), ry: 2.6, area: 'lounge' });
