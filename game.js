@@ -37,7 +37,7 @@ const savedSettings = store('ld_settings');
 const settings = Object.assign({
   quality: 'high', preset: 'high', sens: 1, vol: 0.8, music: 0.6, sfx: 1, amb: 1, fov: 72,
   resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1, dynres: true, showFps: false,
-  touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
+  cinematics: 'full', touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
 }, savedSettings || {});
 // graphics presets: each sets a bundle of individual options (changing one by hand makes it 'custom')
 const PRESETS = {
@@ -496,8 +496,73 @@ const Music = (() => {
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get level() { return level; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
+  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get level() { return level; }, get file() { return !!SONGS[song].file; }, pick(event) { if (typeof VENUE !== 'undefined' && VENUE.songs && Math.random() < 0.85) { const o = VENUE.songs.filter(k => !broken[k]); if (o.length) return choice(o); } const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();
+
+// ---- src/01-venue.js ----
+
+// =====================================================================
+//  VENUES: which pub you're in tonight.
+//  A venue is data: its name and signage, colours, machine lineup, prices, crowd, soundtrack and locals.
+//  The world is built once at boot for the chosen venue; "catching a cab" to another pub saves the game
+//  and reloads into it (so nothing needs unloading and the static batches stay valid).
+// =====================================================================
+const VENUES = {
+  royal: {
+    id: 'royal', name: 'THE ROYAL', hotel: 'ROYAL HOTEL', est: 'EST. 1888', short: 'the Royal', sub: 'FINE ALES · WINES · SPIRITS', terrazzo: 'ROYAL',
+    blurb: "Wattle Creek's last proper pub. Pressed-tin ceilings, a Dragon Link bank out the back, and everyone you know.",
+    story: true, priceMul: 1, crowd: 1, exposure: 1, warm: 1, fare: 0,
+    tint: { carpet: 0xffffff, gaming: 0x6a3a4a, paint: 0xffffff, ceiling: 0xc8bca0, wood: 0xffffff },
+    fascia: ['#1f4d34', '#123222', '#f0cf6a'], roof: '#7a1f14', roofStroke: '#f3e2b8', deckLine: 'THE ROYAL · GAMING · 1c',
+    machines: {
+      back: ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'], front: ['fm', 'te1', 'te2'], rear: ['qotn', 'bigred', 'buffalo'], terrace: ['dragon', 'outback', 'reef', 'sevens']
+    },
+    pal: { carpet: ['#3b0c14', '#c99a2e', '#1b6d73', '#d6a838', '#7a1424', '#e8c35a', '#2a8a7f'], damask: ['#d6c49a', '150,108,40', '120,80,25', '170,125,50'] },
+    bartenders: ['Jacko', 'Rhonda', 'Mick'], songs: null, moments: null,
+  },
+  rsl: {
+    id: 'rsl', name: 'WATTLE CREEK RSL', hotel: 'RSL SUB-BRANCH', est: 'EST. 1921', short: 'the RSL', sub: 'MEMBERS & GUESTS WELCOME', terrazzo: 'RSL',
+    blurb: 'The club. Carpet you could land a plane on, a courtesy bus, $14 schnitty night, and the newest machines in town: Lightning Dollar Link, Thunder Empire and Fire Mountain.',
+    story: false, priceMul: 0.82, crowd: 1.2, exposure: 1.08, warm: 0.5, fare: 12, unlock: 0,
+    tint: { carpet: 0xffffff, gaming: 0x2a3a6a, paint: 0xffffff, ceiling: 0xd2d6dc, wood: 0xc8b8a8 },
+    fascia: ['#14305a', '#0a1a3a', '#e8c56a'], roof: '#14305a', roofStroke: '#f1e4bd', deckLine: 'WATTLE CREEK RSL · GAMING · 1c',
+    machines: {
+      back: ['ldl1', 'ldl2', 'ldl3', 'ldl4', 'te1', 'te2', 'fm', 'fm'], front: ['fm', 'te1', 'te2'], rear: ['am', 'gc', 'hp'], terrace: ['bigred', 'qotn', 'buffalo', 'dragon']
+    },
+    pal: { carpet: ['#0f2350', '#b8c4e0', '#4a78d0', '#dcdcc0', '#243a78', '#f0e8c0', '#3a6ab0'], damask: ['#8fb2e6', '40,72,150', '28,52,115', '60,96,170'] },
+    bartenders: ['Lorraine', 'Digger', 'Marg'], songs: [4, 6, 5, 0], moments: ['footy', 'inspector', 'busker', 'wake'],
+  },
+  dive: {
+    id: 'dive', name: 'THE RUSTY ANCHOR', hotel: 'RUSTY ANCHOR', est: 'EST. 1964', short: 'the Rusty Anchor', sub: 'COLD BEER · HOT CHIPS · NO DRAMA', terrazzo: 'ANCHOR',
+    blurb: "A sticky-carpet dive near the wharf. Cheap pots, old-school pokies (Queen of the Nile, Big Red, 5 Dragons), loud bands and a bouncer called Tiny.",
+    story: false, priceMul: 0.7, crowd: 1.05, exposure: 0.84, warm: 1.15, fare: 8, unlock: 15,
+    tint: { carpet: 0xffffff, gaming: 0x3a2a2a, paint: 0xffffff, ceiling: 0xa09074, wood: 0x9a8a78 },
+    fascia: ['#2a1a14', '#140a08', '#e8a050'], roof: '#5a2a14', roofStroke: '#e8c88a', deckLine: 'THE RUSTY ANCHOR · POKIES · 1c',
+    machines: {
+      back: ['qotn', 'qotn', 'bigred', 'bigred', 'buffalo', 'dragon', 'outback', 'sevens'], front: ['reef', 'sevens', 'dragon'], rear: ['am', 'pm', 'gc'], terrace: ['outback', 'reef', 'qotn', 'bigred']
+    },
+    pal: { carpet: ['#2a1410', '#7a5030', '#5a4636', '#9a7a48', '#4a1a14', '#b89050', '#4a5a40'], damask: ['#8e9c78', '60,74,40', '45,58,30', '78,92,50'] },
+    bartenders: ['Tiny', 'Shaz', 'Gaz'], songs: [2, 3, 7, 6], moments: ['bucks', 'blackout', 'busker', 'footy'],
+  },
+};
+const VENUE = VENUES[store('ld_venue')] || VENUES.royal;
+function venueOpen(id) { const V = VENUES[id]; if (!V) return false; const f = store('ld_save'); const rep = (f && f.flags && f.flags.rep) || 0; return rep >= (V.unlock || 0) || !!window.__unlockVenues; }
+// the colour of the place: tint the shared materials once they exist
+function applyVenueMaterials() {
+  const T = VENUE.tint; if (!T) return;
+  MAT.carpet.color.setHex(T.carpet); MAT.gamingWall.color.setHex(T.gaming); MAT.paintCream.color.setHex(T.paint); MAT.ceiling.color.setHex(T.ceiling);
+  for (const k of ['timber', 'darkWood', 'wainscot', 'barTop']) if (MAT[k] && T.wood !== 0xffffff) MAT[k].color.multiply(new THREE.Color(T.wood));
+}
+// take a cab to another pub: save, remember the choice and reload into it
+function travelTo(id) {
+  const V = VENUES[id]; if (!V || id === VENUE.id) return;
+  const s = Game.state, fare = V.fare || 0;
+  if (fare) { s.wallet >= fare ? s.wallet -= fare : (s.bank -= fare); }
+  Game.save(); store('ld_venue', id); store('ld_resume', 1);
+  const f = $('fade'); f.style.transition = 'opacity .8s'; f.style.opacity = 1;
+  $('loading').classList.remove('hidden'); $('loadtxt').textContent = `Catching a cab to ${V.name}…`;
+  setTimeout(() => location.reload(), 900);
+}
 
 // ---- src/02-textures.js ----
 
@@ -591,20 +656,20 @@ function texTiles(base = '#1f5a3a', w = 256) {
   return canvasTex(c);
 }
 function texCarpet() {
-  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d');
-  x.fillStyle = '#3b0c14'; x.fillRect(0, 0, W, W);
+  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d'), P = VENUE.pal.carpet;
+  x.fillStyle = P[0]; x.fillRect(0, 0, W, W);
   const cell = 128;
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
     const cx = i * cell + cell / 2, cy = j * cell + cell / 2;
     x.save(); x.translate(cx, cy);
     // diamond lattice
-    x.strokeStyle = '#c99a2e'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -cell / 2); x.lineTo(cell / 2, 0); x.lineTo(0, cell / 2); x.lineTo(-cell / 2, 0); x.closePath(); x.stroke();
+    x.strokeStyle = P[1]; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -cell / 2); x.lineTo(cell / 2, 0); x.lineTo(0, cell / 2); x.lineTo(-cell / 2, 0); x.closePath(); x.stroke();
     // floral rosette
-    for (let p = 0; p < 8; p++) { x.rotate(Math.PI / 4); x.fillStyle = p % 2 ? '#1b6d73' : '#d6a838'; x.beginPath(); x.ellipse(0, -20, 7, 18, 0, 0, 7); x.fill(); }
-    x.fillStyle = '#7a1424'; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill();
-    x.fillStyle = '#e8c35a'; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill();
+    for (let p = 0; p < 8; p++) { x.rotate(Math.PI / 4); x.fillStyle = p % 2 ? P[2] : P[3]; x.beginPath(); x.ellipse(0, -20, 7, 18, 0, 0, 7); x.fill(); }
+    x.fillStyle = P[4]; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill();
+    x.fillStyle = P[5]; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill();
     // swirls
-    x.strokeStyle = '#2a8a7f'; x.lineWidth = 2.5;
+    x.strokeStyle = P[6]; x.lineWidth = 2.5;
     for (let q = 0; q < 4; q++) { x.rotate(Math.PI / 2); x.beginPath(); x.arc(cell / 2 - 18, 0, 12, Math.PI * .5, Math.PI * 1.8); x.stroke(); }
     x.restore();
   }
@@ -731,12 +796,12 @@ function signTex(lines, o = {}) {
 
 // Victorian damask wallpaper: cream ground, gilt motif, two motifs per tile
 function texDamask() {
-  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d');
-  x.fillStyle = '#d6c49a'; x.fillRect(0, 0, W, W);
+  const W = 512, c = mkCanvas(W, W), x = c.getContext('2d'), P = VENUE.pal.damask;
+  x.fillStyle = P[0]; x.fillRect(0, 0, W, W);
   for (let i = 0; i < 4000; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '90,60,20' : '255,245,220'},${Math.random() * 0.05})`; x.fillRect(Math.random() * W, Math.random() * W, 2, 2); }
   const motif = (cx, cy, s) => {
     x.save(); x.translate(cx, cy); x.scale(s, s);
-    x.fillStyle = 'rgba(150,108,40,.55)'; x.strokeStyle = 'rgba(120,80,25,.5)'; x.lineWidth = 3;
+    x.fillStyle = `rgba(${P[1]},.55)`; x.strokeStyle = `rgba(${P[2]},.5)`; x.lineWidth = 3;
     for (const m of [1, -1]) {
       x.save(); x.scale(m, 1);
       x.beginPath(); x.moveTo(0, -110); x.bezierCurveTo(40, -90, 60, -40, 20, -10); x.bezierCurveTo(70, 10, 70, 70, 0, 110); x.bezierCurveTo(30, 60, 30, 20, 0, 0); x.closePath(); x.fill(); x.stroke();
@@ -744,7 +809,7 @@ function texDamask() {
       x.beginPath(); x.arc(46, 40, 12, 0, 7); x.stroke();
       x.restore();
     }
-    x.fillStyle = 'rgba(170,125,50,.6)'; x.beginPath(); x.ellipse(0, 0, 12, 22, 0, 0, 7); x.fill();
+    x.fillStyle = `rgba(${P[3]},.6)`; x.beginPath(); x.ellipse(0, 0, 12, 22, 0, 0, 7); x.fill();
     x.restore();
   };
   motif(W / 4, W / 4, 0.95); motif(W * 3 / 4, W * 3 / 4, 0.95); motif(W * 3 / 4, W / 4, 0.45); motif(W / 4, W * 3 / 4, 0.45);
@@ -894,6 +959,7 @@ function buildMaterials() {
   MAT.litWindow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.1, 0.55) });
   MAT.shutter = M({ map: TEX.corr, color: 0x5c6060, metalness: 0.6, roughness: 0.6 }, false);
   // online upgrades (keep procedural if blocked/offline)
+  applyVenueMaterials();
   tryOnline(ONLINE + 'hardwood2_diffuse.jpg', t => { t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(1, 1); t.rotation = Math.PI / 2; MAT.timber.map = t; MAT.timber.color.set(0xd8b090); MAT.timber.needsUpdate = true; });
   tryOnline(ONLINE + 'hardwood2_roughness.jpg', t => { MAT.timber.roughnessMap = t; t.rotation = Math.PI / 2; MAT.timber.roughness = 0.7; MAT.timber.needsUpdate = true; });
   tryOnline(ONLINE + 'brick_diffuse.jpg', t => { t.colorSpace = THREE.SRGBColorSpace; MAT.brick.map = t; MAT.brick.needsUpdate = true; });
@@ -1155,9 +1221,9 @@ function buildFacade() {
   // pediment
   const ped = new THREE.Shape(); ped.moveTo(-3.2, 0); ped.lineTo(3.2, 0); ped.lineTo(0, 1.5); ped.lineTo(-3.2, 0);
   const pg = new THREE.ExtrudeGeometry(ped, { depth: 0.3, bevelEnabled: false }); const pm = new THREE.Mesh(pg, MAT.creamPaint); pm.position.set(0, H2 + 1.6, 1.85); pm.castShadow = true; scene.add(pm);
-  const est = signTex(['EST. 1888'], { w: 512, h: 128, color: '#6b2a18', font: "Rye, serif", size: 72 });
+  const est = signTex([VENUE.est], { w: 512, h: 128, color: '#6b2a18', font: "Rye, serif", size: 72 });
   signPlane(est, 1.8, 0.45, 0, H2 + 2.05, 2.17, 0, { transparent: true });
-  const name = signTex(['ROYAL HOTEL'], { w: 2048, h: 256, color: '#7a1f14', font: "Rye, serif", size: 200, stroke: '#f3e2b8', strokeW: 6 });
+  const name = signTex([VENUE.hotel], { w: 2048, h: 256, color: VENUE.roof, font: "Rye, serif", size: VENUE.hotel.length > 12 ? 170 : 200, stroke: VENUE.roofStroke, strokeW: 6 });
   signPlane(name, 14, 1.75, 0, H2 + 0.92, 2.16, 0, { transparent: true });
   // rear/upper volume so the building has depth from the street
   // (stops short of the front rooms upstairs so the real room behind the facade isn't buried in it)
@@ -1207,11 +1273,11 @@ function buildFacade() {
     s1.position.z = 7.2; s2.position.z = 7.16; dynamic.neon.push(s1, s2);
   });
   // fascia sign over the door
-  const fas = signTex(['THE ROYAL'], { w: 1024, h: 200, bg: ['#1f4d34', '#123222'], color: '#f0cf6a', font: 'Rye, serif', size: 130, border: '#f0cf6a', borderW: 8 });
+  const fas = signTex([VENUE.name], { w: 1024, h: 200, bg: [VENUE.fascia[0], VENUE.fascia[1]], color: VENUE.fascia[2], font: 'Rye, serif', size: VENUE.name.length > 12 ? 92 : 130, border: VENUE.fascia[2], borderW: 8 });
   signPlane(fas, 3.4, 0.66, 0, 3.4, 2.17, 0, { intensity: 1.3, toneMapped: false });
   // door frame + front step (terrazzo)
   addBoxS(SBX, MAT.greenPaint, -1.38, 1.4, 2.0, 0.12, 2.8, 0.36); addBoxS(SBX, MAT.greenPaint, 1.38, 1.4, 2.0, 0.12, 2.8, 0.36); addBoxS(SBX, MAT.greenPaint, 0, 2.8, 2.0, 2.9, 0.1, 0.36);
-  const terr = signTex(['ROYAL'], { w: 512, h: 256, bg: '#b9ae9a', color: '#7a1f14', font: 'Rye, serif', size: 100, border: '#2f4a3a', borderW: 16 });
+  const terr = signTex([VENUE.terrazzo], { w: 512, h: 256, bg: '#b9ae9a', color: '#7a1f14', font: 'Rye, serif', size: 100, border: '#2f4a3a', borderW: 16 });
   const step = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshStandardMaterial({ map: terr, roughness: 0.3 })); step.rotation.x = -Math.PI / 2; step.position.set(0, 0.006, 2.8); step.receiveShadow = true; scene.add(step);
   // A-frame chalk board (updated each day)
   const ab = new THREE.Group(); ab.position.set(2.6, 0, 6.2); ab.rotation.y = -0.4; scene.add(ab);
@@ -1506,7 +1572,7 @@ function buildPublicBar() {
   const fb = mesh(new THREE.PlaneGeometry(mw, mh), MAT.mirrorFake, mx, my, -17.845); window.__mirrorFallback = fb; fb.visible = false;
   const frameM = M({ color: 0xb8902e, metalness: 1, roughness: 0.35 });
   for (const [fx, fy, fw, fh] of [[0, mh / 2 + 0.08, mw + 0.3, 0.16], [0, -mh / 2 - 0.08, mw + 0.3, 0.16], [-mw / 2 - 0.08, 0, 0.16, mh], [mw / 2 + 0.08, 0, 0.16, mh]]) SB.add(G.box, frameM, mx + fx, my + fy, -17.82, 0, 0, 0, fw, fh, 0.06);
-  const mt = signTex(['THE ROYAL HOTEL', 'FINE ALES · WINES · SPIRITS'], { w: 1024, h: 256, color: ['#f3d27a', '#e8dcc0'], font: 'Rye, serif', sizes: [86, 40] });
+  const mt = signTex([VENUE.id === 'royal' ? 'THE ROYAL HOTEL' : VENUE.name, VENUE.sub], { w: 1024, h: 256, color: ['#f3d27a', '#e8dcc0'], font: 'Rye, serif', sizes: [86, 40] });
   signPlane(mt, 2.4, 0.6, mx, my + 0.35, -17.83, 0, { transparent: true });
   // TVs: racing above bar end, footy over door
   const tvA = makeTV(-8.65, 3.0, -0.6, Math.PI / 2 * 0 + Math.PI, 'racing'); // facing -z? placed near bar return
@@ -1602,11 +1668,10 @@ function buildGamingRoom() {
   // machines: back row facing +z, island bank (both faces)
   const games = ['outback', 'dragon', 'sevens', 'reef'];
   let gi = 0;
-  // back wall: a Dragon Link bank (Autumn Moon, Golden Century, Panda Magic, Happy & Prosperous) beside a Lightning Dollar Link bank
-  ['am', 'gc', 'pm', 'hp', 'ldl1', 'ldl2', 'ldl3', 'ldl4'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
-  // island: Konami Fire Mountain and the Thunder Empire pair on the front, the house classics on the back
-  ['fm', 'te1', 'te2'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
-  ['qotn', 'bigred', 'buffalo'].forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
+  // lineup comes from the venue: back wall bank of 8, the island (front / rear faces) and the terrace
+  VENUE.machines.back.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(4.5 + i * 1.08, 0, -17.45), ry: 0, smoke: false }));
+  VENUE.machines.front.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -11.62), ry: 0, smoke: false }));
+  VENUE.machines.rear.forEach((id, i) => MACHINE_DEFS.push({ game: id, pos: V3(5.6 + i * 1.1, 0, -12.38), ry: Math.PI, smoke: false }));
   addColBox(5.0, 8.2, -12.75, -11.25);
   SB.add(G.box, MAT.blackPlastic, 6.7, 1.0, -12, 0, 0, 0, 3.4, 2.0, 0.12);
   // jackpot LED board above island
@@ -1646,7 +1711,7 @@ function buildTerrace() {
   const ss = signTex(['GAMING TERRACE', 'Smoking permitted in this area'], { w: 1024, h: 256, bg: ['#1a3a1a', '#0e220e'], color: ['#e8c56a', '#ddd'], sizes: [96, 44], border: '#e8c56a', borderW: 6 });
   signPlane(ss, 1.6, 0.4, 16.3, 2.5, -17.9, 0);
   // machines along slatted wall facing -x
-  for (let i = 0; i < 4; i++) MACHINE_DEFS.push({ game: ['dragon', 'outback', 'reef', 'sevens'][i], pos: V3(19.0, 0, -16.9 + i * 1.1), ry: -Math.PI / 2, smoke: true });
+  for (let i = 0; i < 4; i++) MACHINE_DEFS.push({ game: VENUE.machines.terrace[i], pos: V3(19.0, 0, -16.9 + i * 1.1), ry: -Math.PI / 2, smoke: true });
   // mushroom heater
   const hx = 15.6, hz = -10.5;
   addCylS(SB, MAT.chrome, hx, 1.1, hz, 0.05, 2.2, 8); addCylS(SB, MAT.chrome, hx, 0.15, hz, 0.25, 0.3, 16);
@@ -2764,7 +2829,7 @@ function deckMat() {
   const c = mkCanvas(512, 264), x = c.getContext('2d');
   x.fillStyle = lg(x, 0, 0, 0, 264, ['#1c1c22', '#0c0c10']); x.fillRect(0, 0, 512, 264);
   x.fillStyle = '#05050a'; rr(x, 14, 14, 484, 40, 8); x.fill();
-  x.fillStyle = '#ff6a3a'; x.font = 'bold 22px Bungee, Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('THE ROYAL · GAMING · 1c', 256, 35);
+  x.fillStyle = '#ff6a3a'; x.font = 'bold 22px Bungee, Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(VENUE.deckLine, 256, 35, 470);
   for (const b of DECK_BTNS) {
     x.fillStyle = '#000'; rr(x, b.x - 37, 140, 74, 78, 12); x.fill();
     x.fillStyle = lg(x, 0, 146, 0, 212, ['#ffffff', b.c]); rr(x, b.x - 32, 145, 64, 66, 10); x.fill();
@@ -4026,7 +4091,7 @@ function bark(n, line, loud = false) {
 // ---------------- bartender: serves & pours ----------------
 let bartender = null, beerStream = null;
 function makeBartender() {
-  bartender = mkNPC({ name: choice(['Jacko', 'Rhonda', 'Mick']), shirt: { tile: 'collar', c: 0x161616 }, pants: { tile: 'cloth', c: 0x161616 }, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
+  bartender = mkNPC({ name: choice(VENUE.bartenders), shirt: { tile: 'collar', c: 0x161616 }, pants: { tile: 'cloth', c: 0x161616 }, role: 'bartender', smoker: false, gambler: false, pos: BAR.tender.home, ry: BAR.tender.ry });
   bartender.glass.group.visible = false;
   // apron
   const ap = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), cm(0x1f4d34, 0.9)); ap.position.set(0, -0.05, 0.135); bartender.h.J.spine.add(ap);
@@ -4602,6 +4667,7 @@ function seatCam() {
 
 function updatePlayer(dt, t) {
   const s = Game.state, drunk = s.drunk / 100;
+  if (Cine.active) { Cine.update(dt); input.mx = input.my = 0; return; }
   if (MG.active) { MG.update(dt, t); if (player.drink) player.drink.update(dt, t); return; }
   // look
   if (input.locked && !player.seated) {
@@ -4739,7 +4805,7 @@ const Game = {
   },
   netWorth() { const s = this.state; return s.wallet + s.bank + s.tickets.reduce((a, b) => a + b, 0) + this.machineCredit(); },
   machineCredit() { return player.seated ? player.seated.credit : 0; },
-  save() { const s = this.state; store('ld_save', { diff: s.diff, day: s.day, wallet: s.wallet, bank: s.bank, cigs: s.cigs, tickets: s.tickets, debts: s.debts, next: s.next, stats: s.stats, mood: s.mood, rel: s.rel, flags: s.flags, JP }); },
+  save() { const s = this.state; store('ld_save', { diff: s.diff, day: s.day, wallet: s.wallet, bank: s.bank, cigs: s.cigs, tickets: s.tickets, debts: s.debts, next: s.next, stats: s.stats, mood: s.mood, rel: s.rel, flags: s.flags, JP, morningDone: s.morningDone, startHang: s.startHang, startEarly: s.startEarly, morningMsgs: s.morningMsgs }); },
   load() { const d = store('ld_save'); if (!d || d.day == null || d.day > 6) return false; Object.assign(this.state, d); if (d.JP) Object.assign(JP, d.JP); rtpMod = DIFF[d.diff].rtp; return true; },
   showDayCard() {
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
@@ -4758,8 +4824,8 @@ const Game = {
         for (const d of s.debts.filter(d => d.day < s.day)) { if (Math.random() < d.chance) { s.wallet += d.amt + 5; msgs.push(`<span class="pos">${d.name} paid back the ${fmt0(d.amt)} he owed you, plus a fiver for your trouble. Legend.</span>`); } else msgs.push(`<span class="neg">${d.name} still hasn't paid back your ${fmt0(d.amt)}. Classic.</span>`); }
         s.debts = s.debts.filter(d => d.day >= s.day);
       }
-      s.morningDone = true; s.startHang = !!s.next.hang; s.startEarly = !!s.next.early;
-    }
+      s.morningDone = true; s.startHang = !!s.next.hang; s.startEarly = !!s.next.early; s.morningMsgs = msgs.slice();
+    } else msgs.push(...(s.morningMsgs || []));
     const start = D.start + (s.startHang ? 1 : 0);
     s.startTime = start;
     const hh = h => { const hr = Math.floor(h) % 24, m = Math.round((h % 1) * 60); return `${hr % 12 === 0 ? 12 : hr % 12}:${String(m).padStart(2, '0')} ${hr >= 12 ? 'PM' : 'AM'}`; };
@@ -4767,6 +4833,7 @@ const Game = {
       <div class="dname">${D.name}</div><div class="dtime">${hh(start)} · DAY ${s.day + 1} OF 7 · ${dd.label.toUpperCase()}</div>
       <div class="event">${D.title}</div>
       <div class="chapter"><small>${CHAPTERS[s.day].title.toUpperCase()}</small>${CHAPTERS[s.day].narr}</div>
+      ${s.day < 6 ? `<div class="venues"><small>WHERE TO TONIGHT?</small>${Object.values(VENUES).map(v => { const ok = venueOpen(v.id), here = v.id === VENUE.id; return `<button class="vchip ${here ? 'on' : ''} ${ok ? '' : 'off'}" data-v="${v.id}" ${ok ? '' : 'disabled'}><b>${v.name}</b><span>${ok ? v.blurb : `Locked: build your standing at the Royal first (${v.unlock}+).`}</span><i>${here ? 'you are here' : v.fare ? `cab $${v.fare}` : 'home turf'}${v.story ? ' · story night' : ' · a night off'}</i></button>`; }).join('')}</div>` : ''}
       <p>${D.desc}</p>
       ${s.startHang ? '<p class="neg"><b>Hungover.</b> You got going an hour late and everything is a bit too loud.</p>' : ''}
       ${msgs.map(m => `<p style="margin:4px 0">${m}</p>`).join('')}
@@ -4775,6 +4842,7 @@ const Game = {
       <div style="margin-top:18px"><button class="cbtn" id="btnGo">HEAD TO THE PUB →</button></div>`;
     $('title').classList.add('hidden'); $('summary').classList.add('hidden'); $('dayCard').classList.remove('hidden');
     $('btnGo').onclick = () => { AudioSys.init(); $('dayCard').classList.add('hidden'); this.startNight(); };
+    document.querySelectorAll('.vchip').forEach(b => b.onclick = () => { if (b.dataset.v !== VENUE.id) { AudioSys.init(); travelTo(b.dataset.v); } });
     this.mode = 'card';
   },
   startNight() {
@@ -4793,8 +4861,8 @@ const Game = {
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
-    REG.spawnAll(); Shops.spawnStaff(); STORY.spawn();
-    spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
+    REG.spawnAll(); VenueLocals.spawn(); Shops.spawnStaff(); STORY.spawn();
+    spawnPatrons(Math.round(D.crowd * VENUE.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
     Night.start(); RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
@@ -4807,7 +4875,8 @@ const Game = {
     $('hud').classList.remove('hidden'); $('deck').classList.add('hidden');
     this.fade(1, 0); lockPointer(); this.useTab = false;
     this.objective();
-    setTimeout(() => this.subtitle(s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is the Royal.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is the Royal.</i>', 5), 600);
+    { const seen = s.flags.seen = s.flags.seen || {}; const first = !seen[VENUE.id]; seen[VENUE.id] = 1; Cine.opening(first); }
+    setTimeout(() => this.subtitle(s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is ' + VENUE.short + '.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is ' + VENUE.short + '.</i>', 5), 600);
   },
   endNight(reason) {
     if (this.mode !== 'play') return;
@@ -4908,7 +4977,7 @@ const Game = {
   objective() {
     const s = this.state, D = DAYS[s.day];
     let o;
-    if (!this.entered) o = 'Cross the road and head into the Royal.';
+    if (!this.entered) o = `Cross the road and head into ${VENUE.short}.`;
     else {
       const tips = { monday: 'Grab a pot at the bar (pots $6.50 till 9). Machines are out the back.', parma: 'Parma & Pot is $15 tonight — order at the bar.', trivia: this.trivia.done ? 'Trivia\'s done. Enjoy the night.' : 'Trivia starts at 8:30pm. Stay inside.', jackpot: 'Jackpots grow twice as fast tonight.', knockoff: 'Shout the crew a round, or let them shout you.', raffle: this.raffle.drawn ? 'Footy\'s on. Have a good one.' : 'Meat raffle draws at 5pm. Tickets at the bar.', sunday: `Rent of ${fmt0(DIFF[s.diff].rent)} comes out tonight. Bank: ${fmt0(s.bank)}.` };
       o = tips[D.event] || '';
@@ -4948,7 +5017,9 @@ const Game = {
     if (s.event === 'knockoff' && type === 'schooner' && s.time >= 16 && s.time < 18) return 8;
     let p = D.price;
     if (s.event === 'monday' && type === 'pot' && s.time < 21) p = 6.5;
+    p = Math.round(p * VENUE.priceMul * 4) / 4;
     if (p > 1 && Night.hasPerk(2)) p = Math.max(1, p - 0.5);
+    if (p > 1 && s.flags.spudMates) p = Math.max(1, p - 0.5);
     return p;
   },
   openBar() {
@@ -5102,6 +5173,7 @@ const Game = {
   onBigWin(m, lvl) { Night.log('🎰', `${lvl} on ${m.game.name} (${fmt$(m.win || 0)})`); $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
   onJackpot(m, name, amt) {
     const who = m.mode === 'player' ? 'You' : (m.occupiedBy && m.occupiedBy.name) || 'Someone';
+    if (m.mode === 'player' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
     if (m.mode === 'player') { this.state.stats.jackpots++; Night.log('🔔', `${name} jackpot: ${fmt$(amt)}`); SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
     else if (name !== 'MINI') { SFX.jackpotBell(); this.toast(`🔔 ${who} just hit the ${name} — ${fmt$(amt)} on ${m.game.name}!`, name === 'GRAND' || name === 'MAJOR'); SFX.cheer(m.screenW, 2); }
   },
@@ -5174,7 +5246,7 @@ const Game = {
     // leaving via the street
     if (this.entered && player.pos.z > 18.6 && !this.askedHome && !this.uiOpen) { this.askedHome = true; this.openPanel('HEAD HOME?', `It's ${this.clockText()}. ${s.time < 22 && s.drunk < 35 ? 'An early, sober night means a bonus tomorrow.' : ''}`, '', [{ label: 'Walk home', fn: () => { this.closePanel(); this.walkHome(); } }, { label: 'One more', fn: () => { this.closePanel(); } }]); }
     if (player.pos.z < 17 && this.askedHome) this.askedHome = false;
-    if (!this.entered && isInside(player.pos.x, player.pos.z)) { this.entered = true; this.toast('Welcome to the Royal.'); this.objective(); this.subtitle(`<b>${bartender.name}:</b> ${choice(["G'day! What can I get ya?", 'Evenin\'! Bar\'s open.', "How ya goin', mate?"])}`, 3); }
+    if (!this.entered && isInside(player.pos.x, player.pos.z)) { this.entered = true; this.toast(`Welcome to ${VENUE.id === 'royal' ? 'the Royal' : VENUE.name.split(' ').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')}.`); this.objective(); this.subtitle(`<b>${bartender.name}:</b> ${choice(["G'day! What can I get ya?", 'Evenin\'! Bar\'s open.', "How ya goin', mate?"])}`, 3); }
     if (s.wallet + s.bank + s.tickets.reduce((a, b) => a + b, 0) + this.machineCredit() < 0.5 && !this.brokeWarned) { this.brokeWarned = true; this.toast('You\'re completely skint. Water\'s free, the walk home is too.', true); }
   },
   runTrivia() {
@@ -5197,9 +5269,11 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
+    if (DLG.active) { DLG.key(code); return; }
+    if (Cine.active) return;
     if (code === 'Escape') { if (!$('panel').classList.contains('hidden')) { this.closePanel(); return; } if (player.seated) { this.leaveMachine(); return; } return; }
     if (this.uiOpen || this.paused) return;
     if (MG.active) { MG.key(code); return; }
@@ -5306,7 +5380,7 @@ function updateBoards(D) {
     lines.forEach((l, i) => { let fs = i === 0 ? 70 : 60; x.font = `${fs}px 'Permanent Marker', cursive`; while (fs > 24 && x.measureText(l).width > W - 48) { fs -= 4; x.font = `${fs}px 'Permanent Marker', cursive`; } x.fillStyle = ['#f2efe6', '#ffd84a', '#ff8a7a', '#8ad8ff', '#f2efe6'][i % 5]; x.fillText(l, W / 2, 110 + i * (H - 160) / Math.max(1, lines.length - 1) * 0.85); });
     b.tex.needsUpdate = true;
   };
-  draw(dynamic.boards.aframe, ['THE ROYAL', ...D.board, 'POKIES · TAB · KENO']);
+  draw(dynamic.boards.aframe, [VENUE.name, ...D.board, 'POKIES · TAB · KENO']);
   draw(dynamic.boards.specials, ['SPECIALS', 'PARMA $26', 'CHIPS $9', D.event === 'parma' ? 'PARMA+POT $15' : D.event === 'sunday' ? 'ROAST $22' : 'SCHOONER $9.50', 'NO SHIRT NO SERVICE']);
 }
 
@@ -5352,6 +5426,7 @@ function perfOverlay(dt) {
 // debug/test helper: fast-forward the simulation without rendering
 window.__sim = (sec, step = 1 / 30) => { for (let i = 0; i < sec / step; i++) simulate(step); };
 function simulate(dt) {
+  if (Cine.active) { Cine.rdt = dt; dt *= Cine.slow; }
   elapsed += dt;
   const s = Game.state;
   const playing = Game.mode === 'play' && !Game.paused;
@@ -5363,9 +5438,9 @@ function simulate(dt) {
   }
   vm.root.visible = Game.mode === 'play' && !MG.active;
   if (playing) {
-    s.time += dt * Game.timeScale;
+    if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt);
+    Game.updateEvents(dt); DLG.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;
@@ -5404,12 +5479,12 @@ function simulate(dt) {
     const gam = inGaming(camera.position.x, camera.position.z);
     atmo.iF = damp(atmo.iF || 0, inside ? 1 : 0, 3, dt);
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
-    Town.glow(atmo.nightF); fxPass.uniforms.uWarm.value = atmo.iF * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
+    Town.glow(atmo.nightF); fxPass.uniforms.uWarm.value = atmo.iF * VENUE.warm * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
     updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
-    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? (1.15 + Night.house * 0.55) * (1 - Night.dark * 0.8) : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
+    renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? (1.15 * VENUE.exposure + Night.house * 0.55) * (1 - Night.dark * 0.8) : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
     fxPass.uniforms.uSmoke.value = damp(fxPass.uniforms.uSmoke.value, onTerrace(camera.position.x, camera.position.z) ? 0.6 : 0, 1, dt);
     AudioSys.update(dt, { inside, gaming: inGaming(camera.position.x, camera.position.z), pos: camera.position, machinePositions: MACHINES.filter(m => m.mode !== 'idle' || Math.random() < 0.3).map(m => m.screenW), firePos: dynamic.firePos, jukePos: dynamic.jukePos });
   }
@@ -5633,12 +5708,12 @@ const Darts = {
     const opts = [0, 5, 10, 20].map(st => ({ label: st ? `Play for $${st}` : 'Friendly game', d: st ? 'Winner takes the lot' : 'Just for bragging rights', price: st ? fmt0(st) : '', disabled: st > s.wallet, fn: () => { Game.closePanel(); this.begin(st, preferred); } }));
     Game.openPanel('DARTS', `${who} is keen for a game. Three rounds, three darts each — highest total wins.`, Game.optList(opts));
   },
-  begin(stake, preferName) {
+  begin(stake, preferName, comp) {
     const { n, sp } = MG.opponent(o => o.anim === 'darts', preferName);
     const regular = typeof REG !== 'undefined' ? REG.get(n.name) : null;
     const skill = regular && regular.dartSkill != null ? regular.dartSkill : rand(0.35, 0.7);
     const gm = this.gm = {
-      opp: n, sp, stake, skill, rounds: [[], []], cur: 0, round: 0, phase: 'intro', t: 0, darts: [], thrown: 0, roundPts: 0,
+      opp: n, sp, stake, comp, skill, rounds: [[], []], cur: 0, round: 0, phase: 'intro', t: 0, darts: [], thrown: 0, roundPts: 0,
       aimX: 0, aimY: 0.103, power: 0, charging: false, breath: 1, steady: false, sway: rand(0, 10), msg: '',
       total(i) { return this.rounds[i].reduce((a, b) => a + b, 0); },
     };
@@ -5812,7 +5887,8 @@ const Darts = {
     MG.lockNPC(gm.opp, V3(-7.6, 0, DARTS.OCHE_Z + 0.6), Math.PI * 0.75);
     if (won) {
       if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; }
-      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts'); Night.ev('dartsWon'); Night.log('🎯', `Beat ${gm.opp.name} at darts`);
+      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts');
+      if (gm.comp) { s.wallet += 60; s.night.extra += 60; s.flags.compWon = true; achieve('champ'); Night.addRep(5, 'Won the Royal darts comp'); Night.log('🏆', 'Won the Royal darts comp (+$60)'); Game.toast('🏆 ROYAL DARTS CHAMPION! The trophy and $60 prize pool are yours.', true); } Night.ev('dartsWon'); Night.log('🎯', `Beat ${gm.opp.name} at darts`);
       gm.msg = `<b>YOU WIN</b> ${gm.total(0)} to ${gm.total(1)}${gm.stake ? ` — +$${gm.stake}` : ''}`;
       bark(gm.opp, choice(['Fair play. Good arrows.', 'Bloody hell. Rematch next week.', 'Beginner\'s luck, that.']), true); SFX.cheer(DARTS.C, 1);
       if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4);
@@ -7243,7 +7319,8 @@ const Karaoke = {
   },
   exit() {
     if (this.el) this.el.remove(); this.el = null; Music.level = 0.9;
-    const g = this.g, pct = Math.round(g.score / g.notes.length * 100);
+    const g = this.g; let pct = Math.round(g.score / g.notes.length * 100);
+    const duet = Game.state.flags.shazDuet && Game.state.day === 4; if (duet) { pct = Math.min(100, pct + 12); Game.toast('Shazza joined in on the chorus. The roof lifts.'); }
     this.scores.push({ name: 'You', s: pct }); this.draw(); Night.ev('sang'); Night.log('🎤', `Karaoke: ${pct}%`);
     if (DAYS[Game.state.day].event === 'knockoff') STORY.addFund(pct, `The crowd chipped in $${pct} for your performance`);
     const s = Game.state; s.mood = Math.min(100, s.mood + (pct > 60 ? 15 : 5));
@@ -7664,7 +7741,7 @@ function updateTraffic(dt) {
   if (u.state === 'arriving') {
     const dx = u.stopX - u.x, sp = Math.min(14, Math.max(1.2, Math.abs(dx) * 0.9));
     u.x += Math.sign(dx) * Math.min(Math.abs(dx), sp * dt); t.position.set(u.x, -0.15, 11.4); t.rotation.y = Math.PI;
-    if (Math.abs(dx) < 0.05) { u.state = 'waiting'; SFX.tone(420, 0.15, { gain: 0.06, pos: t.position, type: 'square' }); SFX.tone(420, 0.15, { delay: 0.3, gain: 0.06, pos: t.position, type: 'square' }); Game.toast('Your cab\'s here.'); u.ia = addInteract({ id: 'getin', temp: true, pos: V3(u.x, 1.0, 10.6), r: 3.0, label: () => 'Get in the cab', action: () => { interactables.splice(interactables.indexOf(u.ia), 1); u.state = 'leaving'; achieve('taxi'); Game.endNight('taxi'); } }); }
+    if (Math.abs(dx) < 0.05) { u.state = 'waiting'; SFX.tone(420, 0.15, { gain: 0.06, pos: t.position, type: 'square' }); SFX.tone(420, 0.15, { delay: 0.3, gain: 0.06, pos: t.position, type: 'square' }); Game.toast('Your cab\'s here.'); u.ia = addInteract({ id: 'getin', temp: true, pos: V3(u.x, 1.0, 10.6), r: 3.0, label: () => 'Get in the cab', action: () => { interactables.splice(interactables.indexOf(u.ia), 1); u.state = 'leaving'; achieve('taxi'); if (!Cine.taxi(() => Game.endNight('taxi'))) Game.endNight('taxi'); } }); }
   } else if (u.state === 'leaving') { u.x -= 10 * dt; t.position.x = u.x; if (u.x < -75) { u.state = 'idle'; t.visible = false; } }
 }
 
@@ -7864,7 +7941,7 @@ const REGULARS = {
       "Sunday sesh, then TAFE tomorrow. Kill me.",
     ],
     extra(n, s, opts) {
-      opts.push({ label: 'Challenge him to pool', d: 'Eight-ball, on the house table', fn: () => { Game.closePanel(); if (typeof Pool !== 'undefined') Pool.offer('Spud'); else Game.toast('Table\'s booked tonight — Spud reckons next week.'); } });
+      opts.push({ label: 'Challenge him to pool', d: 'Eight-ball, on the house table', fn: () => { Game.closePanel(); startPool('Spud'); } });
       if (s.day === 1 && !s.flags.spudLoan) opts.push({ label: 'Lend him $20', disabled: s.wallet < 20, fn: () => { s.flags.spudLoan = 1; s.wallet -= 20; relUp('Spud', 6); Game.closePanel(); bark(n, 'Champion. Wednesday. On me nan\'s life.', true); } });
       if (s.day === 2 && s.flags.spudLoan === 1) { s.flags.spudLoan = 2; s.wallet += 30; Game.toast('Spud paid back your $20 — plus a tenner. Legend.', true); relUp('Spud', 6); }
       if (s.day >= 5 && rel('Spud') >= 15 && !s.flags.poolTip) { s.flags.poolTip = true; Game.toast('Spud\'s tip: your pool aim line is longer now.'); }
@@ -7879,6 +7956,7 @@ const REG = {
   bump(name, k) { if (REGULARS[name]) relUp(name, k); },
   dartBonus() { return (Game.state.flags.dartTip ? 0.004 : 0) + (Night.hasPerk(4) ? 0.004 : 0); },
   spawnAll() {
+    if (!VENUE.story) return;   // the Royal's locals drink at the Royal
     for (const name in REGULARS) {
       const R = REGULARS[name];
       const n = mkNPC(Object.assign({ name, smoker: name === 'Davo', gambler: name === 'Davo' }, R.look));
@@ -7895,6 +7973,8 @@ const REG = {
     const first = !s.tonight['talk_' + name];
     if (first) { s.tonight['talk_' + name] = 1; relUp(name, 5); s.mood = Math.min(100, s.mood + 3); }
     const opts = [];
+    const beat = DLG.nextBeat(name);
+    if (beat) opts.push({ label: 'Dig deeper', d: beat.title, fn: () => { Game.closePanel(); DLG.playBeat(name, n); } });
     R.extra && R.extra(n, s, opts);
     STORY.talkOpts(n, opts);
     const price = Game.drinkPrice('schooner');
@@ -7959,7 +8039,7 @@ const RANDOM = {
       if (this.done) return;
       this.t -= dt;
       if (this.t <= 0 && this.k < lines.length) { const [who, l] = lines[this.k++]; bark(who, l, true); who.cheerT = 0; this.t = 4; }
-      else if (this.t <= 0 && this.k >= lines.length) { this.done = true; Game.subtitle('<b>Bouncer:</b> Right, you two. Out. Now.', 4); for (const n of [a, b]) { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }
+      else if (this.t <= 0 && this.k >= lines.length) { this.done = true; Game.subtitle('<b>Bouncer:</b> Right, you two. Out. Now.', 4); if (player.pos.distanceTo(a.pos) < 11 && !Game.uiOpen && !MG.active && !player.seated) Cine.follow(a, 4.5, '<b>Bouncer:</b> Right, you two. Out. Now.'); for (const n of [a, b]) { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }
     } };
     const calm = () => {
       if (ev.done) return; ev.done = true; a.eventTalk = b.eventTalk = null; Game.closePanel();
@@ -8030,6 +8110,7 @@ const SETTINGS_TABS = {
   ],
   GAMEPLAY: [
     ['timeSpeed', 'Clock speed', 'select', [[0.6, 'Relaxed — nights last longer'], [1, 'Normal'], [1.5, 'Fast']], 'How quickly the pub clock runs.'],
+    ['cinematics', 'Cinematics', 'select', [['full', 'Full — opening shots, last drinks, big wins, the council'], ['short', 'Short — only the quick ones'], ['off', 'Off']], 'Hold E to skip any of them.'],
     ['subtitles', 'Dialogue subtitles', 'toggle', null, ''],
     ['subSize', 'Subtitle size', 'range', [0.8, 1.6, 0.05, v => Math.round(v * 100) + '%'], ''],
     ['hints', 'Control hints & objectives', 'toggle', null, ''],
@@ -8120,6 +8201,7 @@ const STORY = {
   chapter() { return CHAPTERS[Game.state.day]; },
   goal() {
     const s = Game.state, S = this.st(), d = s.day;
+    if (!VENUE.story) return `A night out at ${VENUE.name}. The Royal's story can wait a night. Make some mates, back a few winners.`;
     if (d === 0 && S.met) return 'Have a yarn with the regulars. Shout one a drink.';
     if (d === 1 && S.letter) return S.letter === 'signed' ? 'You signed the suit\'s letter. Hope nobody finds out.' : 'You told the suit where to go. The regulars will hear about it.';
     if (d === 2) return `Chip in to the Save the Royal jar on the bar. Fund: ${fmt0(S.fund)}.`;
@@ -8139,14 +8221,14 @@ const STORY = {
     this.jar = jar; jar.visible = false;
     addInteract({ id: 'jar', pos: V3(F - 0.16, 1.25, -5.3), r: 2.2, enabled: () => this.jar.visible && !MG.active, label: () => `Save the Royal jar — ${fmt0(this.st().fund)} so far`, action: () => this.donate() });
     // the licence behind the footy photo
-    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => Game.state.day >= 3 && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
+    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => VENUE.story && (Game.state.day >= 3 || Game.state.flags.mickLicenceHint) && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
   },
   spawn() {
     const s = Game.state, S = this.st();
-    this.jar.visible = s.day >= 2 && S.ending !== 'sold';
+    this.jar.visible = VENUE.story && s.day >= 2 && S.ending !== 'sold';
     this.refreshCoins();
     this.clive = null; this.meetingDone = !!S.ending;
-    if (s.day === 1 || s.day === 5) {
+    if (VENUE.story && (s.day === 1 || s.day === 5)) {
       const n = mkNPC({ name: 'Clive Marsh', role: 'staff', shirt: { tile: 'collar', c: 0x2a2c34 }, pants: { tile: 'cloth', c: 0x2a2c34 }, hair: 0x8a8a8a, style: 'short', glasses: true, beard: null, skinI: 0, girth: 1.05 });
       const p = V3(7.6, 0, -2.9); n.pos.copy(p); n.ry = Math.PI * 0.85; MG.lockNPC(n, p, Math.PI * 0.85, 'stand');
       n.eventTalk = () => this.talkClive(n); this.clive = n;
@@ -8200,9 +8282,9 @@ const STORY = {
   // ---------------------------------------------------------- nightly hooks
   update() {
     const s = Game.state, S = this.st();
-    if (s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
+    if (VENUE.story && s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
   },
-  score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
+  score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + Math.min(3, Game.state.flags.goodwill || 0) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
   meeting() {
     const S = this.st(), sc = this.score(), there = isInside(player.pos.x, player.pos.z) && player.level === 0;
     S.ending = sc >= 7 ? 'saved' : sc >= 4 ? 'reprieve' : 'sold';
@@ -8217,6 +8299,7 @@ const STORY = {
     ];
     if (!there) { Game.toast(`📱 <b>Bev:</b> ${S.ending === 'saved' ? 'WE DID IT!!! The Royal is SAVED. Where ARE you?!' : S.ending === 'reprieve' ? 'Twelve months reprieve. We fight on. Missed you there, love.' : 'It\'s over. They\'re selling. Wish you\'d been there.'}`, true); this.finale(); return; }
     Game.fade(0, 0.7); SFX.bell(V3(-9, 2.5, -8), 2);
+    if (Cine.council(lines, () => { Game.fade(0.7, 0); this.finale(); })) return;
     let i = 0;
     const next = () => {
       if (i >= lines.length) { Game.closePanel(); Game.fade(0.7, 0); this.finale(); return; }
@@ -8842,8 +8925,15 @@ const Night = {
     el.innerHTML = `<b>${title}</b>${sub ? `<span>${sub}</span>` : ''}`; el.classList.add('on'); clearTimeout(this._bt); this._bt = setTimeout(() => el.classList.remove('on'), dur * 1000);
   },
   // ---------------------------------------------------------- the shape of the night
+  compPrompt() {
+    const s = Game.state, stake = s.flags.kennoBet && s.wallet >= 50 ? 50 : 0;
+    Game.openPanel('ROYAL DARTS COMP', `Kenno's chalked up the final. ${stake ? 'Fifty dollars says he wins.' : 'Winner takes the trophy and the $60 prize pool.'} Sixteen entries, two left standing.`, Game.optList([
+      { label: 'Step up to the oche', d: stake ? `Your $${stake} bet is on` : 'Three rounds, three darts each', fn: () => { Game.closePanel(); Darts.begin(stake, 'Kenno', true); } },
+      { label: 'Forfeit', d: 'Kenno will be very quiet about it', fn: () => { Game.closePanel(); Night.addRep(-2, 'Forfeited the darts comp'); } }]), []);
+  },
   update(dt) {
     const s = Game.state, D = DAYS[s.day]; if (!Game.entered) return;
+    if (VENUE.story && s.day === 5 && s.flags.compEntered && !s.tonight.comp && s.time >= s.startTime + 1.5 && !Game.uiOpen && !MG.active && !player.seated && isInside(player.pos.x, player.pos.z)) { s.tonight.comp = 1; this.compPrompt(); }
     const span = D.close - s.startTime, f = (s.time - s.startTime) / span, B = this.beatsDone;
     s.night.maxDrunk = Math.max(s.night.maxDrunk || 0, s.drunk);
     this.tickT -= dt;
@@ -8873,6 +8963,7 @@ const Night = {
     Music.level = Math.max(0.2, Music.level - 0.3);
     this.log('🔔', 'Last drinks called');
     if (Game.mode !== 'play' || Game.uiOpen || MG.active || player.seated) { if (player.seated) Game.toast('Last drinks! Wrap it up, champ.'); return; }
+    if (Cine.lastCall(bartender)) { const iv = setInterval(() => { if (!Cine.active) { clearInterval(iv); if (Game.mode === 'play' && !Game.uiOpen && !MG.active) setTimeout(() => this.lastCallPanel(), 400); } }, 300); return; }
     setTimeout(() => { if (Game.mode !== 'play' || Game.uiOpen || MG.active) return; this.lastCallPanel(); }, 3600);
   },
   lastCallPanel() {
@@ -8919,7 +9010,7 @@ const Night = {
     while (c.children.length > 40) c.remove(c.children[0]);
   },
 };
-ACH_LIST.push(['royalty', 'Royal Royalty', 'Reach the top standing at the Royal.']);
+ACH_LIST.push(['royalty', 'Royal Royalty', 'Reach the top standing at the Royal.'], ['champ', 'Royal Darts Champion', 'Win the Saturday darts comp.']);
 
 // ---- src/22-moments.js ----
 
@@ -8941,7 +9032,8 @@ const Moments = {
     this.started = false; this.id = null;
     if (s.day === 6) return;   // Sunday is the council meeting
     const used = f.momentsUsed || (f.momentsUsed = []);
-    let pool = this.names.filter(n => !used.includes(n)); if (!pool.length) { used.length = 0; pool = this.names.slice(); }
+    const allowed = VENUE.moments ? this.names.filter(n => VENUE.moments.includes(n)) : this.names;
+    let pool = allowed.filter(n => !used.includes(n)); if (!pool.length) { used.length = 0; pool = allowed.slice(); }
     this.id = window.__moment || choice(pool);
     const D = DAYS[s.day]; this.at = s.startTime + (D.close - s.startTime) * rand(0.3, 0.5);
     window.__moment = null;
@@ -9319,9 +9411,10 @@ function skinScreen(add, S) {
 function buildSkinSigns() {
   const img = SLOTSKIN.bannerImg; if (!img) return;
   const t = new THREE.Texture(img); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true;
-  const w = 4.36, h = w * img.height / img.width;
-  signPlane(t, w, h, 10.44, 2.8, -17.82, 0, { toneMapped: false, intensity: 1.1 });
-  addBoxS(SB, MAT.blackPlastic, 10.44, 2.8, -17.86, w + 0.08, h + 0.08, 0.04);
+  const row = VENUE.machines.back, i0 = row.indexOf('ldl1'); if (i0 < 0 || row[i0 + 3] !== 'ldl4') return;   // only over a Lightning Dollar Link run
+  const w = 4.36, h = w * img.height / img.width, cx = 4.5 + (i0 + 1.5) * 1.08;
+  signPlane(t, w, h, cx, 2.8, -17.82, 0, { toneMapped: false, intensity: 1.1 });
+  addBoxS(SB, MAT.blackPlastic, cx, 2.8, -17.86, w + 0.08, h + 0.08, 0.04);
 }
 
 // ---- src/24-classics.js ----
@@ -9563,6 +9656,577 @@ function townBlock(x0, x1, zf, depth, h, facing, kind) {
   return body;
 }
 
+// ---- src/26-dialogue.js ----
+
+// =====================================================================
+//  DIALOGUE: a small graph runner for real conversations.
+//  A graph is { start, nodes: { id: { say, who?, mood?, do?, opts?, next?, end?, time?, timeout? } } }.
+//  say   string | (ctx) => string | [lines]    {name} is replaced by the NPC's name
+//  opts  [{ t, d?, if?(ctx), off?(ctx) => reason|false, cost?, check?: {stat, dc?}, go, pass?, fail?, do?(ctx), once? }]
+//  A node with no opts shows Continue (-> next) or Leave (end).  time: seconds to answer, timeout: option index picked when it runs out.
+//  ctx: { s, n, name, rel, drunk, mood, day, time, money, rep, mem (this NPC's persistent memory), flags, charm() }
+//  Choices are remembered per character (flags.mem[key]) and arcs advance on flags.arc[key], both saved with the game.
+// =====================================================================
+const DLG = {
+  graphs: {}, active: null, node: null, timer: 0, typed: 0, line: '', lineFull: '',
+  def(id, g) { this.graphs[id] = g; return g; },
+  mem(key) { const f = Game.state.flags; f.mem = f.mem || {}; return f.mem[key] || (f.mem[key] = {}); },
+  arc(key) { const f = Game.state.flags; f.arc = f.arc || {}; return f.arc[key] || 0; },
+  setArc(key, v) { const f = Game.state.flags; f.arc = f.arc || {}; f.arc[key] = v; },
+  ctx(n, key) {
+    const s = Game.state, name = (n && (n.regular || n.local || n.name)) || '', k = key || name, me = this;
+    const c = { s, n, name, key: k, get rel() { return rel(k); }, drunk: s.drunk, mood: s.mood, day: s.day, time: s.time, money: s.wallet, rep: Night.rep(), mem: me.mem(k), flags: s.flags, venue: VENUE.id,
+      done() { me.mem(k)['done_' + (me.active && me.active.id)] = 1; }, up(v) { relUp(k, v); }, cash(v) { s.wallet = Math.max(0, s.wallet + v); s.night.extra += v; if (v > 0) CashFX.receive(v); }, mood_(v) { s.mood = clamp(s.mood + v, 0, 100); }, standing(v, why) { Night.addRep(v, why); }, log(i, t) { Night.log(i, t); },
+      // how persuasive you are right now: knowing them, a good mood and being only a little merry all help
+      charm() { return clamp(45 + rel(k) * 0.35 + (s.mood - 50) * 0.25 - Math.abs(s.drunk - 22) * 0.45, 5, 95); } };
+    return c;
+  },
+  // ------------------------------------------------------------ open / close
+  open(id, n, opts = {}) {
+    const g = this.graphs[id]; if (!g) { console.warn('no dialogue', id); return false; }
+    const key = opts.key || (n && (n.regular || n.local || n.name)) || id;
+    this.active = { id, g, n, key, opts, hist: [] };
+    if (n) { n.a.talk = 999; }
+    Game.uiOpen = true; document.exitPointerLock && document.exitPointerLock();
+    $('talk').classList.remove('hidden'); document.body.classList.add('talking');
+    const name = opts.name || (n && (n.regular || n.local || n.name)) || 'Someone';
+    $('tName').textContent = name.toUpperCase();
+    const p = $('tPort'); p.textContent = name.split(/\s+/).map(w => w[0]).join('').slice(0, 2); p.style.background = opts.col || this.colour(name);
+    this.go(g.start || 'start'); return true;
+  },
+  colour(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h},45%,38%)`; },
+  close() {
+    const A = this.active; if (!A) return;
+    if (A.n) A.n.a.talk = 0;
+    this.active = null; this.node = null; $('talk').classList.add('hidden'); document.body.classList.remove('talking');
+    if (A.opts.onEnd) A.opts.onEnd();
+    Game.uiOpen = false; if (Game.mode === 'play' && !player.seated && !MG.active) lockPointer();
+  },
+  // ------------------------------------------------------------ the runner
+  say(v, c) { let t = typeof v === 'function' ? v(c) : v; if (Array.isArray(t)) t = t.join('<br><br>'); return String(t || '').replace(/\{name\}/g, c.name); },
+  go(id) {
+    const A = this.active; if (!A) return;
+    const node = A.g.nodes[id]; if (!node) { this.close(); return; }
+    const c = this.ctx(A.n, A.key); A.hist.push(id); this.node = node; this.nodeId = id;
+    if (node.do) node.do(c);
+    $('tSub').innerHTML = this.sub(A, c, node);
+    this.lineFull = this.say(node.say, c); this.typed = 0; $('tLine').innerHTML = '';
+    // build the options
+    const box = $('tOpts'); box.innerHTML = ''; this.opts = [];
+    const raw = node.opts || [{ t: node.next ? 'Continue' : 'Leave', go: node.next || null, end: !node.next }];
+    for (const o of raw) {
+      if (o.if && !o.if(c)) continue; if (o.once && c.mem['o_' + id + '_' + o.t]) continue;
+      const off = o.off ? o.off(c) : (o.cost && c.money < o.cost ? `Need $${o.cost}` : false);
+      const chance = o.check ? Math.round(this.chance(o.check, c)) : null;
+      this.opts.push({ o, off, chance });
+    }
+    this.opts.forEach((it, i) => {
+      const b = document.createElement('button'); b.className = 'topt' + (it.off ? ' off' : '') + (it.chance != null ? ' chk' : ''); b.disabled = !!it.off;
+      const label = typeof it.o.t === 'function' ? it.o.t(c) : it.o.t, hint = typeof it.o.d === 'function' ? it.o.d(c) : it.o.d;
+      b.innerHTML = `<kbd>${i + 1}</kbd><span>${label}${hint ? `<em>${hint}</em>` : ''}${it.off ? `<em class="why">${it.off}</em>` : ''}</span>${it.o.cost ? `<i class="cost">$${it.o.cost}</i>` : ''}${it.chance != null ? `<i class="chance">${it.o.check.stat || 'Charm'} ${it.chance}%</i>` : ''}`;
+      b.onclick = () => this.pick(i); b.style.animationDelay = (0.15 + i * 0.07) + 's'; box.appendChild(b);
+    });
+    // the clock
+    this.timer = node.time || 0; this.timerMax = this.timer; $('tTimer').style.display = this.timer ? '' : 'none';
+  },
+  sub(A, c, node) {
+    const hearts = (A.opts.hearts !== false && rel(A.key) > 0) ? `<span class="hearts">${'♥'.repeat(Math.round(rel(A.key) / 20))}${'♡'.repeat(5 - Math.round(rel(A.key) / 20))}</span>` : '';
+    return `${A.opts.bio || ''}${A.opts.bio && hearts ? ' · ' : ''}${hearts}${node.who ? ` · <b>${node.who}</b>` : ''}`;
+  },
+  chance(ch, c) { const st = String(ch.stat || 'Charm').toLowerCase(), base = st === 'nerve' ? clamp(40 + c.mood * 0.2 - c.drunk * 0.3, 5, 95) : st === 'luck' ? 50 : c.charm(); return clamp(base + (ch.dc ? 50 - ch.dc : 0) + (ch.bonus ? ch.bonus(c) : 0), 4, 96); },
+  pick(i) {
+    const A = this.active; if (!A) return; const it = this.opts[i]; if (!it || it.off) return;
+    const o = it.o, c = this.ctx(A.n, A.key); SFX.click();
+    if (o.once) c.mem['o_' + this.nodeId + '_' + o.t] = 1;
+    if (o.cost) { if (!Game.spend(o.cost, o.cat || null)) return; if (!o.cat) Game.state.night.extra -= o.cost; }
+    let dest = o.go;
+    if (o.check) { const roll = Math.random() * 100, ok = roll < it.chance; dest = ok ? (o.pass || o.go) : (o.fail || o.go); this.flashRoll(ok, it.chance, Math.round(roll)); c.passed = ok; }
+    if (o.do) o.do(c);
+    if (this.active !== A) return;   // the option opened something else (another conversation, a game)
+    if (o.end || !dest) { this.close(); return; }
+    this.go(dest);
+  },
+  flashRoll(ok, chance, roll) { const e = $('tRoll'); e.textContent = ok ? `SUCCESS · ${chance}%` : `MISSED · ${chance}%`; e.className = ok ? 'ok on' : 'no on'; clearTimeout(this._rt); this._rt = setTimeout(() => e.classList.remove('on'), 1300); ok ? SFX.tone(880, 0.12, { gain: 0.05, type: 'triangle' }) : SFX.tone(180, 0.2, { gain: 0.06, type: 'sawtooth' }); },
+  key(code) {
+    if (!this.active) return false;
+    if (code === 'Escape') { this.close(); return true; }
+    if (code === 'Space' && this.typed < this.lineFull.length) { this.typed = this.lineFull.length; return true; }
+    const m = /^(?:Digit|Numpad)(\d)$/.exec(code); if (m) { this.pick(+m[1] - 1); return true; }
+    if (code === 'Space' || code === 'Enter') { if (this.opts.length === 1) this.pick(0); return true; }
+    return true;
+  },
+  // typewriter + answer clock, called every frame while a conversation is open
+  update(dt) {
+    const A = this.active; if (!A) return;
+    if (this.typed < this.lineFull.length) {
+      this.typed = Math.min(this.lineFull.length, this.typed + dt * 70);
+      const t = this.lineFull.slice(0, Math.floor(this.typed)), cut = t.lastIndexOf('<'), cl = t.lastIndexOf('>'); $('tLine').innerHTML = cut > cl ? t.slice(0, cut) : t;
+      if (Math.floor(this.typed) % 3 === 0 && A.n) SFX.noise(0.03, { freq: rand(500, 900), q: 3, gain: 0.012, pos: A.n.pos.clone().add(V3(0, 1.6, 0)) });
+    } else if ($('tLine').innerHTML !== this.lineFull) $('tLine').innerHTML = this.lineFull;
+    if (this.timer > 0 && this.typed >= this.lineFull.length) {
+      this.timer -= dt; $('tTimer').firstElementChild.style.width = (this.timer / this.timerMax * 100) + '%';
+      if (this.timer <= 0) { const k = this.node.timeout; if (k != null && this.opts[k] && !this.opts[k].off) this.pick(k); else { const c = this.ctx(A.n, A.key); c.up(-2); this.close(); Game.toast(`${c.name} gets tired of waiting.`); } }
+    }
+    // face them
+    if (A.n) { const dx = A.n.pos.x - camera.position.x, dz = A.n.pos.z - camera.position.z, want = Math.atan2(-dx, -dz); player.yaw += angleDiff(player.yaw, want) * Math.min(1, dt * 3); player.pitch += (-0.04 - player.pitch) * Math.min(1, dt * 3); }
+  },
+  // ------------------------------------------------------------ arcs: "dig deeper" beats for a character
+  // arcs[key] = [{ id, need: (c) => bool, title }] in order; the next beat is offered when its condition holds and none was played tonight
+  arcs: {},
+  addArc(key, beats) { this.arcs[key] = beats; },
+  nextBeat(key) {
+    const list = this.arcs[key]; if (!list) return null; const s = Game.state; s.tonight.arcDone = s.tonight.arcDone || {};
+    if (s.tonight.arcDone[key]) return null;
+    const b = list[this.arc(key)]; if (!b) return null; const c = this.ctx(null, key);
+    return b.need(c) ? b : null;
+  },
+  playBeat(key, n) {
+    const b = this.nextBeat(key); if (!b) return false; Game.state.tonight.arcDone[key] = 1;
+    return this.open(b.id, n, { key, bio: b.title, onEnd: () => { if (this.mem(key)['done_' + b.id]) this.setArc(key, this.arc(key) + 1); } });
+  },
+};
+// a beat counts as played once one of its nodes calls c.done(), so walking off mid-conversation doesn't burn it
+
+// ---- src/27-conversations.js ----
+
+// =====================================================================
+//  CONVERSATIONS: three "dig deeper" beats for each of the Royal's regulars, and the locals at the other pubs.
+//  The choices matter: they move relationships, unlock things (the licence hint, a karaoke duet, the lucky flights,
+//  mates' rates), shift the Save the Royal fund and the council vote ("goodwill"), and are remembered across nights.
+// =====================================================================
+function startPool(who) { const P = globalThis.PoolGame; if (P) P.offer(who); else Game.toast(`The table's booked tonight. ${who} says next week.`); }
+const GW = c => { c.flags.goodwill = (c.flags.goodwill || 0) + 1; };   // community goodwill: counts towards the council vote
+const need = (rl, arc, day = 0) => c => c.rel >= rl && DLG.arc(c.key) >= arc && c.day >= day;
+
+// ---------------------------------------------------------------- OLD MICK
+DLG.def('mick1', { start: 'a', nodes: {
+  a: { say: ["He turns a creased photograph over in his big hands before he'll let you see it.", '"That\'s Joanie. Christmas dance at the Royal, nineteen seventy-one. She told me I danced like a bloke killing snakes."'], opts: [
+    { t: '"She looks like she could handle you."', go: 'b', do: c => c.up(4) },
+    { t: '"Is that why they pinched your plaque?" (a joke)', check: { stat: 'Charm', dc: 55 }, pass: 'c', fail: 'd' },
+    { t: 'Say nothing. Buy him Joanie\'s drink.', d: 'A sweet sherry. She always had one.', cost: 7, cat: 'spentDrinks', go: 'e' }] },
+  b: { say: '"Handle me? She ran me. Fifty-one years. Wouldn\'t let me pay a bill late, wouldn\'t let me skip church, and she\'d never ask for a thing. Best woman in the district."', next: 'z1' },
+  c: { say: '"Ha! Ha! The PLAQUE. Joanie nicked it herself — said I\'d been warming that stool so long it deserved a medal. She hid it in the cellar. Still down there, I reckon."', do: c => { c.up(8); c.mem.plaque = 1; }, next: 'z1' },
+  d: { say: '"That\'s not funny, son." He puts the photo away. "Not today."', do: c => c.up(-5), end: true },
+  e: { say: ['You set the little glass on the bar in front of the empty stool beside him.', 'He doesn\'t say anything for a long time. Then he nods once, very slowly.', '"…Thanks, mate."'], do: c => { c.up(14); c.mem.sherry = 1; c.mood_(6); }, next: 'z1' },
+  z1: { say: '"Come and see me again. I\'ve got something to show you. About the pub."', do: c => c.done(), end: true },
+} });
+DLG.def('mick2', { start: 'a', nodes: {
+  a: { say: ['"You know the licence story? Joanie\'s grandad framed the Royal\'s original licence in eighteen eighty-eight. When Frank took over he stuck a footy photo on top of it. Front wall, by the door."', '"I\'m too old to get up there. Do us a favour. Have a look."'], opts: [
+    { t: '"Leave it with me, Mick."', d: 'You can look behind the photo from tonight', go: 'b' },
+    { t: '"That\'s just a pub legend, mate."', go: 'c' },
+    { t: '"What\'s in it for the pub?"', go: 'd' }] },
+  b: { say: '"Good lad. If it\'s there, it proves she\'s older than Federation. A council can\'t ignore that."', do: c => { c.up(10); c.flags.mickLicenceHint = true; c.done(); }, end: true },
+  c: { say: '"Legend, is it." He looks at you for a bit. "Everything\'s a legend till someone checks."', do: c => { c.up(-6); c.flags.mickLicenceHint = true; c.done(); }, end: true },
+  d: { say: '"A heritage listing is what\'s in it. Can\'t knock down a listed pub. Not even Clive Marsh can."', do: c => { c.up(4); c.flags.mickLicenceHint = true; c.done(); }, end: true },
+} });
+DLG.def('mick3', { start: 'a', nodes: {
+  a: { say: ['Mick\'s sitting very straight tonight, hands flat on the bar.', '"I\'ve put it in writing. When I go — and it\'ll be soon, don\'t pretend — I want my ashes under the gum tree in the beer garden. Joanie\'s there already. Frank knows. But Frank\'s selling."', '"Will you make sure it happens? Whatever happens to this place."'], opts: [
+    { t: '"I promise, Mick."', d: 'A promise is a promise', go: 'b' },
+    { t: '"You\'ve got years left, mate."', go: 'c' },
+    { t: '"I\'ll fight for the pub. Then you won\'t need to ask."', check: { stat: 'Nerve', dc: 50 }, pass: 'd', fail: 'c' }] },
+  b: { say: '"Then I can rest easy." He pushes the plaque across the bar, the one Joanie hid. "This goes on the stool. Bolted down."', do: c => { c.up(25); c.flags.mickPromise = true; GW(c); c.log('🌳', 'Promised Mick the gum tree'); Night.addRep(3); c.done(); }, end: true },
+  c: { say: '"Years." He chuckles. "Righto. Years."', do: c => { c.up(6); c.done(); }, end: true },
+  d: { say: '"Then fight for her. Properly. Not just with a petition — with your feet. Turn up."', do: c => { c.up(20); c.flags.mickPromise = true; GW(c); c.mood_(10); c.done(); }, end: true },
+} });
+DLG.addArc('Old Mick', [{ id: 'mick1', title: "Joanie's photo", need: need(8, 0) }, { id: 'mick2', title: 'Behind the footy photo', need: need(25, 1, 1) }, { id: 'mick3', title: 'The gum tree', need: need(40, 2, 3) }]);
+
+// ---------------------------------------------------------------- SHAZZA
+DLG.def('shaz1', { start: 'a', nodes: {
+  a: { say: ['Shazza slaps a glossy Bali brochure on the bar. There are Post-it flags in it.', '"Ten days in Kuta. I\'m $400 short and the flights go up Monday. Don\'t say anything. I know. I know."'], opts: [
+    { t: 'Lend her $50', d: 'She\'ll pay you back', cost: 50, go: 'b' },
+    { t: '"Maybe skip the third schooner a night?"', check: { stat: 'Charm', dc: 60 }, pass: 'c', fail: 'd' },
+    { t: '"Bali sounds amazing, Shaz."', go: 'e' }] },
+  b: { say: '"You ABSOLUTE legend. I\'ll pay you back with interest and a bracelet."', do: c => { c.up(14); c.flags.shazLoan = 1; c.log('🌴', 'Lent Shazza $50 for Bali'); c.done(); }, end: true },
+  c: { say: '"Ugh. Fine. FINE. You\'re right. Water. For one whole night."', do: c => { c.up(10); c.mood_(3); c.flags.shazWater = 1; c.done(); }, end: true },
+  d: { say: '"Oh, are you my mum now?" She laughs but it\'s sharp. "Sorry. Touchy subject."', do: c => { c.up(-4); c.done(); }, end: true },
+  e: { say: '"RIGHT?! The beaches! The smoothies! I\'m going to be someone different over there."', do: c => { c.up(7); c.done(); }, end: true },
+} });
+DLG.def('shaz2', { start: 'a', nodes: {
+  a: { say: ['"Karaoke, Friday. I need a duet partner. And it\'s you. I\'ve decided."', '"It\'s \'Islands In The Stream\'. You\'re Kenny. No arguments."'], opts: [
+    { t: '"Deal. I\'ll be Kenny."', d: 'Your Friday karaoke score gets a boost', go: 'b' },
+    { t: '"I can\'t sing, Shaz."', check: { stat: 'Charm', dc: 50 }, pass: 'c', fail: 'd' },
+    { t: '"Only if you pay for the first round."', go: 'e' }] },
+  b: { say: '"YES. We\'re going to bring the house DOWN."', do: c => { c.up(14); c.flags.shazDuet = true; c.done(); }, end: true },
+  c: { say: '"Nobody can, babe, that\'s what the Dolly part\'s for. You\'ll be a lovely terrible Kenny."', do: c => { c.up(8); c.flags.shazDuet = true; c.done(); }, end: true },
+  d: { say: '"…fine, I\'ll ask Davo." She does not look pleased.', do: c => { c.up(-3); c.done(); }, end: true },
+  e: { say: '"Cheeky! …Deal."', do: c => { c.up(6); c.flags.shazDuet = true; c.done(); }, end: true },
+} });
+DLG.def('shaz3', { start: 'a', nodes: {
+  a: { say: ['Shazza is not laughing. That\'s how you know it\'s serious.', '"Can I tell you something? That Bali money? Eleven years I\'ve been putting a twenty a week in the jar behind the bar. For the roof fund. Never told anyone. Bev knows."', '"If they sell, I\'ll have been paying for somebody else\'s apartment block."'], opts: [
+    { t: '"You\'re the heart of this place, Shaz."', go: 'b' },
+    { t: '"Then let\'s make sure they can\'t."', go: 'c' },
+    { t: 'Squeeze her hand. Say nothing.', go: 'd' }] },
+  b: { say: '"Stop it, I\'ll ruin my eyeliner."', do: c => { c.up(12); STORY.addFund(60, 'Shazza emptied her Bali envelope into the jar'); GW(c); c.done(); }, end: true },
+  c: { say: '"There it is. There\'s the person Bev said you were."', do: c => { c.up(15); STORY.addFund(100, 'Shazza matched your pledge'); GW(c); c.done(); }, end: true },
+  d: { say: 'She squeezes back, hard. Then she sniffs, grabs a napkin, and is Shazza again. "Right. Who\'s getting the drinks?"', do: c => { c.up(10); STORY.addFund(30); c.done(); }, end: true },
+} });
+DLG.addArc('Shazza', [{ id: 'shaz1', title: 'The Bali fund', need: need(8, 0) }, { id: 'shaz2', title: 'The duet', need: need(25, 1) }, { id: 'shaz3', title: 'Eleven years of twenties', need: need(40, 2, 3) }]);
+
+// ---------------------------------------------------------------- DAVO
+DLG.def('davo1', { start: 'a', nodes: {
+  a: { say: ['Davo\'s phone lights up on the ledge. KYLIE ♥. He stares at it until it stops. It starts again.', '"She knows. About last week. Don\'t say anything to her if she comes in, yeah?"'], time: 20, timeout: 1, opts: [
+    { t: '"Answer it, Davo."', go: 'b' },
+    { t: '"Not my business, mate."', go: 'c' },
+    { t: '"If she asks, I haven\'t seen you."', d: 'Cover for him', go: 'd' }] },
+  b: { say: 'He stares at you. Then he answers. "Yeah. …Yeah, I\'m at the Royal. …I know. I KNOW. …Okay. Okay. I\'ll come home." He hangs up, shaking.', do: c => { c.up(12); c.flags.davoGood = (c.flags.davoGood || 0) + 1; c.log('📞', 'Told Davo to answer Kylie'); c.done(); }, next: 'b2' },
+  b2: { say: '"Cheers. I\'d have let it ring out. Again."', end: true },
+  c: { say: '"Yeah. Yeah. Fair enough." The phone rings out.', do: c => { c.up(-2); c.done(); }, end: true },
+  d: { say: '"You\'re a good bloke." He doesn\'t look at you when he says it.', do: c => { c.up(5); c.flags.davoGood = Math.max(0, (c.flags.davoGood || 0) - 1); c.done(); }, end: true },
+} });
+DLG.def('davo2', { start: 'a', nodes: {
+  a: { say: ['Davo\'s slumped at the machine, credit meter blinking $0.00.', '"I\'ve got a card in my wallet. Gambling Help. Somebody put it there. I haven\'t… I don\'t…"', 'He holds it out like it\'s hot.'], opts: [
+    { t: '"I\'ll walk you out front. Let\'s ring them."', d: 'Be there for him', go: 'b' },
+    { t: '"Keep it. Just in case."', go: 'c' },
+    { t: '"Last go. She\'s due."', d: 'Tell him what he wants to hear', go: 'd' }] },
+  b: { say: ['You stand on the footpath while he talks to a stranger on the phone for twenty minutes. His voice gets steadier.', '"They\'ve got a counsellor Thursday. I\'m going."'], do: c => { c.up(20); c.flags.davoGood = (c.flags.davoGood || 0) + 2; c.mood_(8); c.log('📞', 'Walked Davo out to ring Gambling Help'); GW(c); c.done(); }, end: true },
+  c: { say: '"Yeah. In case." He tucks it in his wallet, behind the photo of the kids.', do: c => { c.up(8); c.flags.davoGood = (c.flags.davoGood || 0) + 1; c.done(); }, end: true },
+  d: { say: '"…Yeah. Last go." He feeds the machine his last twenty. You watch it go.', do: c => { c.up(-8); c.flags.davoGood = Math.max(0, (c.flags.davoGood || 0) - 2); c.mood_(-5); c.done(); }, end: true },
+} });
+DLG.def('davo3', { start: 'a', nodes: {
+  a: { say: ['Davo\'s in a clean shirt. He smells of soap. He is holding a Coke.', '"Thirteen days. I wanted you to be first to know. Kylie\'s picking me up at ten and she\'s bringing the kids. We\'re doing pizza."'], opts: [
+    { t: '"Mate. I\'m proud of you."', go: 'b' },
+    { t: 'Shout him a lemon squash. "To thirteen."', cost: 4, go: 'c' },
+    { t: '"Don\'t let the pub drag you back in."', check: { stat: 'Charm', dc: 55 }, pass: 'd', fail: 'e' }] },
+  b: { say: '"Don\'t. You\'ll set me off."', do: c => { c.up(15); GW(c); c.done(); }, end: true },
+  c: { say: 'He holds it up. "Thirteen." You clink.', do: c => { c.up(18); GW(c); c.done(); }, end: true },
+  d: { say: '"I know. I\'ve told the boys. Not here after dark. Not yet." He grins. "I\'ll come for the parma."', do: c => { c.up(12); GW(c); c.done(); }, end: true },
+  e: { say: '"Hey. Easy. I\'m doing the work."', do: c => { c.up(-3); c.done(); }, end: true },
+} });
+DLG.addArc('Davo', [{ id: 'davo1', title: "Kylie's calling", need: need(8, 0) }, { id: 'davo2', title: 'The card in his wallet', need: need(22, 1, 1) }, { id: 'davo3', title: 'Thirteen days', need: c => c.rel >= 35 && DLG.arc(c.key) >= 2 && c.day >= 4 && (c.flags.davoGood || 0) >= 3 }]);
+
+// ---------------------------------------------------------------- KENNO
+DLG.def('kenno1', { start: 'a', nodes: {
+  a: { say: ['Kenno\'s chalking up the board with great ceremony.', '"Royal Darts Comp. Saturday arvo. Sixteen entries. I\'ve won it twice. You\'re not on the sheet. Why aren\'t you on the sheet?"'], opts: [
+    { t: '"Put me down."', d: 'You\'ll play in the Saturday comp', go: 'b' },
+    { t: '"I\'d embarrass myself."', check: { stat: 'Charm', dc: 55 }, pass: 'c', fail: 'd' },
+    { t: '"Fifty bucks says I beat you."', go: 'e' }] },
+  b: { say: '"Atta boy. Elbow up. Eyes on the treble."', do: c => { c.up(12); c.flags.compEntered = true; c.done(); }, end: true },
+  c: { say: '"Everyone\'s embarrassed their first time, mate. Ask me about 2006." He writes your name down anyway.', do: c => { c.up(10); c.flags.compEntered = true; c.done(); }, end: true },
+  d: { say: '"Suit yourself. More glory for me."', do: c => { c.up(-3); c.done(); }, end: true },
+  e: { say: 'He laughs for a very long time. "You\'re on. Not tonight — Saturday. Bring your wallet."', do: c => { c.up(8); c.flags.compEntered = true; c.flags.kennoBet = true; c.done(); }, end: true },
+} });
+DLG.def('kenno2', { start: 'a', nodes: {
+  a: { say: ['"See that bloke in the RSL jersey? Big Terry. Pinched my trophy off me in \'14 at the Surfie. Never forgave him."', '"I\'m not saying you should sabotage his arrows. I\'m saying a man should have a hobby."'], opts: [
+    { t: '"We could challenge him properly."', go: 'b' },
+    { t: '"Let it go, Kenno."', go: 'c' },
+    { t: '"What did he do exactly?"', go: 'd' }] },
+  b: { say: '"A challenge match at the RSL. Winner takes the trophy and the bragging rights. Oh, I like you."', do: c => { c.up(14); c.flags.kennoRival = true; c.done(); }, end: true },
+  c: { say: '"Easy for you to say. Your trophy wasn\'t used as a doorstop."', do: c => { c.up(2); c.done(); }, end: true },
+  d: { say: '"He said — in front of everybody — that my grouping was \'agricultural\'." He is still hurt.', do: c => { c.up(6); c.done(); }, end: true },
+} });
+DLG.def('kenno3', { start: 'a', nodes: {
+  a: { say: ['Kenno puts his case on the bar and opens it. Three arrows nest in worn red felt, flights frayed.', '"Forty years. Never lent them to anyone. They\'ve found a lot of trebles and a lot of dartboards\' edges."', '"You throw like a bloke who\'s listening. Take them."'], opts: [
+    { t: '"I can\'t take your arrows, Kenno."', go: 'b' },
+    { t: 'Take them. Carefully.', go: 'c' }] },
+  b: { say: '"You can and you will. Rule is: they stay at the Royal. Whoever plays for the Royal, plays with those."', next: 'c' },
+  c: { say: 'They\'re warm from his hand and heavier than they look.', do: c => { c.up(25); c.flags.dartTip = true; c.flags.luckyFlights = true; GW(c); c.log('🎯', "Kenno handed over his lucky flights"); c.done(); }, end: true },
+} });
+DLG.addArc('Kenno', [{ id: 'kenno1', title: 'The Royal darts comp', need: need(8, 0) }, { id: 'kenno2', title: 'Big Terry', need: need(25, 1, 1) }, { id: 'kenno3', title: 'Forty years of arrows', need: need(42, 2, 3) }]);
+
+// ---------------------------------------------------------------- BEV
+DLG.def('bev1', { start: 'a', nodes: {
+  a: { say: ['Bev has a ledger open, a pencil behind her ear and a very flat expression.', '"Frank hasn\'t paid the cleaning bill since March. The roof fund\'s forty dollars. I do the books for free, love, and I\'m telling you: this pub could be saved by one good year."'], opts: [
+    { t: '"What\'s the one good year look like?"', go: 'b' },
+    { t: '"Can I help with the books?"', check: { stat: 'Charm', dc: 50 }, pass: 'c', fail: 'd' },
+    { t: 'Put $20 in the roof fund jar.', cost: 20, go: 'e' }] },
+  b: { say: '"Busy Thursdays. A proper Friday. Trivia that fills the lounge. And somebody sensible running the raffle." She taps the ledger. "Me. I can do that."', do: c => { c.up(8); c.done(); }, end: true },
+  c: { say: 'She slides the ledger to you. You find $340 of double-billed beer deliveries. She stares at it. Then at you. "Oh, you are GOOD."', do: c => { c.up(16); STORY.addFund(40, 'You found $340 in double-billed deliveries'); GW(c); c.done(); }, end: true },
+  d: { say: '"Thanks, love. I\'ve got it." She closes the ledger.', do: c => { c.up(-2); c.done(); }, end: true },
+  e: { say: '"Bless you."', do: c => { c.up(10); STORY.addFund(20); c.done(); }, end: true },
+} });
+DLG.def('bev2', { start: 'a', nodes: {
+  a: { say: ['"Frank\'s in the office with Clive Marsh\'s lawyer. He won\'t look at me. He\'s sixty-eight and tired and he\'s got an offer for four million."', '"If someone — a friendly face — took him a schooner and reminded him whose pub it was…"'], opts: [
+    { t: 'Take Frank a schooner and talk to him.', d: 'Check: Charm', check: { stat: 'Charm', dc: 55 }, pass: 'b', fail: 'c' },
+    { t: '"I\'m not going near that."', go: 'd' }] },
+  b: { say: ['You find Frank staring at a photograph of the Royal\'s centenary. You don\'t say much. You don\'t need to.', 'He lets out a long breath. "Tell Bev I\'ll hold off on signing till the council\'s had a look."'], do: c => { c.up(18); c.flags.frankStalls = true; GW(c); c.done(); }, end: true },
+  c: { say: 'Frank takes the schooner, thanks you politely, and doesn\'t change a single thing.', do: c => { c.up(4); c.done(); }, end: true },
+  d: { say: '"No, love. Fair enough. I\'ll try Mick."', do: c => { c.up(-4); c.done(); }, end: true },
+} });
+DLG.def('bev3', { start: 'a', nodes: {
+  a: { say: ['"Here\'s the thing. A community trust can bid for the freehold. The bank wants a guarantor to put his name behind the first hundred. Not hand it over, love — just have your name on the paper."', '"You\'d be on the hook if it all goes wrong. It\'s a lot to ask."'], opts: [
+    { t: '"Put my name down."', d: 'A real risk: it costs $100 now', cost: 100, go: 'b' },
+    { t: '"I can\'t. I\'m skint."', go: 'c' },
+    { t: '"What if I just come to the meeting?"', go: 'd' }] },
+  b: { say: 'She writes your name in careful capitals. "Wattle Creek Hotel Community Trust. Founding member number one."', do: c => { c.up(30); STORY.addFund(100, 'You put your name on the trust'); c.flags.guarantor = true; GW(c); GW(c); c.log('📜', 'Became founding member of the community trust'); Night.addRep(5); achieve('trust'); c.done(); }, end: true },
+  c: { say: '"Course you are, love. No shame in it."', do: c => { c.up(2); c.done(); }, end: true },
+  d: { say: '"Oh, I\'ll take that. A warm body at that meeting is worth its weight."', do: c => { c.up(10); c.done(); }, end: true },
+} });
+DLG.addArc('Bev', [{ id: 'bev1', title: 'The books', need: need(8, 0) }, { id: 'bev2', title: 'Frank in the office', need: need(25, 1, 2) }, { id: 'bev3', title: 'The guarantor', need: need(42, 2, 4) }]);
+
+// ---------------------------------------------------------------- SPUD
+DLG.def('spud1', { start: 'a', nodes: {
+  a: { say: ['Spud has his work boots up on the stool and his phone in his hand. He looks about twelve.', '"Boss says he\'s \'letting me go at the end of the month\'. I\'m two years into a four year apprenticeship. What do I do?"'], opts: [
+    { t: '"Ask for it in writing. It\'s not legal otherwise."', go: 'b' },
+    { t: '"Tell him to get stuffed. Find a better sparky."', go: 'c' },
+    { t: '"Want me to come and have a chat with him?"', check: { stat: 'Nerve', dc: 50 }, pass: 'd', fail: 'e' }] },
+  b: { say: '"Writing. Right. That\'s smart. I\'ll ask in the morning."', do: c => { c.up(12); c.flags.spudWriting = true; c.done(); }, end: true },
+  c: { say: '"I… yeah. Can\'t afford to, though."', do: c => { c.up(4); c.done(); }, end: true },
+  d: { say: 'You do. You\'re polite and extremely patient. The boss goes grey. Spud keeps his job.', do: c => { c.up(25); GW(c); c.done(); }, end: true },
+  e: { say: 'You go in too hard. The boss laughs at you. Spud looks at his boots. "…Cheers for trying."', do: c => { c.up(2); c.done(); }, end: true },
+} });
+DLG.def('spud2', { start: 'a', nodes: {
+  a: { say: ['"I\'ve been practising. Eight ball, Saturday, a tenner. You and me." He\'s grinning but the grin\'s thin.', '"Honestly, I need the win. Rent."'], opts: [
+    { t: 'Play him.', d: 'On the house table', go: 'b' },
+    { t: 'Give him $10 and say you lost.', cost: 10, go: 'c' },
+    { t: '"Rent comes from a job, mate. Not pool."', go: 'd' }] },
+  b: { say: '"You beauty. I\'ll rack."', do: c => { c.up(8); startPool('Spud'); c.done(); }, end: true },
+  c: { say: '"Oh. Oh, mate. You didn\'t have to…" He takes it. His ears go red.', do: c => { c.up(16); c.done(); }, end: true },
+  d: { say: '"…Yeah." He looks at the table. "Yeah. That\'s fair."', do: c => { c.up(6); c.flags.spudNoGamble = true; c.done(); }, end: true },
+} });
+DLG.def('spud3', { start: 'a', nodes: {
+  a: { say: ['Spud pulls a fistful of electrical tape and a multimeter out of his back pocket.', '"Right. The Royal\'s wiring is a crime. Bev says I can rewire the neon and the fuse board, on the cheap, as a favour. Needs a second pair of hands, one night. Interested?"'], opts: [
+    { t: '"Count me in."', d: 'Spud\'s mates\' rates at the bar for you', go: 'b' },
+    { t: '"I\'d probably electrocute us both."', go: 'c' }] },
+  b: { say: 'You hold a torch for two hours. Nothing explodes. Afterwards Spud gets the boss to knock fifty cents off every round "for the sparkies".', do: c => { c.up(25); c.flags.spudMates = true; GW(c); c.log('⚡', 'Helped Spud rewire the neon'); c.done(); }, end: true },
+  c: { say: '"Fair call. Probably."', do: c => { c.up(3); c.done(); }, end: true },
+} });
+DLG.addArc('Spud', [{ id: 'spud1', title: 'Skint sparky', need: need(8, 0) }, { id: 'spud2', title: 'Eight ball for rent', need: need(25, 1) }, { id: 'spud3', title: 'The rewire', need: need(42, 2, 3) }]);
+ACH_LIST.push(['trust', 'Founding Member', 'Put your name on the community trust.']);
+
+// ---------------------------------------------------------------- LOCALS AT THE OTHER PUBS
+const LOCALS = {
+  rsl: [
+    { name: 'Digger Dave', look: { fem: false, skinI: 1, shirt: { tile: 'collar', c: 0x1a2a4a }, pants: { tile: 'cloth', c: 0x2a2a30 }, hair: 0xe8e8e8, style: 'short', scale: 0.96, girth: 1.0, beard: 'mo', glasses: false }, spot: s => s.kind === 'stool' && s.area === 'bar', bio: 'Vietnam. Two-up Tuesdays. Sixty-one years a member.' },
+    { name: 'Lorraine', look: { fem: true, skinI: 0, shirt: { tile: 'collar', c: 0x2a5a8a }, pants: { tile: 'cloth', c: 0x1a1a22 }, hair: 0xcfa070, style: 'bob', scale: 0.95, girth: 1.0, glasses: true }, spot: s => s.kind === 'chair' && s.area === 'lounge', bio: 'Runs the Members\' Draw. Sees everything.' },
+  ],
+  dive: [
+    { name: 'Tiny', look: { fem: false, skinI: 3, shirt: { tile: 'collar', c: 0x121212 }, pants: { tile: 'cloth', c: 0x15151a }, hair: 0x1a1210, style: 'short', scale: 1.08, girth: 1.4, beard: 'full', glasses: false }, spot: s => s.kind === 'stand' && s.area === 'bar', bio: "The bouncer. Six foot six. Won't hurt a fly. Will hurt a bloke who hurts a fly." },
+    { name: 'Slick Rick', look: { fem: false, skinI: 2, shirt: { tile: 'hoops', c: 0x203060 }, pants: { tile: 'denim', c: 0xffffff }, hair: 0x2a1a0a, style: 'mullet', girth: 0.9, beard: 'mo' }, spot: s => s.kind === 'pool' || (s.kind === 'stool' && s.area === 'bar'), bio: 'Pool hustler. Has never once lost a game he cared about.' },
+  ],
+};
+// generic hub for a local: yarn (their arc), shout them a drink, ask about the place, a tip
+function localHub(key, lore, tipLines) {
+  DLG.def(key + '.hub', { start: 'a', nodes: {
+    a: { say: c => c.mem.met ? choice(['Back again. Good.', 'Mate. Pull up a stool.', "Look who it is."]) : (c.mem.met = 1, `"${choice(['New face. Welcome.', "Haven't seen you in here before.", 'G\'day. First time?'])}"`), opts: [
+      { t: 'Have a proper yarn', d: () => (DLG.nextBeat(key) || {}).title, do: c => { DLG.close(); DLG.playBeat(key, c.n); }, end: true, if: c => !!DLG.nextBeat(key) },
+      { t: 'Have a yarn', go: 'chat', if: c => !DLG.nextBeat(key) },
+      { t: c => `Shout ${c.name} a drink`, go: 'shout', cost: 6, if: c => !c.s.tonight['shout_' + key] },
+      { t: 'Ask about the place', go: 'lore' },
+      { t: 'Ask for a tip', go: 'tip', if: c => c.rel >= 15 },
+      { t: 'See ya', end: true }] },
+    chat: { say: () => `"${choice(tipLines.chat)}"`, do: c => { if (!c.s.tonight['talk_' + key]) { c.s.tonight['talk_' + key] = 1; c.up(5); c.mood_(3); } }, next: 'a' },
+    shout: { say: () => `"${choice(['You beauty.', "Cheers, mate. I'll get the next one.", 'A gentleman and a scholar.'])}"`, do: c => { c.s.tonight['shout_' + key] = 1; c.up(10); Night.ev('shouted'); Night.log('🍺', `Shouted ${c.name} a drink`); }, next: 'a' },
+    lore: { say: lore, next: 'a' },
+    tip: { say: () => `"${choice(tipLines.tip)}"`, do: c => c.up(1), next: 'a' },
+  } });
+}
+localHub('Digger Dave', '"Wattle Creek RSL opened in 1921. We\'ve got a courtesy bus, a meat raffle on Fridays and a plaque with the names of every local who went. I read it every Anzac Day. All of them."', {
+  chat: ['Two-up Tuesdays used to be illegal except Anzac Day. We played anyway.', "The schnitty's the best in the shire. Don't tell the Royal I said so.", 'Marg runs the bistro like a drill sergeant. We love her.'],
+  tip: ["Number four on the Thunder Empire's been paying better than the rest. Doesn't mean a thing, mind.", "Bet small and leave while you're up. That's the only system there is."]
+});
+localHub('Lorraine', '"I\'ve run the Members\' Draw since 1994. Every Friday: the badge draw, the raffle, the jackpot. If your name\'s in the drum and you\'re not here, it goes back in. Rules."', {
+  chat: ["I know everyone's business and I'll take it to my grave. Mostly.", 'The club puts back more than the pokies take out. Ask me about the netball courts.', 'You look like you need a cuppa more than a pot.'],
+  tip: ['Back the 4 horse in race 3. Not advice. I just like his name.', 'Never leave your handbag on the floor in this place. Not because of thieves. Because of the dogs.']
+});
+localHub('Tiny', '"Rusty Anchor\'s been here since \'64. Fishermen first, then wharfies, then everyone. I keep it quiet. I ask nicely first, twice, and then I\'m not so nice."', {
+  chat: ["Don't mind the stickiness. It's heritage.", 'Last bloke who tried to take a stool outside brought it back himself, apologising.', 'You can leave your drink if you want a dance. I\'ll watch it.'],
+  tip: ["If you get in a barney, don't swing first. I see everything.", "Cab rank's on the corner. Don't walk past the bait shop on your own."]
+});
+localHub('Slick Rick', '"Table\'s level, cues are straight, the felt\'s older than me. It\'s the best table in three towns, and I\'d tell you why but then you\'d be better."', {
+  chat: ["I play a dollar a game and I never lose. Funny, that.", 'Everything\'s angles, mate. Pool. Life. The odds on the TAB. Angles.', 'I once played a bloke for his ute. I won the ute. Gave it back. Never touched pool again. For a week.'],
+  tip: ["Don't play for money until you can run a rack. Never play for the rent.", "Machine three on the left's due. Joking. They're all random. Remember that."]
+});
+DLG.def('digger1', { start: 'a', nodes: {
+  a: { say: ['Digger Dave rubs a thumb over a worn brass badge on his lapel.', '"Fifty-four years old when I got this. Can you believe that? I thought the Army was over for me. Then came the call, and then the jungle."', '"Do you know what I came home to? A bloke in a tie telling me to take my medals off on the bus."'], opts: [
+    { t: '"I\'m sorry, Dave."', go: 'b' },
+    { t: '"What did you do?"', go: 'c' },
+    { t: 'Buy him a pot.', cost: 6, cat: 'spentDrinks', go: 'd' }] },
+  b: { say: '"No need, son. It\'s the ones who didn\'t come home. I\'m just the one who did."', do: c => { c.up(10); c.done(); }, end: true },
+  c: { say: '"Took them off, got on the bus, rang my mum from the pay phone, and cried my eyes out. First and last time. Then I joined the RSL."', do: c => { c.up(14); c.done(); }, end: true },
+  d: { say: 'He takes the pot, holds it up to the empty chair next to him, and drinks half of it in one go. "Ta."', do: c => { c.up(16); c.done(); }, end: true },
+} });
+DLG.def('digger2', { start: 'a', nodes: {
+  a: { say: ['"Two-up. Tuesdays. Fifty cents a spin, kids play for lollies. It\'s the one day of the year it\'s legal and the one day I\'d like to beat Kev Jones. Will you spin for me?"', 'He holds out two pennies and a wooden kip.'], opts: [
+    { t: 'Spin for him. "Heads!"', check: { stat: 'Luck', dc: 50, bonus: () => 0 }, pass: 'b', fail: 'c' },
+    { t: '"I don\'t gamble, Dave."', go: 'd' }] },
+  b: { say: 'Two heads. Dave whoops like a man half his age. "Beat Kev! BEAT KEV!" He buys you a schooner.', do: c => { c.up(18); c.cash(0); c.mood_(10); c.done(); }, end: true },
+  c: { say: 'Tails. Dave shrugs. "Well, Kev\'s a prick anyway."', do: c => { c.up(10); c.done(); }, end: true },
+  d: { say: '"Good on you. Smartest man in the room." He pockets the pennies.', do: c => { c.up(12); c.done(); }, end: true },
+} });
+DLG.addArc('Digger Dave', [{ id: 'digger1', title: 'The brass badge', need: need(8, 0) }, { id: 'digger2', title: 'Two-up', need: need(25, 1) }]);
+DLG.def('lorraine1', { start: 'a', nodes: {
+  a: { say: ['"Raffle\'s down on tickets. And I\'ll tell you why. There\'s a poker machine room out the back that doesn\'t need a raffle to fill it."', '"The club\'s paid for a minibus, a netball court and the footy club\'s lights with that money. I know what it costs, too. I see it every Friday."'], opts: [
+    { t: '"It\'s complicated, Lorraine."', go: 'b' },
+    { t: '"Maybe a cap on how much a person can lose a night?"', go: 'c' },
+    { t: 'Buy ten tickets.', cost: 10, go: 'd' }] },
+  b: { say: '"Isn\'t it just."', do: c => { c.up(8); c.done(); }, end: true },
+  c: { say: '"Pre-commitment cards. Yes. Don\'t think I haven\'t pushed. The board says it\'s \'bad for the experience\'." She says the last words like they taste of metal.', do: c => { c.up(14); c.done(); }, end: true },
+  d: { say: 'She counts them out slowly. "Good on you. Doesn\'t fix the problem. But it\'s a start."', do: c => { c.up(12); Game.raffle.tickets += 5; c.done(); }, end: true },
+} });
+DLG.def('lorraine2', { start: 'a', nodes: {
+  a: { say: ['"I\'m retiring in June. After thirty years. Nobody\'s lined up to run the Draw. Would you ever consider it?"'], opts: [
+    { t: '"I\'ll help. A couple of Fridays."', go: 'b' },
+    { t: '"I\'m only in town a week."', go: 'c' }] },
+  b: { say: '"Ha! A couple of Fridays. That\'s how it starts. Here — hold the drum."', do: c => { c.up(16); c.standing(3, 'Held the drum at the Members\' Draw'); c.done(); }, end: true },
+  c: { say: '"Course. Well. If you ever change your mind."', do: c => { c.up(4); c.done(); }, end: true },
+} });
+DLG.addArc('Lorraine', [{ id: 'lorraine1', title: 'The Members\' Draw', need: need(8, 0) }, { id: 'lorraine2', title: 'Who takes over', need: need(25, 1) }]);
+DLG.def('tiny1', { start: 'a', nodes: {
+  a: { say: ['"Everyone thinks I\'m paid to throw people out. I\'m paid to make sure nobody has to get thrown out. That\'s the job."', '"Last week I walked a lad home. Nineteen. Drank too much, couldn\'t stand. I put him in a cab and stood on the footpath till it turned the corner. That\'s the job."'], opts: [
+    { t: '"That\'s a good job, Tiny."', go: 'b' },
+    { t: '"Do you ever get scared?"', go: 'c' },
+    { t: '"Could you walk me home tonight?"', go: 'd' }] },
+  b: { say: '"It is." He nods. "It really is."', do: c => { c.up(12); c.done(); }, end: true },
+  c: { say: '"Every night. Fear\'s what keeps you honest." He grins. "Don\'t tell anyone."', do: c => { c.up(14); c.done(); }, end: true },
+  d: { say: '"Of course. Just say when."', do: c => { c.up(10); c.flags.tinyWalk = true; c.done(); }, end: true },
+} });
+DLG.def('tiny2', { start: 'a', nodes: {
+  a: { say: ['A bloke at the bar is getting loud. Tiny puts a hand flat on the bar, not looking at him.', '"Watch this. Lesson one." He steps over, says three quiet words, and the bloke deflates like a tyre. He comes back.', '"You try."'], opts: [
+    { t: 'Try it on the next loud bloke.', check: { stat: 'Nerve', dc: 55 }, pass: 'b', fail: 'c' },
+    { t: '"I\'ll leave that to the professionals."', go: 'd' }] },
+  b: { say: 'You walk up. You don\'t quite know what you say. But the bloke apologises, shakes your hand and goes to the toilets. Tiny stares at you. "…Where did you learn that?"', do: c => { c.up(20); c.standing(2, 'Cooled things down at the Rusty Anchor'); c.done(); }, end: true },
+  c: { say: 'The bloke laughs at you. Tiny walks over, says three words, and the pub is quiet again. "Practice."', do: c => { c.up(8); c.done(); }, end: true },
+  d: { say: '"Probably wise."', do: c => { c.up(6); c.done(); }, end: true },
+} });
+DLG.addArc('Tiny', [{ id: 'tiny1', title: 'The job', need: need(8, 0) }, { id: 'tiny2', title: 'Lesson one', need: need(25, 1) }]);
+DLG.def('rick1', { start: 'a', nodes: {
+  a: { say: ['Rick racks without looking, a cigarette that isn\'t lit behind his ear.', '"Ten bucks a game. Winner stays on. You\'ll lose, but you\'ll learn."'], opts: [
+    { t: '"Let\'s play."', go: 'b' },
+    { t: '"What\'s your secret?"', go: 'c' },
+    { t: '"Not for money."', go: 'd' }] },
+  b: { say: '"Righto. Rack\'s yours."', do: c => { c.up(6); startPool('Slick Rick'); c.done(); }, end: true },
+  c: { say: '"Never play a bloke who\'s better than you. And never show them you\'re better than they think. Boom. Secret."', do: c => { c.up(10); c.done(); }, end: true },
+  d: { say: '"Smart. Now you\'re learning."', do: c => { c.up(10); c.done(); }, end: true },
+} });
+DLG.def('rick2', { start: 'a', nodes: {
+  a: { say: ['Rick isn\'t playing. He\'s watching a bloke at the machines drop hundreds into a Big Red and he\'s got a thin look on his face.', '"Seen him in here every night for a month. Wife left in June. Won\'t talk to anyone. I\'d say something. Not my business."'], opts: [
+    { t: '"Maybe somebody should."', go: 'b' },
+    { t: '"Not my business either."', go: 'c' },
+    { t: 'Go and talk to him.', check: { stat: 'Charm', dc: 55 }, pass: 'd', fail: 'e' }] },
+  b: { say: '"Maybe. Yeah." He puts the cue down. "I\'ll buy him a pot."', do: c => { c.up(10); c.done(); }, end: true },
+  c: { say: '"Yeah." He goes back to the table. His shoulders are tight.', do: c => { c.up(2); c.done(); }, end: true },
+  d: { say: 'You sit next to the bloke at the machine for a while. He talks. You listen. At the end he feeds the machine his last five and doesn\'t buy more. He takes a card from your hand. Rick nods at you across the room.', do: c => { c.up(25); c.standing(4, 'Talked a bloke away from the pokies'); c.mood_(10); achieve('listener'); c.done(); }, end: true },
+  e: { say: 'He waves you off. "Mind your business, mate." He doesn\'t say it unkindly.', do: c => { c.up(6); c.done(); }, end: true },
+} });
+DLG.addArc('Slick Rick', [{ id: 'rick1', title: 'Ten bucks a game', need: need(8, 0) }, { id: 'rick2', title: 'The bloke at the machine', need: need(25, 1) }]);
+ACH_LIST.push(['listener', 'A Good Listener', 'Talk someone away from the pokies.']);
+
+const VenueLocals = {
+  spawn() {
+    for (const L of LOCALS[VENUE.id] || []) {
+      const n = mkNPC(Object.assign({ name: L.name, smoker: false, gambler: false }, L.look)); n.local = L.name;
+      const sp = SPOTS.find(s => !s.occ && L.spot(s));
+      if (sp) { claim(n, sp); n.pos.copy(sp.pos); n.ry = sp.ry; seatNPC(n); } else { n.pos.copy(NODES.P5); n.state = 'idle'; n.kind = 'stand'; }
+      n.timer = 1e9; n.eventTalk = () => { Night.ev('talk', L.name); DLG.open(L.name + '.hub', n, { key: L.name, bio: L.bio }); };
+    }
+  },
+};
+
+// ---- src/28-cine.js ----
+
+// =====================================================================
+//  CINEMATIC DIRECTOR: skippable camera moves over the live world.
+//  Cine.play([{ dur, a: {p, l, fov}, b: {p, l, fov}, ease, sub, title, shake, slow, duck, fn }], { onEnd, bars, skippable })
+//  p / l are [x, y, z] (position, look-at).  A shot moves from a to b (or holds a when b is omitted).
+//  Hold E / SPACE (or tap the screen on a phone) to skip: the world is left exactly as the cinematic's end would leave it.
+//  settings.cinematics: 'full' | 'short' (only the quick ones) | 'off'.
+// =====================================================================
+const Cine = {
+  active: null, bars: 0, slow: 1, skipT: 0, saved: null, t: 0,
+  ok(kind = 'full') { const m = settings.cinematics || 'full'; return m === 'off' ? false : m === 'short' ? kind !== 'long' : true; },
+  play(shots, o = {}) {
+    if (this.active) this.end(true);
+    if (!this.ok(o.kind)) { o.onEnd && o.onEnd(); return false; }
+    const A = this.active = { shots, i: -1, t: 0, o, seen: 0, fovStart: camera.fov };
+    this.saved = { fov: camera.fov, music: Music.level, uiOpen: Game.uiOpen };
+    this.skipT = 0; this.slow = 1; document.body.classList.add('cine'); $('lbT').style.height = $('lbB').style.height = (o.bars === 0 ? 0 : 11) + 'vh';
+    $('cineHint').classList.toggle('hidden', o.skippable === false); this.next();
+    return true;
+  },
+  next() {
+    const A = this.active; if (!A) return;
+    const prev = A.shots[A.i]; if (prev && prev.end) prev.end();
+    A.i++; A.t = 0; const s = A.shots[A.i];
+    if (!s) { this.end(false); return; }
+    if (s.sub) Game.subtitle(s.sub, s.dur + 0.4);
+    if (s.title) this.title(s.title[0], s.title[1], Math.min(s.dur, 4.5));
+    if (s.fn) s.fn();
+    if (s.duck != null) Music.level = Math.max(0.05, this.saved.music * s.duck);
+  },
+  title(a, b, dur) { const e = $('cineTitle'); e.innerHTML = `<b>${a}</b>${b ? `<span>${b}</span>` : ''}`; e.classList.add('on'); clearTimeout(this._tt); this._tt = setTimeout(() => e.classList.remove('on'), dur * 1000); },
+  // the camera for this frame
+  update(dt) {
+    const A = this.active; if (!A) return;
+    dt = this.rdt || dt; A.t += dt; const s = A.shots[A.i]; if (!s) return;
+    const k = clamp(A.t / s.dur, 0, 1), e = s.ease === 'lin' ? k : s.ease === 'out' ? easeOut(k) : smooth(k);
+    const a = s.a, b = s.b || s.a;
+    const pos = V3(lerp(a.p[0], b.p[0], e), lerp(a.p[1], b.p[1], e), lerp(a.p[2], b.p[2], e));
+    const look = V3(lerp(a.l[0], b.l[0], e), lerp(a.l[1], b.l[1], e), lerp(a.l[2], b.l[2], e));
+    // handheld breath so a locked-off shot never feels dead
+    const t = elapsed; if (!settings.reduceMotion) { pos.x += Math.sin(t * 0.9) * 0.012; pos.y += Math.sin(t * 1.3) * 0.01; }
+    if (s.shake) { const sh = s.shake * (1 - k); pos.x += (Math.random() - 0.5) * 0.03 * sh; pos.y += (Math.random() - 0.5) * 0.03 * sh; }
+    camera.position.copy(pos); camera.lookAt(look);
+    const fov = lerp(a.fov || 60, b.fov || a.fov || 60, e); if (Math.abs(camera.fov - fov) > 0.02) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    this.slow = s.slow != null ? s.slow : 1;
+    // skipping: hold the key
+    const held = keys.KeyE || keys.Space || keys.Enter || this.touchHeld;
+    this.skipT = held ? this.skipT + dt : Math.max(0, this.skipT - dt * 2);
+    $('cineSkip').style.width = Math.min(100, this.skipT / 0.7 * 100) + '%';
+    if (A.o.skippable !== false && this.skipT >= 0.7) { this.end(true); return; }
+    if (A.t >= s.dur) this.next();
+  },
+  end(skipped) {
+    const A = this.active; if (!A) return; this.active = null;
+    // run any remaining shots' end hooks so state is left as the full cinematic would have left it
+    for (let i = Math.max(0, A.i); i < A.shots.length; i++) { const s = A.shots[i]; if (skipped && i > A.i && s.fn) s.fn(); if (s.end) s.end(); }
+    if (skipped) { Game.subtitle('', 0); $('subtitle').innerHTML = ''; }
+    document.body.classList.remove('cine'); $('lbT').style.height = $('lbB').style.height = 0; $('cineTitle').classList.remove('on'); $('cineSkip').style.width = 0;
+    camera.fov = this.saved.fov; camera.updateProjectionMatrix(); Music.level = this.saved.music; this.slow = 1; this.skipT = 0; this.touchHeld = false;
+    if (A.o.onEnd) A.o.onEnd(skipped);
+  },
+  // ------------------------------------------------------------ ready-made sequences
+  // the establishing shot at the start of a night: the street, a drift in towards the door, then you
+  opening(first) {
+    const D = DAYS[Game.state.day];
+    return this.play([
+      { dur: first ? 5.5 : 3.6, ease: 'lin', a: { p: [-34, 5.8, 21], l: [-4, 3.2, 2], fov: 50 }, b: { p: [-17, 3.6, 19.5], l: [0, 2.6, 2], fov: 52 }, title: first ? [VENUE.name, `${DAYS[Game.state.day].name} · ${CHAPTERS[Game.state.day].title.split('— ')[1] || ''}`] : [VENUE.name, D.title], sub: first ? '<i>The street\'s dead. Only thing lit up for blocks is ' + VENUE.short + '.</i>' : null, duck: 0.6 },
+      { dur: first ? 3 : 2.2, a: { p: [-17, 3.6, 19.5], l: [0, 2.6, 2], fov: 52 }, b: { p: [-8.5, 1.9, 22], l: [-2, 2.2, 3], fov: 60 }, ease: 'out' },
+    ], { kind: 'short', onEnd: () => { player.pos.set(-7.5, 0, 21.2); player.yaw = 0.12; player.pitch = 0.04; } });
+  },
+  // last drinks: the bell, the lights come up, the whole bar turns
+  lastCall(bt) {
+    const p = bt.pos, bell = [-9.0, 1.3, -8.0];
+    return this.play([
+      { dur: 2.4, a: { p: [-6.3, 1.55, -7.2], l: [bell[0], bell[1] + 0.1, bell[2]], fov: 38 }, b: { p: [-6.6, 1.5, -7.6], l: [bell[0], bell[1], bell[2]], fov: 34 }, slow: 0.55, sub: `<b>${bt.name}:</b> LAST DRINKS, EVERYBODY!`, fn: () => { SFX.bell(V3(-9, 2.5, -8), 3); }, duck: 0.35 },
+      { dur: 3.2, a: { p: [-5.2, 1.7, -4.5], l: [-9, 1.5, -8], fov: 60 }, b: { p: [-1.5, 2.2, 0.2], l: [-7, 1.6, -9], fov: 66 }, ease: 'out', fn: () => { Music.level = Math.max(0.2, this.saved.music * 0.5); } },
+    ], { kind: 'short' });
+  },
+  // a pokie jackpot: the screen fills your view, the room goes quiet for a second
+  jackpot(m, name) {
+    const s = m.screenW, f = m.fw, up = V3(0, 1, 0), eye = player.pos.clone().add(V3(0, 1.3, 0)).addScaledVector(f, 0.2);
+    const near = s.clone().addScaledVector(f, 0.42).add(V3(0, -0.02, 0));
+    return this.play([
+      { dur: 3.4, a: { p: [eye.x, eye.y, eye.z], l: [s.x, s.y - 0.1, s.z], fov: 55 }, b: { p: [near.x, near.y, near.z], l: [s.x, s.y, s.z], fov: 42 }, slow: 0.5, shake: 1.2, ease: 'out', sub: `<b>${name} JACKPOT!</b>`, duck: 0.3 },
+      { dur: 1.2, a: { p: [near.x, near.y, near.z], l: [s.x, s.y, s.z], fov: 42 }, b: { p: [eye.x, eye.y, eye.z], l: [s.x, s.y - 0.1, s.z], fov: 55 } },
+    ], { kind: 'short', bars: 11 });
+  },
+  // follow somebody for a few seconds (a scuffle being walked out, a patron leaving)
+  follow(n, dur = 4, sub) {
+    const tgt = () => [n.pos.x, 1.4, n.pos.z];
+    const a = n.pos.clone().add(V3(-2.2, 0.4, 2.8));
+    return this.play([{ dur, a: { p: [a.x, 1.7, a.z], l: tgt(), fov: 50 }, b: { p: [a.x + 1.4, 1.5, a.z - 0.6], l: tgt(), fov: 46 }, sub, ease: 'lin' }], { kind: 'short' });
+  },
+  // the council decides: slow shots across the packed bar, one line per beat
+  council(lines, then) {
+    const poses = [
+      { a: { p: [-3.5, 1.7, -3.2], l: [-9, 1.5, -8], fov: 52 }, b: { p: [-4.5, 1.7, -4.5], l: [-9, 1.5, -8], fov: 48 } },
+      { a: { p: [0, 1.6, -9], l: [-6, 1.6, -4], fov: 55 }, b: { p: [-1.2, 1.6, -8.4], l: [-6, 1.6, -4], fov: 50 } },
+      { a: { p: [-6.5, 1.5, -3.5], l: [-1, 1.5, -7], fov: 58 }, b: { p: [-5.5, 1.6, -4], l: [-1, 1.5, -7], fov: 50 } },
+    ];
+    const shots = lines.map(([who, l], i) => ({ dur: Math.max(3.2, 1.4 + l.length * 0.045), ease: 'lin', ...poses[i % poses.length], sub: `<b>${who}:</b> ${l}`, duck: 0.2 }));
+    return this.play(shots, { kind: 'long', onEnd: then });
+  },
+  // the cab ride home
+  taxi(then) {
+    return this.play([
+      { dur: 2.2, a: { p: [-4, 1.3, 9.2], l: [-11.5, 1.1, 11.4], fov: 55 }, b: { p: [-9, 1.25, 10.3], l: [-11.5, 1.1, 11.4], fov: 45 }, ease: 'out', sub: '<i>The back seat smells of pine and last night.</i>', duck: 0.5 },
+      { dur: 3.6, ease: 'lin', a: { p: [-12.5, 1.15, 12.6], l: [-30, 1.4, 12], fov: 62 }, b: { p: [-24, 1.15, 12.6], l: [-44, 1.4, 12], fov: 62 }, sub: '<b>Driver:</b> Big night, mate? You want me to drop you at the corner?' },
+    ], { kind: 'short', onEnd: then });
+  },
+};
+addEventListener('touchstart', () => { if (Cine.active) Cine.touchHeld = true; }, { passive: true });
+addEventListener('touchend', () => { Cine.touchHeld = false; });
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -9608,6 +10272,7 @@ async function boot() {
     await new Promise(r => setTimeout(r, 300));
     $('loading').classList.add('hidden');
     Game.toTitle();
+    if (store('ld_resume')) { store('ld_resume', null); if (Game.load()) Game.showDayCard(); }   // we just caught a cab to another pub
     window.__ready = true;
   } catch (e) {
     console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message;
@@ -9619,4 +10284,4 @@ window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__m
 window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
 window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
 window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
-window.__game = { colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
+window.__game = { Cine, DLG, VenueLocals, TEX, MAT, VENUE, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

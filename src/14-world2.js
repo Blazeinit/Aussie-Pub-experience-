@@ -377,7 +377,7 @@ function updateTraffic(dt) {
   if (u.state === 'arriving') {
     const dx = u.stopX - u.x, sp = Math.min(14, Math.max(1.2, Math.abs(dx) * 0.9));
     u.x += Math.sign(dx) * Math.min(Math.abs(dx), sp * dt); t.position.set(u.x, -0.15, 11.4); t.rotation.y = Math.PI;
-    if (Math.abs(dx) < 0.05) { u.state = 'waiting'; SFX.tone(420, 0.15, { gain: 0.06, pos: t.position, type: 'square' }); SFX.tone(420, 0.15, { delay: 0.3, gain: 0.06, pos: t.position, type: 'square' }); Game.toast('Your cab\'s here.'); u.ia = addInteract({ id: 'getin', temp: true, pos: V3(u.x, 1.0, 10.6), r: 3.0, label: () => 'Get in the cab', action: () => { interactables.splice(interactables.indexOf(u.ia), 1); u.state = 'leaving'; achieve('taxi'); Game.endNight('taxi'); } }); }
+    if (Math.abs(dx) < 0.05) { u.state = 'waiting'; SFX.tone(420, 0.15, { gain: 0.06, pos: t.position, type: 'square' }); SFX.tone(420, 0.15, { delay: 0.3, gain: 0.06, pos: t.position, type: 'square' }); Game.toast('Your cab\'s here.'); u.ia = addInteract({ id: 'getin', temp: true, pos: V3(u.x, 1.0, 10.6), r: 3.0, label: () => 'Get in the cab', action: () => { interactables.splice(interactables.indexOf(u.ia), 1); u.state = 'leaving'; achieve('taxi'); if (!Cine.taxi(() => Game.endNight('taxi'))) Game.endNight('taxi'); } }); }
   } else if (u.state === 'leaving') { u.x -= 10 * dt; t.position.x = u.x; if (u.x < -75) { u.state = 'idle'; t.visible = false; } }
 }
 

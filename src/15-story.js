@@ -167,7 +167,7 @@ const REGULARS = {
       "Sunday sesh, then TAFE tomorrow. Kill me.",
     ],
     extra(n, s, opts) {
-      opts.push({ label: 'Challenge him to pool', d: 'Eight-ball, on the house table', fn: () => { Game.closePanel(); if (typeof Pool !== 'undefined') Pool.offer('Spud'); else Game.toast('Table\'s booked tonight — Spud reckons next week.'); } });
+      opts.push({ label: 'Challenge him to pool', d: 'Eight-ball, on the house table', fn: () => { Game.closePanel(); startPool('Spud'); } });
       if (s.day === 1 && !s.flags.spudLoan) opts.push({ label: 'Lend him $20', disabled: s.wallet < 20, fn: () => { s.flags.spudLoan = 1; s.wallet -= 20; relUp('Spud', 6); Game.closePanel(); bark(n, 'Champion. Wednesday. On me nan\'s life.', true); } });
       if (s.day === 2 && s.flags.spudLoan === 1) { s.flags.spudLoan = 2; s.wallet += 30; Game.toast('Spud paid back your $20 — plus a tenner. Legend.', true); relUp('Spud', 6); }
       if (s.day >= 5 && rel('Spud') >= 15 && !s.flags.poolTip) { s.flags.poolTip = true; Game.toast('Spud\'s tip: your pool aim line is longer now.'); }
@@ -199,6 +199,8 @@ const REG = {
     const first = !s.tonight['talk_' + name];
     if (first) { s.tonight['talk_' + name] = 1; relUp(name, 5); s.mood = Math.min(100, s.mood + 3); }
     const opts = [];
+    const beat = DLG.nextBeat(name);
+    if (beat) opts.push({ label: 'Dig deeper', d: beat.title, fn: () => { Game.closePanel(); DLG.playBeat(name, n); } });
     R.extra && R.extra(n, s, opts);
     STORY.talkOpts(n, opts);
     const price = Game.drinkPrice('schooner');
@@ -263,7 +265,7 @@ const RANDOM = {
       if (this.done) return;
       this.t -= dt;
       if (this.t <= 0 && this.k < lines.length) { const [who, l] = lines[this.k++]; bark(who, l, true); who.cheerT = 0; this.t = 4; }
-      else if (this.t <= 0 && this.k >= lines.length) { this.done = true; Game.subtitle('<b>Bouncer:</b> Right, you two. Out. Now.', 4); for (const n of [a, b]) { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }
+      else if (this.t <= 0 && this.k >= lines.length) { this.done = true; Game.subtitle('<b>Bouncer:</b> Right, you two. Out. Now.', 4); if (player.pos.distanceTo(a.pos) < 11 && !Game.uiOpen && !MG.active && !player.seated) Cine.follow(a, 4.5, '<b>Bouncer:</b> Right, you two. Out. Now.'); for (const n of [a, b]) { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }
     } };
     const calm = () => {
       if (ev.done) return; ev.done = true; a.eventTalk = b.eventTalk = null; Game.closePanel();

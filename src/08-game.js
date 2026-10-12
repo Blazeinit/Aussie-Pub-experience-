@@ -113,7 +113,7 @@ const Game = {
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
-    REG.spawnAll(); Shops.spawnStaff(); STORY.spawn();
+    REG.spawnAll(); VenueLocals.spawn(); Shops.spawnStaff(); STORY.spawn();
     spawnPatrons(Math.round(D.crowd * VENUE.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
     Night.start(); RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
@@ -127,6 +127,7 @@ const Game = {
     $('hud').classList.remove('hidden'); $('deck').classList.add('hidden');
     this.fade(1, 0); lockPointer(); this.useTab = false;
     this.objective();
+    { const seen = s.flags.seen = s.flags.seen || {}; const first = !seen[VENUE.id]; seen[VENUE.id] = 1; Cine.opening(first); }
     setTimeout(() => this.subtitle(s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is ' + VENUE.short + '.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is ' + VENUE.short + '.</i>', 5), 600);
   },
   endNight(reason) {
@@ -270,6 +271,7 @@ const Game = {
     if (s.event === 'monday' && type === 'pot' && s.time < 21) p = 6.5;
     p = Math.round(p * VENUE.priceMul * 4) / 4;
     if (p > 1 && Night.hasPerk(2)) p = Math.max(1, p - 0.5);
+    if (p > 1 && s.flags.spudMates) p = Math.max(1, p - 0.5);
     return p;
   },
   openBar() {
@@ -423,6 +425,7 @@ const Game = {
   onBigWin(m, lvl) { Night.log('🎰', `${lvl} on ${m.game.name} (${fmt$(m.win || 0)})`); $('bigwin').textContent = lvl + '!'; $('bigwin').style.opacity = 1; setTimeout(() => $('bigwin').style.opacity = 0, 2500); SFX.cheer(m.screenW, 1); NPCS.forEach(n => { if (n.pos.distanceTo(m.seatW) < 6 && n.role !== 'bartender') { n.cheerT = 2; } }); },
   onJackpot(m, name, amt) {
     const who = m.mode === 'player' ? 'You' : (m.occupiedBy && m.occupiedBy.name) || 'Someone';
+    if (m.mode === 'player' && (name === 'GRAND' || name === 'MAJOR')) Cine.jackpot(m, name);
     if (m.mode === 'player') { this.state.stats.jackpots++; Night.log('🔔', `${name} jackpot: ${fmt$(amt)}`); SFX.jackpotBell(); this.toast(`${name} JACKPOT! ${fmt$(amt)}`, true); }
     else if (name !== 'MINI') { SFX.jackpotBell(); this.toast(`🔔 ${who} just hit the ${name} — ${fmt$(amt)} on ${m.game.name}!`, name === 'GRAND' || name === 'MAJOR'); SFX.cheer(m.screenW, 2); }
   },
@@ -518,9 +521,11 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
+    if (DLG.active) { DLG.key(code); return; }
+    if (Cine.active) return;
     if (code === 'Escape') { if (!$('panel').classList.contains('hidden')) { this.closePanel(); return; } if (player.seated) { this.leaveMachine(); return; } return; }
     if (this.uiOpen || this.paused) return;
     if (MG.active) { MG.key(code); return; }
@@ -673,6 +678,7 @@ function perfOverlay(dt) {
 // debug/test helper: fast-forward the simulation without rendering
 window.__sim = (sec, step = 1 / 30) => { for (let i = 0; i < sec / step; i++) simulate(step); };
 function simulate(dt) {
+  if (Cine.active) { Cine.rdt = dt; dt *= Cine.slow; }
   elapsed += dt;
   const s = Game.state;
   const playing = Game.mode === 'play' && !Game.paused;
@@ -684,9 +690,9 @@ function simulate(dt) {
   }
   vm.root.visible = Game.mode === 'play' && !MG.active;
   if (playing) {
-    s.time += dt * Game.timeScale;
+    if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt);
+    Game.updateEvents(dt); DLG.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;

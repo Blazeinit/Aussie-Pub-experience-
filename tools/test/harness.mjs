@@ -19,7 +19,7 @@ export function serve(port = 8123) {
     res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(res);
   }).listen(port);
 }
-export async function launch({ quality = 'high', file = null, w = 1280, h = 720, port = 8123, venue = null } = {}) {
+export async function launch({ quality = 'high', file = null, w = 1280, h = 720, port = 8123, venue = null, cine = 'off' } = {}) {
   serve(port);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: w, height: h } });
@@ -33,7 +33,7 @@ export async function launch({ quality = 'high', file = null, w = 1280, h = 720,
     if (m) { const p = T + m[1]; if (fs.existsSync(p)) return r.fulfill({ path: p, contentType: 'application/javascript' }); }
     return r.abort();
   });
-  await page.addInitScript(([q, v]) => { window.__noDynRes = true; localStorage.setItem('ld_settings', JSON.stringify({ quality: q })); if (v) localStorage.setItem('ld_venue', JSON.stringify(v)); }, [quality, venue]);
+  await page.addInitScript(([q, v, c]) => { window.__noDynRes = true; localStorage.setItem('ld_settings', JSON.stringify({ quality: q, cinematics: c })); if (v) localStorage.setItem('ld_venue', JSON.stringify(v)); }, [quality, venue, cine]);
   await page.goto(file ? 'file://' + ROOT + file : `http://localhost:${port}/index.html`);
   await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 240000 });
   const bootErr = await page.evaluate(() => window.__bootError || null);

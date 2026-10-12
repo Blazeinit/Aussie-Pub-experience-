@@ -155,8 +155,15 @@ const Night = {
     el.innerHTML = `<b>${title}</b>${sub ? `<span>${sub}</span>` : ''}`; el.classList.add('on'); clearTimeout(this._bt); this._bt = setTimeout(() => el.classList.remove('on'), dur * 1000);
   },
   // ---------------------------------------------------------- the shape of the night
+  compPrompt() {
+    const s = Game.state, stake = s.flags.kennoBet && s.wallet >= 50 ? 50 : 0;
+    Game.openPanel('ROYAL DARTS COMP', `Kenno's chalked up the final. ${stake ? 'Fifty dollars says he wins.' : 'Winner takes the trophy and the $60 prize pool.'} Sixteen entries, two left standing.`, Game.optList([
+      { label: 'Step up to the oche', d: stake ? `Your $${stake} bet is on` : 'Three rounds, three darts each', fn: () => { Game.closePanel(); Darts.begin(stake, 'Kenno', true); } },
+      { label: 'Forfeit', d: 'Kenno will be very quiet about it', fn: () => { Game.closePanel(); Night.addRep(-2, 'Forfeited the darts comp'); } }]), []);
+  },
   update(dt) {
     const s = Game.state, D = DAYS[s.day]; if (!Game.entered) return;
+    if (VENUE.story && s.day === 5 && s.flags.compEntered && !s.tonight.comp && s.time >= s.startTime + 1.5 && !Game.uiOpen && !MG.active && !player.seated && isInside(player.pos.x, player.pos.z)) { s.tonight.comp = 1; this.compPrompt(); }
     const span = D.close - s.startTime, f = (s.time - s.startTime) / span, B = this.beatsDone;
     s.night.maxDrunk = Math.max(s.night.maxDrunk || 0, s.drunk);
     this.tickT -= dt;
@@ -186,6 +193,7 @@ const Night = {
     Music.level = Math.max(0.2, Music.level - 0.3);
     this.log('🔔', 'Last drinks called');
     if (Game.mode !== 'play' || Game.uiOpen || MG.active || player.seated) { if (player.seated) Game.toast('Last drinks! Wrap it up, champ.'); return; }
+    if (Cine.lastCall(bartender)) { const iv = setInterval(() => { if (!Cine.active) { clearInterval(iv); if (Game.mode === 'play' && !Game.uiOpen && !MG.active) setTimeout(() => this.lastCallPanel(), 400); } }, 300); return; }
     setTimeout(() => { if (Game.mode !== 'play' || Game.uiOpen || MG.active) return; this.lastCallPanel(); }, 3600);
   },
   lastCallPanel() {
@@ -232,4 +240,4 @@ const Night = {
     while (c.children.length > 40) c.remove(c.children[0]);
   },
 };
-ACH_LIST.push(['royalty', 'Royal Royalty', 'Reach the top standing at the Royal.']);
+ACH_LIST.push(['royalty', 'Royal Royalty', 'Reach the top standing at the Royal.'], ['champ', 'Royal Darts Champion', 'Win the Saturday darts comp.']);

@@ -39,7 +39,7 @@ const STORY = {
     this.jar = jar; jar.visible = false;
     addInteract({ id: 'jar', pos: V3(F - 0.16, 1.25, -5.3), r: 2.2, enabled: () => this.jar.visible && !MG.active, label: () => `Save the Royal jar — ${fmt0(this.st().fund)} so far`, action: () => this.donate() });
     // the licence behind the footy photo
-    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => VENUE.story && Game.state.day >= 3 && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
+    addInteract({ id: 'licence', pos: V3(2.2, 2.4, 1.7), r: 2.4, enabled: () => VENUE.story && (Game.state.day >= 3 || Game.state.flags.mickLicenceHint) && !this.st().licence, label: () => 'Look behind the old footy photo', action: () => this.findLicence() });
   },
   spawn() {
     const s = Game.state, S = this.st();
@@ -102,7 +102,7 @@ const STORY = {
     const s = Game.state, S = this.st();
     if (VENUE.story && s.day === 6 && !this.meetingDone && s.time >= 20) { this.meetingDone = true; this.meeting(); }
   },
-  score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
+  score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + Math.min(3, Game.state.flags.goodwill || 0) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
   meeting() {
     const S = this.st(), sc = this.score(), there = isInside(player.pos.x, player.pos.z) && player.level === 0;
     S.ending = sc >= 7 ? 'saved' : sc >= 4 ? 'reprieve' : 'sold';
@@ -117,6 +117,7 @@ const STORY = {
     ];
     if (!there) { Game.toast(`📱 <b>Bev:</b> ${S.ending === 'saved' ? 'WE DID IT!!! The Royal is SAVED. Where ARE you?!' : S.ending === 'reprieve' ? 'Twelve months reprieve. We fight on. Missed you there, love.' : 'It\'s over. They\'re selling. Wish you\'d been there.'}`, true); this.finale(); return; }
     Game.fade(0, 0.7); SFX.bell(V3(-9, 2.5, -8), 2);
+    if (Cine.council(lines, () => { Game.fade(0.7, 0); this.finale(); })) return;
     let i = 0;
     const next = () => {
       if (i >= lines.length) { Game.closePanel(); Game.fade(0.7, 0); this.finale(); return; }

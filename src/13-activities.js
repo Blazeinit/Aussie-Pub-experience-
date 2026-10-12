@@ -437,7 +437,8 @@ const Karaoke = {
   },
   exit() {
     if (this.el) this.el.remove(); this.el = null; Music.level = 0.9;
-    const g = this.g, pct = Math.round(g.score / g.notes.length * 100);
+    const g = this.g; let pct = Math.round(g.score / g.notes.length * 100);
+    const duet = Game.state.flags.shazDuet && Game.state.day === 4; if (duet) { pct = Math.min(100, pct + 12); Game.toast('Shazza joined in on the chorus. The roof lifts.'); }
     this.scores.push({ name: 'You', s: pct }); this.draw(); Night.ev('sang'); Night.log('🎤', `Karaoke: ${pct}%`);
     if (DAYS[Game.state.day].event === 'knockoff') STORY.addFund(pct, `The crowd chipped in $${pct} for your performance`);
     const s = Game.state; s.mood = Math.min(100, s.mood + (pct > 60 ? 15 : 5));

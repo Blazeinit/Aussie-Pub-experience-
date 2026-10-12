@@ -358,6 +358,7 @@ function seatCam() {
 
 function updatePlayer(dt, t) {
   const s = Game.state, drunk = s.drunk / 100;
+  if (Cine.active) { Cine.update(dt); input.mx = input.my = 0; return; }
   if (MG.active) { MG.update(dt, t); if (player.drink) player.drink.update(dt, t); return; }
   // look
   if (input.locked && !player.seated) {

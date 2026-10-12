@@ -182,12 +182,12 @@ const Darts = {
     const opts = [0, 5, 10, 20].map(st => ({ label: st ? `Play for $${st}` : 'Friendly game', d: st ? 'Winner takes the lot' : 'Just for bragging rights', price: st ? fmt0(st) : '', disabled: st > s.wallet, fn: () => { Game.closePanel(); this.begin(st, preferred); } }));
     Game.openPanel('DARTS', `${who} is keen for a game. Three rounds, three darts each — highest total wins.`, Game.optList(opts));
   },
-  begin(stake, preferName) {
+  begin(stake, preferName, comp) {
     const { n, sp } = MG.opponent(o => o.anim === 'darts', preferName);
     const regular = typeof REG !== 'undefined' ? REG.get(n.name) : null;
     const skill = regular && regular.dartSkill != null ? regular.dartSkill : rand(0.35, 0.7);
     const gm = this.gm = {
-      opp: n, sp, stake, skill, rounds: [[], []], cur: 0, round: 0, phase: 'intro', t: 0, darts: [], thrown: 0, roundPts: 0,
+      opp: n, sp, stake, comp, skill, rounds: [[], []], cur: 0, round: 0, phase: 'intro', t: 0, darts: [], thrown: 0, roundPts: 0,
       aimX: 0, aimY: 0.103, power: 0, charging: false, breath: 1, steady: false, sway: rand(0, 10), msg: '',
       total(i) { return this.rounds[i].reduce((a, b) => a + b, 0); },
     };
@@ -361,7 +361,8 @@ const Darts = {
     MG.lockNPC(gm.opp, V3(-7.6, 0, DARTS.OCHE_Z + 0.6), Math.PI * 0.75);
     if (won) {
       if (gm.stake) { s.wallet += gm.stake * 2; s.night.extra += gm.stake; }
-      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts'); Night.ev('dartsWon'); Night.log('🎯', `Beat ${gm.opp.name} at darts`);
+      s.mood = Math.min(100, s.mood + 10); s.stats.dartsWon = (s.stats.dartsWon || 0) + 1; achieve('darts');
+      if (gm.comp) { s.wallet += 60; s.night.extra += 60; s.flags.compWon = true; achieve('champ'); Night.addRep(5, 'Won the Royal darts comp'); Night.log('🏆', 'Won the Royal darts comp (+$60)'); Game.toast('🏆 ROYAL DARTS CHAMPION! The trophy and $60 prize pool are yours.', true); } Night.ev('dartsWon'); Night.log('🎯', `Beat ${gm.opp.name} at darts`);
       gm.msg = `<b>YOU WIN</b> ${gm.total(0)} to ${gm.total(1)}${gm.stake ? ` — +$${gm.stake}` : ''}`;
       bark(gm.opp, choice(['Fair play. Good arrows.', 'Bloody hell. Rematch next week.', 'Beginner\'s luck, that.']), true); SFX.cheer(DARTS.C, 1);
       if (typeof REG !== 'undefined') REG.bump(gm.opp.name, 4);

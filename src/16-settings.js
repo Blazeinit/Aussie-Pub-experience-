@@ -38,6 +38,7 @@ const SETTINGS_TABS = {
   ],
   GAMEPLAY: [
     ['timeSpeed', 'Clock speed', 'select', [[0.6, 'Relaxed — nights last longer'], [1, 'Normal'], [1.5, 'Fast']], 'How quickly the pub clock runs.'],
+    ['cinematics', 'Cinematics', 'select', [['full', 'Full — opening shots, last drinks, big wins, the council'], ['short', 'Short — only the quick ones'], ['off', 'Off']], 'Hold E to skip any of them.'],
     ['subtitles', 'Dialogue subtitles', 'toggle', null, ''],
     ['subSize', 'Subtitle size', 'range', [0.8, 1.6, 0.05, v => Math.round(v * 100) + '%'], ''],
     ['hints', 'Control hints & objectives', 'toggle', null, ''],

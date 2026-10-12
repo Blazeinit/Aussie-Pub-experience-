@@ -36,7 +36,7 @@ const savedSettings = store('ld_settings');
 const settings = Object.assign({
   quality: 'high', preset: 'high', sens: 1, vol: 0.8, music: 0.6, sfx: 1, amb: 1, fov: 72,
   resScale: 1, shadows: 'high', aa: true, bloom: true, bloomStr: 0.55, reflections: true, shafts: true, crowd: 1, dynres: true, showFps: false,
-  touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
+  cinematics: 'full', touch: 'auto', brightness: 1, vignette: 1, drunkFx: 1, headBob: true, reduceMotion: false, invertY: false, subtitles: true, subSize: 1, timeSpeed: 1, hints: true,
 }, savedSettings || {});
 // graphics presets: each sets a bundle of individual options (changing one by hand makes it 'custom')
 const PRESETS = {
