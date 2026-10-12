@@ -56,12 +56,14 @@ const Shops = {
   },
   kebab() {
     const s = Game.state;
-    const food = (name, price, kind, line) => ({ label: name, price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentFood')) return; Game.closePanel(); SFX.register(V3(10.4, 1.2, 26.7)); Game.subtitle('<b>Tony:</b> ' + choice(['Garlic and chilli? Of course garlic and chilli.', 'Coming up, boss.', 'Best kebab in the state. Every night.']), 3); setTimeout(() => { Needs.eat(kind); Game.toast(line); if (s.time >= 23 && kind !== 'can') achieve('kebab'); }, 2200); } });
+    const food = (name, price, kind, line) => ({ label: name, price: fmt$(price), disabled: s.wallet < price, fn: () => { if (!Game.spend(price, 'spentFood')) return; Game.closePanel(); SFX.register(V3(10.4, 1.2, 26.7)); Game.subtitle('<b>Tony:</b> ' + choice(['Garlic and chilli? Of course garlic and chilli.', 'Coming up, boss.', 'Best kebab in the state. Every night.']), 3); setTimeout(() => { if (kind === 'can') { Needs.eat(kind); Game.toast(line); } else { const mdl = makeFood(kind); if (!Eat.begin(kind, mdl, { place: () => {} })) { Needs.eat(kind); Game.toast(line); } else if (s.time >= 23) achieve('kebab'); } }, 1800); } });
     Game.openPanel('KEBAB PALACE', `<b>Tony:</b> "What'll it be, my friend?" · Wallet ${fmt$(s.wallet)}`, Game.optList([
       food('Doner kebab — lamb, garlic, chilli', 14, 'kebab', 'Absolutely demolished that kebab. Garlic sauce on your chin. Worth it.'),
       food('HSP — halal snack pack', 18, 'hsp', 'The holy trinity: chips, meat, sauce. You feel almost sober.'),
       food('Hot chips', 6, 'chips', 'Chicken salt. Always chicken salt.'),
       food('Slice of pizza', 5, 'pizza', 'Cold-ish pizza. Somehow perfect.'),
+      food('Dim sims (3)', 5, 'dimsim', 'Soy sauce, steamed.'),
+      food('Potato scallop', 2, 'scallop', 'Crispy and fluffy.'),
       food('Can of soft drink', 3.5, 'can', 'Ice cold. Bliss.'),
       { label: 'Just looking', fn: () => Game.closePanel() }]));
   },

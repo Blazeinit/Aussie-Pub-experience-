@@ -286,10 +286,11 @@ const Game = {
       const D = DRINKS[type], price = this.drinkPrice(type);
       opts.push({ label: D.name, d: type === 'water' ? 'Free. Hydrate, legend.' : D.std ? `${D.std} std drinks` : 'No alcohol', price: price ? fmt$(price) : 'FREE', disabled: holding || (rsa && D.std > 0), fn: () => this.order(type, price) });
     }
+    const dish = (k, extra = {}) => { const F = FOODS[k]; return Object.assign({ label: F.name, d: this.foodBlurb(k), price: fmt$(F.price), disabled: rsa && false, fn: () => this.order(null, F.price, k, 'spentFood') }, extra); };
     if (s.event === 'parma') opts.push({ label: 'Parma & Pot (Tuesday special)', d: 'Chicken parmigiana, chips, salad + a pot', price: '$15.00', disabled: holding || rsa, fn: () => this.order('pot', 15, 'parma', 'spentFood') });
-    opts.push({ label: s.event === 'sunday' ? 'Sunday roast' : 'Chicken Parma', d: 'Soaks up the grog (−drunk, +mood)', price: s.event === 'sunday' ? '$22.00' : '$26.00', fn: () => this.order(null, s.event === 'sunday' ? 22 : 26, 'parma', 'spentFood') });
+    opts.push(dish(s.event === 'sunday' ? 'roast' : 'parma'), dish('schnitty'), dish('burger'), dish('pie'), dish('sausageroll'), dish('snags'), dish('chips'), dish('nuts'), dish('cheese'));
+    if (s.event === 'sunday' || s.event === 'raffle' || s.event === 'knockoff') opts.push(dish('pav'));
     if (!s.tonight.shift && s.drunk < 25 && s.day < 5 && s.time < DAYS[s.day].close - 2) opts.push({ label: 'Ask about a shift behind the bar', d: 'Cash in hand + tips. You need to be sober.', fn: () => { this.closePanel(); BarShift.offer(); } });
-    opts.push({ label: 'Bowl of chips', d: 'With chicken salt, obviously', price: '$9.00', fn: () => this.order(null, 9, 'chips', 'spentFood') });
     opts.push({ label: 'Pack of smokes (20)', d: `You have ${s.cigs}. Yes, they're really this much.`, price: '$45.00', fn: () => { if (this.spend(45, 'spentSmokes')) { s.cigs += 20; SFX.register(V3(-9, 1.2, -9)); this.toast('20 smokes. Your wallet weeps.'); this.closePanel(); } } });
     if (s.event === 'raffle' && !this.raffle.drawn) opts.push({ label: 'Meat raffle tickets ×3', d: `Draw at 5pm. You have ${this.raffle.tickets}.`, price: '$5.00', fn: () => { if (this.spend(5)) { s.night.extra -= 5; this.raffle.tickets += 3; SFX.register(V3(-9, 1.2, -9)); this.toast('Three raffle tickets. Come on, meat tray!'); this.closePanel(); } } });
     if (s.event === 'knockoff') opts.push({ label: 'Shout the crew a round', d: 'Five schooners. Mateship +, wallet −', price: '$45.00', fn: () => { if (this.spend(45, 'spentDrinks')) { s.stats.shouts++; s.mood = Math.min(100, s.mood + 18); this.crewOwes = true; Night.ev('shouted'); SFX.cheer(V3(-5, 1.5, -6), 1); this.toast('"Legend!" — the crew owes you one.', true); this.closePanel(); } } });
@@ -299,6 +300,7 @@ const Game = {
     if (Night.hasPerk(4) && !s.night.freeUsed && !holding && !rsa) opts.unshift({ label: 'Your free schooner', d: 'Local Legend perk: on the house, once a night', price: 'FREE', fn: () => { s.night.freeUsed = true; this.order('schooner', 0); } });
     this.openPanel('THE BAR', rsa ? '<span style="color:#ff8a7a">"Sorry mate, I can\'t serve you any more alcohol. Have a water."</span>' : `Wallet ${fmt$(s.wallet)} · ${bartender.name}'s behind the bar`, this.optList(opts));
   },
+  foodBlurb(k) { return ({ parma: 'Chicken parmigiana, chips and salad. The size of a hubcap.', schnitty: 'Golden crumbed chook, lemon, chips.', roast: 'Lamb, crispy spuds, peas, gravy.', burger: 'Beetroot, egg, bacon, the lot.', pie: 'Mince and onion. Tomato sauce.', sausageroll: 'Hot, flaky, a bit dangerous.', snags: 'Sausage in bread, onions underneath.', chips: 'With chicken salt, obviously.', nuts: 'A bowl of salty peanuts.', cheese: 'Brie, cheddar, blue, quince, crackers, grapes.', pav: 'Meringue, cream and passionfruit.' })[k] || ''; },
   order(type, price, food, cat = 'spentDrinks') {
     if (price > 0 && !this.spend(price, cat)) return;
     this.useTab = false; if (type === 'water') Night.ev('water');
@@ -312,26 +314,21 @@ const Game = {
   },
   placeItem(item, spot) {
     this.items.push(item);
-    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${item.food === 'chips' ? 'chips' : this.state.event === 'sunday' ? 'roast' : 'parma'}`;
+    const kind = item.kind === 'food' ? legacyFood(item.food, this.state.event) : null;
+    const lbl = item.kind === 'drink' ? `Take your ${item.glass.D.short}` : `Eat your ${FOODS[kind].name.toLowerCase()}`;
     const ia = addInteract({ id: 'item', temp: true, pos: spot.clone().add(V3(0, 0.08, 0)), r: 2.0, label: () => lbl, action: () => {
       if (item.kind === 'drink') { if (player.drink) { this.toast('Hands full — finish or drop (G) what you\'ve got.'); return; } giveDrink(item.glass); SFX.clink(spot); }
-      else { this.eat(item); }
+      else if (!this.eat(item, spot)) return;
       this.items.splice(this.items.indexOf(item), 1); interactables.splice(interactables.indexOf(ia), 1);
     } });
   },
-  eat(item) {
-    const s = this.state, kind = item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma';
-    Needs.eat(kind); Night.ev('ate');
-    // eaten bite by bite: chips and salad go first, then the parma itself shrinks away
-    const m = item.mesh, bites = (m.userData.bites || []).slice().sort(() => Math.random() - 0.5), main = m.userData.main || [];
-    let k = 0; const n = 8;
-    const iv = setInterval(() => {
-      k++; SFX.noise(0.12, { freq: rand(1400, 2200), q: 1, gain: 0.06, pos: m.position });
-      bites.splice(0, Math.ceil(bites.length / (n - k + 1))).forEach(c => c.visible = false);
-      const f = Math.max(0.05, 1 - k / n); main.forEach(o => o.scale.set(f, 1, f * 0.95 + 0.05));
-      if (k >= n) { clearInterval(iv); main.forEach(o => o.visible = false); setTimeout(() => scene.remove(m), 4000); }
-    }, 450);
-    this.toast(kind === 'chips' ? 'Hot chips with chicken salt. Perfection.' : kind === 'roast' ? 'Roast lamb, crispy spuds, gravy. Sunday sorted.' : 'Crumbed chook, napoli, melted cheese, chips and salad. The size of a hubcap. You feel human again.');
+  // sit the plate in front of you and eat it, knife and fork or bare hands
+  eat(item, spot) {
+    const kind = legacyFood(item.food, this.state.event), model = item.mesh;
+    const ok = Eat.begin(kind, model, { place: (m, frac) => { scene.add(m); m.position.copy(spot); m.rotation.set(0, 0, 0); m.scale.setScalar(1); player.drink && (player.drink.group.visible = true); setTimeout(() => scene.remove(m), frac > 0.9 ? 25000 : 90000); } });
+    if (!ok) { this.toast('Not now.'); return false; }
+    if (kind === 'chips' || kind === 'parma') Needs.ateKind = kind;
+    return true;
   },
   openATM() { ATM.open(); },
   openJukebox() { Juke.open(); },
@@ -521,11 +518,12 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active && !Eat.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
     if (DLG.active) { DLG.key(code); return; }
     if (Cine.active) return;
+    if (Eat.active) { if (code === 'KeyQ' || code === 'Escape') Eat.stop(true); return; }
     if (code === 'Escape') { if (!$('panel').classList.contains('hidden')) { this.closePanel(); return; } if (player.seated) { this.leaveMachine(); return; } return; }
     if (this.uiOpen || this.paused) return;
     if (MG.active) { MG.key(code); return; }
@@ -692,7 +690,7 @@ function simulate(dt) {
   if (playing) {
     if (!Cine.active) s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
-    Game.updateEvents(dt); DLG.update(dt);
+    Game.updateEvents(dt); DLG.update(dt); Eat.update(dt, elapsed); Food.update(dt);
     Game.updateKeno(dt);
     setTimeOfDay(s.time, DAYS[s.day].weather); // every frame: lighting changes smoothly, no steps
     const t = Game.findTarget(); Game.target = t;

@@ -757,6 +757,11 @@ function buildBarService() {
   for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.008, 0.012), M({ color: [0xc8201a, 0x2a8a3a, 0xf0d040, 0x3a6ad8, 0xffffff][i], roughness: 0.4 })); b.position.set(0.022, 0.04 - i * 0.016, 0); sodaGun.add(b); }
   sodaGun.userData.home = V3(F - 0.62, 1.22, BAR_WORK.gunZ); sodaGun.position.copy(sodaGun.userData.home); scene.add(sodaGun);
   addBoxS(SB, MAT.chrome, F - 0.64, 1.17, BAR_WORK.gunZ, 0.05, 0.1, 0.06);
+  // the kitchen pass: a stainless hot bench with heat lamps and the order-up bell, at the lounge end of the back bar
+  addBoxS(SB, MAT.chrome, -11.3, 0.9, -2.72, 1.0, 0.05, 0.42); addBoxS(SB, MAT.chrome, -11.3, 0.45, -2.72, 0.96, 0.9, 0.4);
+  for (const dx of [-0.3, 0.3]) { addCylS(SB, MAT.blackPlastic, -11.3 + dx, 1.62, -2.72, 0.07, 0.12, 12); SB.add(G.sph, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.1, 0.25) }), -11.3 + dx, 1.54, -2.72, 0, 0, 0, 0.055, 0.025, 0.055); addCylS(SB, MAT.chrome, -11.3 + dx, 1.9, -2.72, 0.012, 0.6, 6); }
+  addCylS(SB, MAT.brass, -10.95, 0.95, -2.72, 0.04, 0.035, 14); addBoxS(SB, MAT.brass, -10.95, 0.99, -2.72, 0.012, 0.012, 0.012);
+  signPlane(signTex(['ORDER UP'], { w: 256, h: 64, bg: '#7a1f14', color: '#f3e2b8', size: 38 }), 0.5, 0.12, -11.3, 1.32, -2.52, Math.PI);
   // a black rubber hose snaking down under the bar
   SB.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V3(F - 0.64, 1.12, BAR_WORK.gunZ), V3(F - 0.7, 0.9, BAR_WORK.gunZ - 0.05), V3(F - 0.68, 0.5, BAR_WORK.gunZ - 0.1)]), 10, 0.008, 5), MAT.rubber);
 }
@@ -783,7 +788,7 @@ function updateBartender(n, dt, t, player) {
       const base = Math.abs(-11.5 - j.forZ) < Math.abs(-6.5 - j.forZ) ? 0 : 4;
       j.tap = BAR.taps[base + (TAP_FOR[j.type] ?? 1)]; j.phase = 'toTap';
     } else if (D) j.phase = D.ice ? 'toIce' : 'toShelf';
-    else j.phase = 'toCustomer';
+    else j.phase = j.food ? 'toPass' : 'toCustomer';
   }
   const j = n.job;
   let ik = null, ikL = null, walking = false, pole = V3(0.6, -0.8, -0.6);
@@ -848,10 +853,16 @@ function updateBartender(n, dt, t, player) {
       const z = SPIRIT_Z[D.spirit] ?? -8;
       if (goTo(-12.05, z)) { face(-Math.PI / 2); ik = V3(-12.62, 1.78, z); if (j.t > 0.5 && j.bottle) { scene.remove(j.bottle); j.bottle = null; SFX.tone(1500, 0.05, { gain: 0.04, pos: ik }); } if (j.t > 0.8) { j.phase = 'fetchGlass'; j.t = 0; } } else walking = true;
     } else if (j.phase === 'fetchGlass') { if (goTo(-9.42, BAR_WORK.pourZ)) { face(Math.PI / 2); ik = glassAt.clone().add(V3(0, 0.07, 0)); if (j.t > 0.4) { j.phase = 'toCustomer'; j.t = 0; j.carry = true; } } else walking = true; }
+    // ---------------- food: out to the kitchen pass, ding the bell, collect the plate, carry it back
+    else if (j.phase === 'toPass') {
+      const PX = -11.3, PZ = -3.05;
+      if (goTo(PX, PZ)) { face(Math.PI); ik = V3(PX + 0.1, 1.2, PZ - 0.45); if (j.t > 0.25 && !j.dinged) { j.dinged = true; SFX.bell(V3(PX, 1.3, PZ - 0.5), 1); SFX.noise(0.7, { freq: 3500, q: 1.5, gain: 0.05, pos: V3(PX, 1.2, PZ - 0.5) }); } if (j.t > 1.15) { j.plate = makeFood(legacyFood(j.food, Game.state.event)); scene.add(j.plate); j.hot = FOODS[j.plate.userData.kind].hot; j.phase = 'toCustomer'; j.t = 0; } } else walking = true;
+    }
     // ---------------- serve
     else if (j.phase === 'toCustomer') {
       j.tap && (j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt));
       if (j.glass && !j.tap) j.carry = true;
+      if (j.plate) ik = V3(n.pos.x + Math.sin(n.ry) * 0.36, 1.12, n.pos.z + Math.cos(n.ry) * 0.36);
       if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { face(Math.PI / 2); j.phase = 'place'; j.t = 0; } else walking = true;
     } else if (j.phase === 'place') {
       const spot = V3(BAR.front - 0.18, 1.115, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6));
@@ -859,7 +870,7 @@ function updateBartender(n, dt, t, player) {
       if (j.t > 0.6) {
         let item;
         if (j.glass) { j.glass.group.position.copy(spot); j.glass.group.rotation.set(0, 0, 0); item = { kind: 'drink', glass: j.glass }; SFX.glassDown(spot); }
-        else { const plate = makeFood(Game.state.event === 'sunday' && j.food === 'parma' ? 'roast' : j.food); plate.position.copy(spot); scene.add(plate); item = { kind: 'food', food: j.food, mesh: plate }; SFX.glassDown(spot); }
+        else { const plate = j.plate || makeFood(legacyFood(j.food, Game.state.event)); plate.position.copy(spot); plate.rotation.set(0, 0, 0); if (!plate.parent) scene.add(plate); plate.userData.placedAt = elapsed + 0.001; item = { kind: 'food', food: j.food, mesh: plate, spot: spot.clone() }; SFX.glassDown(spot); SFX.noise(0.9, { freq: 4200, q: 1.2, gain: FOODS[plate.userData.kind].hot ? 0.035 : 0, pos: spot }); j.plate = null; }
         bark(n, choice(["There ya go, love.", "Enjoy, mate.", "Cheers.", "There you are.", "Get that into ya."]));
         j.cb && j.cb(item, spot);
         n.job = null;
@@ -873,6 +884,7 @@ function updateBartender(n, dt, t, player) {
   n.h.root.updateMatrixWorld(true);
   if (ik) armIK(n.h, 'r', ik, pole);
   if (ikL) armIK(n.h, 'l', ikL, pole);
+  if (j && j.plate) { n.h.J.rH.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.rH.matrixWorld); j.plate.position.set(hp.x, hp.y - 0.025, hp.z); j.plate.rotation.set(0, n.ry, 0); }
   if (j) {
     // the bottle sits in his right hand, tipped up while pouring
     if (j.bottle) {
@@ -907,7 +919,7 @@ function foodTextures() {
   _foodTex = { crumb: mk(crumb), sauce: mk(sauce) };
   return _foodTex;
 }
-function makeFood(kind) {
+function makeFoodOld(kind) {
   const g = new THREE.Group(), T = foodTextures();
   const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.115, 0.016, 32), MAT.white); plate.position.y = 0.008; g.add(plate);
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.143, 0.006, 6, 32), MAT.white); rim.rotation.x = Math.PI / 2; rim.position.y = 0.017; g.add(rim);

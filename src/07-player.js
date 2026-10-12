@@ -187,6 +187,7 @@ function startSmoke() {
   layoutCig(1, 0); player.cigMesh.g.visible = true;
 }
 function updateSmoking(dt, t) {
+  if (Eat.active) return;
   const c = player.cig, cm_ = player.cigMesh;
   const seated = !!player.seated;
   const rest = seated ? V3(-0.21, -0.3, -0.46) : V3(-0.24, -0.29, -0.44);
@@ -272,6 +273,7 @@ function giveDrink(glass) {
   return true;
 }
 function updateDrinkVM(dt, t, moving) {
+  if (Eat.active) return;
   const d = player.drink, seated = player.seated, held = d && !d.onLedge;
   const R = vm.R;
   let target, tilt = 0, snap = 12;
@@ -361,7 +363,7 @@ function updatePlayer(dt, t) {
   if (Cine.active) { Cine.update(dt); input.mx = input.my = 0; return; }
   if (MG.active) { MG.update(dt, t); if (player.drink) player.drink.update(dt, t); return; }
   // look
-  if (input.locked && !player.seated) {
+  if (input.locked && !player.seated && !Eat.active) {
     const sens = 0.0022 * settings.sens;
     player.yaw -= input.mx * sens; player.pitch -= input.my * sens;
     player.pitch = clamp(player.pitch, -1.45, 1.45);
