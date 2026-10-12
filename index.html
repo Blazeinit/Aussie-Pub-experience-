@@ -256,6 +256,14 @@ body.touchmode #deck{bottom:8px}
 /* jukebox list */
 .opts.juke .opt.playing{border-color:var(--gold);background:rgba(243,196,90,.14)}
 
+/* sat at a pokie: the machine fills your world. HUD steps back, the deck bar goes glassy until you reach for it */
+body.seated #objective,body.seated #hud .br{opacity:0 !important;pointer-events:none}
+body.seated #hud .tl,body.seated #hud .tr{opacity:.55}
+#objective,#hud .br,#hud .tl,#hud .tr{transition:opacity .6s}
+body.seated #deck{background:rgba(6,6,10,.38);border-color:rgba(255,255,255,.08);opacity:.72;transition:opacity .25s,background .25s}
+body.seated #deck:hover{opacity:1;background:rgba(10,10,14,.78)}
+body.seated.touchmode #deck{opacity:1}
+
 </style>
 </head>
 <body>
@@ -325,6 +333,6 @@ body.touchmode #deck{bottom:8px}
 <div id="fade"></div>
 <div id="perf" class="hidden"></div>
 <div id="touch" class="hidden"><div id="tStick"><i></i></div><div id="tBtns"></div><button id="tMenu">☰</button></div>
-<script type="module" src="game.js?v=d83b666c54"></script>
+<script type="module" src="game.js?v=ea960f7322"></script>
 </body>
 </html>

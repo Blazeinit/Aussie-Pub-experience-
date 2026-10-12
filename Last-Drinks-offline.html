@@ -256,6 +256,14 @@ body.touchmode #deck{bottom:8px}
 /* jukebox list */
 .opts.juke .opt.playing{border-color:var(--gold);background:rgba(243,196,90,.14)}
 
+/* sat at a pokie: the machine fills your world. HUD steps back, the deck bar goes glassy until you reach for it */
+body.seated #objective,body.seated #hud .br{opacity:0 !important;pointer-events:none}
+body.seated #hud .tl,body.seated #hud .tr{opacity:.55}
+#objective,#hud .br,#hud .tl,#hud .tr{transition:opacity .6s}
+body.seated #deck{background:rgba(6,6,10,.38);border-color:rgba(255,255,255,.08);opacity:.72;transition:opacity .25s,background .25s}
+body.seated #deck:hover{opacity:1;background:rgba(10,10,14,.78)}
+body.seated.touchmode #deck{opacity:1}
+
 </style>
 </head>
 <body>
@@ -459,7 +467,7 @@ const fxPass = new ShaderPass({
       vec2 off = vec2(sin(uTime*.7), cos(uTime*.53))*0.012*d*d;
       vec3 c = texture2D(tDiffuse, uv).rgb;
       if(d>0.05){ vec3 c2 = texture2D(tDiffuse, uv+off).rgb; c = mix(c, c2, .45*smoothstep(.05,.8,d)); }
-      float ca = 0.0015 + 0.004*d;
+      float ca = (0.0015 + 0.004*d) * smoothstep(.12, .7, length(vUv-.5)*1.4);   // fringe only toward the edges: the centre (pokie screen, faces) stays crisp
       c.r = mix(c.r, texture2D(tDiffuse, uv+vec2(ca,0.)).r, .6);
       c.b = mix(c.b, texture2D(tDiffuse, uv-vec2(ca,0.)).b, .6);
       // grade: warm amber pub interior, cool sodium-and-moonlight night outside
@@ -1889,11 +1897,8 @@ function buildLounge() {
   dynamic.firePos = V3(fx - 0.4, 0.5, fz);
   // ATM
   const ax = 12.6, az = -3.3;
-  SB.add(new RoundedBoxGeometry(0.7, 1.6, 0.6, 2, 0.05), MAT.greyPlastic, ax, 0.8, az);
-  const atmT = signTex(['ATM', 'CASH OUT'], { w: 256, h: 256, bg: ['#0a4aa8', '#062a6a'], color: '#fff', sizes: [90, 40] });
-  const atmS = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.32), new THREE.MeshBasicMaterial({ map: atmT, toneMapped: false })); atmS.position.set(ax - 0.31, 1.25, az); atmS.rotation.y = -Math.PI / 2; scene.add(atmS);
-  SB.add(G.box, MAT.blackPlastic, ax - 0.32, 0.95, az, 0, 0, 0, 0.06, 0.08, 0.35);
-  addCol(ax, az, 0.75, 0.65);
+  ATM.build(ax, az);   // the machine itself lives with the ATM logic (19-service.js)
+  addCol(ax, az, 0.62, 0.7);
   addInteract({ id: 'atm', pos: V3(ax - 0.3, 1.2, az), r: 1.8, label: () => 'Use ATM', action: () => Game.openATM() });
   // lounge standing spot + fireside
   addSpot({ kind: 'stand', pos: V3(11.4, 0, -2.6), ry: 2.6, area: 'lounge' });
@@ -3011,9 +3016,24 @@ function gameMats(id) {
     strip: new THREE.BoxGeometry(0.015, 1.4, 0.03), crown: new THREE.BoxGeometry(0.62, 0.05, 0.2), topper: new THREE.PlaneGeometry(0.56, 0.28), belly: new THREE.PlaneGeometry(0.58, 0.29),
     bezH: new THREE.BoxGeometry(0.61, 0.012, 0.012), bezV: new THREE.BoxGeometry(0.012, 0.46, 0.012), bezB: new THREE.BoxGeometry(0.6, 0.012, 0.012), note: new THREE.BoxGeometry(0.12, 0.05, 0.04),
     ledge: new THREE.BoxGeometry(0.2, 0.025, 0.24), ashtray: new THREE.CylinderGeometry(0.06, 0.05, 0.03, 16), seat: new THREE.CylinderGeometry(0.22, 0.22, 0.1, 18), back: new RoundedBoxGeometry(0.4, 0.35, 0.06, 2, 0.03),
-    leg: new THREE.CylinderGeometry(0.03, 0.03, 0.62, 8), base: new THREE.CylinderGeometry(0.22, 0.22, 0.03, 16), screen: new THREE.PlaneGeometry(0.58, 0.435), deck: new THREE.PlaneGeometry(0.62, 0.32), spin: new RoundedBoxGeometry(0.105, 0.135, 0.026, 3, 0.012)
+    leg: new THREE.CylinderGeometry(0.03, 0.03, 0.62, 8), base: new THREE.CylinderGeometry(0.22, 0.22, 0.03, 16), screen: new THREE.PlaneGeometry(0.58, 0.435), plate: new THREE.PlaneGeometry(0.6, 0.13), deck: new THREE.PlaneGeometry(0.62, 0.32), spin: new RoundedBoxGeometry(0.105, 0.135, 0.026, 3, 0.012)
   };
-  return (_gameMats[id] = { accent: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.accent).multiplyScalar(1.5) }), bez: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.frame).multiplyScalar(1.25) }), topper, belly });
+  // the panel between the screen and the deck: speaker grilles either side of the game's badge
+  const pc = mkCanvas(512, 128), px = pc.getContext('2d'), G0 = GAMES[id];
+  px.fillStyle = lg(px, 0, 0, 0, 128, ['#26262c', '#0e0e12']); px.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 512; i += 2) { px.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.02})`; px.fillRect(i, 0, 1, 128); }   // brushed metal
+  for (const cx of [62, 450]) {
+    const ring = px.createRadialGradient(cx, 64, 30, cx, 64, 50); ring.addColorStop(0, '#111'); ring.addColorStop(0.8, '#9a9aa4'); ring.addColorStop(1, '#2a2a30');
+    px.fillStyle = ring; px.beginPath(); px.arc(cx, 64, 50, 0, 7); px.fill(); px.fillStyle = '#08080a'; px.beginPath(); px.arc(cx, 64, 42, 0, 7); px.fill();
+    px.fillStyle = '#2c2c34'; for (let y = -38; y <= 38; y += 7) for (let x = -38; x <= 38; x += 7) if (x * x + y * y < 38 * 38) { px.beginPath(); px.arc(cx + x, 64 + y, 2.2, 0, 7); px.fill(); }
+  }
+  px.textAlign = 'center'; px.textBaseline = 'middle';
+  px.fillStyle = 'rgba(0,0,0,.6)'; rr(px, 128, 22, 256, 84, 14); px.fill(); px.strokeStyle = th.frame; px.lineWidth = 3; rr(px, 128, 22, 256, 84, 14); px.stroke();
+  px.font = 'bold 34px Bungee, Impact, sans-serif'; px.lineWidth = 6; px.strokeStyle = th.accent; px.strokeText(G0.name, 256, 56, 236); px.fillStyle = th.glow; px.fillText(G0.name, 256, 56, 236);
+  px.font = 'bold 15px Inter, sans-serif'; px.fillStyle = th.text || '#fff'; px.fillText((G0.sub || '').toUpperCase(), 256, 90, 230);
+  const plateT = new THREE.CanvasTexture(pc); plateT.colorSpace = THREE.SRGBColorSpace; plateT.anisotropy = maxAniso;
+  const plate = new THREE.MeshBasicMaterial({ map: plateT }); plate.color.setScalar(0.9);
+  return (_gameMats[id] = { plate, accent: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.accent).multiplyScalar(1.5) }), bez: new THREE.MeshBasicMaterial({ color: new THREE.Color(th.frame).multiplyScalar(1.25) }), topper, belly });
 }
 function cabMat() { if (!_cab) { _cab = new THREE.MeshStandardMaterial({ color: 0x17171c, metalness: 0.65, roughness: 0.28 }); interiorMats.push(_cab); } return _cab; }
 function spinMat() { return _spinMat || (_spinMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 1.7, 0.55) })); }
@@ -3059,6 +3079,7 @@ function buildMachineMesh(def, idx) {
   addS(MGEO.crown, gm.accent, 0, 2.32, -0.15);
   addS(MGEO.topper, gm.topper, 0, 2.08, -0.035);
   addS(MGEO.belly, gm.belly, 0, 0.6, 0.312);
+  addS(MGEO.plate, gm.plate, 0, 1.148, 0.0315);
   for (const [x, y, k] of [[0, 1.664, 'bezH'], [0, 1.216, 'bezH'], [-0.299, 1.44, 'bezV'], [0.299, 1.44, 'bezV'], [0, 0.75, 'bezB'], [0, 0.45, 'bezB']]) addS(MGEO[k], gm.bez, x, y, y < 1 ? 0.312 : 0.044);
   addS(MGEO.note, MAT.chrome, 0.2, 0.86, 0.32);
   addS(MGEO.ledge, MAT.darkWood, -0.45, 0.98, 0.18);
@@ -4830,14 +4851,14 @@ function dropHeld() {
 function sitAt(m) {
   player.seated = m; player.seatT = 0;
   player.camFrom = { pos: camera.position.clone(), q: camera.quaternion.clone() };
-  m.occupiedBy = 'player'; m.setMode('player'); PokieFX.attach(m);
+  m.occupiedBy = 'player'; m.setMode('player'); PokieFX.attach(m); document.body.classList.add('seated');
   if (player.drink && !player.drink.onLedge) placeOnLedge();
 }
 function standUp() {
   const m = player.seated; if (!m) return;
   if (player.drink && player.drink.onLedge) takeFromLedge();
   if (player.drink) player.drink.wasLedge = false;
-  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach();
+  m.occupiedBy = null; m.setMode('idle'); PokieFX.detach(); document.body.classList.remove('seated');
   player.seated = null;
   player.pos.copy(m.seatW).addScaledVector(m.fw, 0.45);
   player.yaw = Math.atan2(m.fw.x, m.fw.z); player.pitch = -0.1;
@@ -8573,6 +8594,68 @@ const CashFX = {
 // ---------------------------------------------------------------- the ATM: card, PIN, menu, dispense
 const ATM = {
   pos: V3(12.6, 0, -3.3), FEE: 2.5,
+  // the machine: charcoal cabinet, lit topper, hooded screen that mirrors what you're doing, keypad deck, slots
+  build(ax, az) {
+    const g = new THREE.Group(); g.position.set(ax, 0, az); g.rotation.y = -Math.PI / 2; scene.add(g); this.root = g;   // local +z faces the room
+    const body = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.55 }), dark = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.3, metalness: 0.3 });
+    const blue = new THREE.MeshStandardMaterial({ color: 0x0b4fb3, roughness: 0.35, metalness: 0.3 }), steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: 0.22, metalness: 1 });
+    interiorMats.push(body, dark, blue, steel);
+    const add = (geo, mat, x, y, z, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.x = rx; m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+    const rb = (w, h, d, r = 0.02) => new RoundedBoxGeometry(w, h, d, 2, r);
+    add(rb(0.64, 0.08, 0.56, 0.01), dark, 0, 0.04, 0);                        // plinth
+    add(rb(0.62, 0.92, 0.55), body, 0, 0.52, 0);                               // lower safe
+    add(rb(0.62, 0.62, 0.42), body, 0, 1.28, -0.065);                         // upper head, set back
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.012, 1.5, 0.5), blue, sx * 0.311, 0.78, -0.02);   // brand stripes down the sides
+    // lit topper
+    add(rb(0.64, 0.2, 0.46), blue, 0, 1.69, -0.06);
+    const topT = signTex(['ATM', 'ROYAL CREDIT UNION'], { w: 512, h: 160, bg: ['#1065e0', '#0a3c8e'], color: '#fff', sizes: [86, 26] });
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.18), new THREE.MeshBasicMaterial({ map: topT, toneMapped: false })); top.material.color.setScalar(1.4); top.position.set(0, 1.69, 0.172); g.add(top);
+    // screen hood + screen (tilted back a touch)
+    add(rb(0.46, 0.38, 0.1, 0.015), dark, 0, 1.33, 0.17, -0.12);
+    const c = mkCanvas(512, 400); this.scr = { c, tex: canvasTex(c, 1, 1) };
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.28), new THREE.MeshBasicMaterial({ map: this.scr.tex, toneMapped: false })); scr.position.set(0, 1.335, 0.222); scr.rotation.x = -0.12; g.add(scr);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.3), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.03, metalness: 1, transparent: true, opacity: 0.18, depthWrite: false })); glass.position.set(0, 1.335, 0.224); glass.rotation.x = -0.12; g.add(glass);
+    // keypad deck: angled shelf with a printed keypad
+    add(rb(0.62, 0.05, 0.22, 0.01), body, 0, 1.0, 0.27, 0.35);
+    const kc = mkCanvas(256, 160), k = kc.getContext('2d');
+    k.fillStyle = '#1a1c20'; k.fillRect(0, 0, 256, 160);
+    const keys = ['1', '2', '3', 'X', '4', '5', '6', '<', '7', '8', '9', 'O', '', '0', '', ''];
+    keys.forEach((t, i) => { const cx = 18 + (i % 4) * 58, cy = 8 + Math.floor(i / 4) * 37; if (i === 12 || i === 14 || i === 15) return;
+      k.fillStyle = t === 'X' ? '#c0282d' : t === '<' ? '#d6b21c' : t === 'O' ? '#1f9a46' : '#9ea3ab'; k.fillRect(cx, cy, 48, 30); k.fillStyle = 'rgba(255,255,255,.35)'; k.fillRect(cx, cy, 48, 4);
+      k.fillStyle = t === 'X' || t === 'O' ? '#fff' : '#111'; k.font = 'bold 20px sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(t, cx + 24, cy + 16); });
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.125), new THREE.MeshStandardMaterial({ map: canvasTex(kc, 1, 1), roughness: 0.4, metalness: 0.4 })); pad.position.set(-0.04, 1.03, 0.27); pad.rotation.x = -Math.PI / 2 + 0.35; g.add(pad);
+    add(new THREE.BoxGeometry(0.26, 0.05, 0.012), steel, -0.04, 1.075, 0.2, -0.2);   // privacy shield lip behind the keypad
+    // card slot with a breathing green light, receipt slot
+    add(new THREE.BoxGeometry(0.11, 0.035, 0.03), dark, 0.2, 1.06, 0.31, 0.35);
+    this.cardLed = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.008, 0.006), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2, 0.6), toneMapped: false })); this.cardLed.position.set(0.2, 1.076, 0.33); this.cardLed.rotation.x = 0.35; g.add(this.cardLed);
+    add(new THREE.BoxGeometry(0.1, 0.012, 0.012), dark, 0.2, 0.97, 0.36);
+    // cash slot: steel bezel, black mouth, amber light
+    add(rb(0.3, 0.07, 0.03, 0.008), steel, 0, 0.86, 0.285);
+    add(new THREE.BoxGeometry(0.22, 0.022, 0.02), dark, 0, 0.86, 0.297);
+    this.cashLed = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.006, 0.004), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.2, 0.05), toneMapped: false })); this.cashLed.position.set(0, 0.84, 0.302); g.add(this.cashLed);
+    // safe door seam, lock and a sticker
+    add(new THREE.BoxGeometry(0.5, 0.004, 0.004), dark, 0, 0.72, 0.277); add(new THREE.BoxGeometry(0.004, 0.62, 0.004), dark, 0.25, 0.41, 0.277);
+    add(new THREE.CylinderGeometry(0.018, 0.018, 0.012, 16), steel, 0.2, 0.5, 0.28, Math.PI / 2);
+    const stT = signTex(['FEE $2.50', 'per withdrawal'], { w: 256, h: 128, bg: ['#f2c230', '#e0a81a'], color: '#1a1405', sizes: [44, 22] });
+    const st = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.085), new THREE.MeshStandardMaterial({ map: stT, roughness: 0.6 })); st.position.set(-0.13, 0.62, 0.277); g.add(st);
+    this.slot = V3(ax - 0.29, 0.86, az);
+    this.drawScreen(); this.scrT = 0;
+  },
+  // the 3D screen mirrors the panel, so the machine looks alive from across the room
+  drawScreen() {
+    if (!this.scr) return;
+    const x = this.scr.c.getContext('2d'), W = 512, H = 400, st = this.st || null, t = performance.now() / 1000;
+    const gr = x.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0f4fae'); gr.addColorStop(1, '#06224f'); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(0, 0, W, 54); x.fillStyle = '#fff'; x.font = 'bold 22px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('ROYAL CREDIT UNION', W / 2, 28);
+    const stage = this.disp ? 'take' : this.active ? st && st.stage : 'idle';
+    const msg = { idle: ['WELCOME', 'Insert your card to begin'], card: ['WELCOME', 'Please insert your card'], reading: ['PLEASE WAIT', 'Reading card…'], pin: ['ENTER PIN', '●'.repeat(st ? st.pin.length : 0) + '○'.repeat(4 - (st ? st.pin.length : 0))], menu: ['SELECT', 'Withdrawal · Balance'], balance: ['BALANCE', st ? fmt$(Game.state.bank) : ''], amount: ['WITHDRAWAL', 'Select an amount'], confirm: ['FEE NOTICE', `$${this.FEE.toFixed(2)} fee applies`], processing: ['PROCESSING', 'Please wait…'], take: ['PLEASE TAKE', 'YOUR CASH'] }[stage] || ['WELCOME', ''];
+    x.font = 'bold 60px sans-serif'; x.fillText(msg[0], W / 2, 170); x.font = '32px sans-serif'; x.fillStyle = '#cfe0ff'; x.fillText(msg[1], W / 2, 240);
+    if (stage === 'idle' && Math.sin(t * 3) > 0) { x.fillStyle = '#ffd34d'; x.beginPath(); x.moveTo(W / 2 - 18, 300); x.lineTo(W / 2 + 18, 300); x.lineTo(W / 2, 330); x.fill(); }
+    if (stage === 'processing' || stage === 'reading') { x.strokeStyle = '#fff'; x.lineWidth = 6; x.beginPath(); x.arc(W / 2, 315, 22, t * 6, t * 6 + 4.2); x.stroke(); }
+    x.fillStyle = 'rgba(255,255,255,.5)'; x.font = '16px sans-serif'; x.fillText('Visa · Mastercard · eftpos · fees apply', W / 2, H - 22);
+    this.scr.tex.needsUpdate = true;
+  },
   open() {
     const s = Game.state; this.st = { stage: 'card', pin: '', amt: 0 };
     const wrap = document.createElement('div'); wrap.className = 'atm';
@@ -8581,10 +8664,10 @@ const ATM = {
     this.el = wrap;
     wrap.querySelectorAll('.atmpad button').forEach(b => b.onclick = () => this.key(b.dataset.k));
     Game.openPanel('ATM', 'Royal Credit Union · this machine charges $2.50 per withdrawal', wrap, []);
-    this.render(); SFX.beep();
+    this.active = true; this.render(); SFX.beep();
   },
   render() {
-    const s = Game.state, st = this.st, body = this.el.querySelector('.atmbody');
+    const s = Game.state, st = this.st, body = this.el.querySelector('.atmbody'); this.drawScreen();
     const opt = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = 'atmopt ' + cls; b.innerHTML = label; b.onclick = () => { SFX.beep(); fn(); }; return b; };
     body.innerHTML = '';
     if (st.stage === 'card') { body.innerHTML = '<p class="big">WELCOME</p><p>Please insert your card</p><div class="cardslot"></div>'; body.appendChild(opt('Insert card ▸', () => { SFX.noise(0.4, { freq: 600, q: 1, gain: 0.08 }); st.stage = 'reading'; this.render(); setTimeout(() => { st.stage = 'pin'; this.render(); }, 900); })); }
@@ -8617,15 +8700,15 @@ const ATM = {
     const s = Game.state, st = this.st, a = st.amt;
     s.bank -= a + this.FEE; s.night.atm = (s.night.atm || 0) + a; s.night.fees += this.FEE; s.stats.atmFees += this.FEE;
     st.stage = 'processing'; this.render(); SFX.atm();
-    setTimeout(() => { st.stage = 'take'; this.render(); setTimeout(() => { Game.closePanel(); this.dispense(a); }, 600); }, 1500);
+    setTimeout(() => { st.stage = 'take'; this.render(); setTimeout(() => { this.active = false; Game.closePanel(); this.dispense(a); }, 600); }, 1500);
   },
-  close() { Game.closePanel(); SFX.noise(0.3, { freq: 600, q: 1, gain: 0.06 }); },
+  close() { this.active = false; this.drawScreen(); Game.closePanel(); SFX.noise(0.3, { freq: 600, q: 1, gain: 0.06 }); },
   // notes slide out of the slot, then you take them
   dispense(a) {
-    const slot = V3(this.pos.x - 0.36, 0.95, this.pos.z);
+    const slot = (this.slot || V3(this.pos.x - 0.29, 0.86, this.pos.z)).clone();
     const stack = new THREE.Group(); scene.add(stack);
     notesFor(a).forEach((d, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.002, 0.075), [0, 1, 2, 3, 4, 5].map(f => f === 2 || f === 3 ? new THREE.MeshStandardMaterial({ map: noteTex(d), roughness: 0.7 }) : new THREE.MeshStandardMaterial({ color: NOTE_COL[d][0], roughness: 0.7 }))); m.position.y = i * 0.0025; m.rotation.y = rand(-0.05, 0.05); stack.add(m); });
-    stack.position.copy(slot); stack.rotation.y = Math.PI / 2;
+    stack.position.copy(slot); stack.rotation.y = -Math.PI / 2;   // notes read the right way up from the front
     this.disp = { stack, t: 0, a, from: slot.clone(), state: 'out' };
     for (let i = 0; i < 14; i++) SFX.noise(0.04, { delay: 0.1 + i * 0.05, freq: 2200, q: 2, gain: 0.05, pos: slot });
     const ia = addInteract({ id: 'cash', temp: true, pos: slot.clone().add(V3(-0.1, 0.1, 0)), r: 2.4, label: () => `Take your ${fmt0(a)}`, action: () => { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } });
@@ -8633,6 +8716,11 @@ const ATM = {
     setTimeout(() => { if (this.disp && this.disp.state === 'out') { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } }, 6000);
   },
   update(dt) {
+    // screen + lights tick over a few times a second; the cash light flashes while notes are waiting
+    this.scrT = (this.scrT || 0) + dt; if (this.scrT > 0.2) { this.scrT = 0; if ($('panel').classList.contains('hidden')) this.active = false; this.drawScreen(); }
+    const tt = performance.now() / 1000;
+    if (this.cardLed) this.cardLed.material.color.setRGB(0.2, 1.1 + Math.sin(tt * 3) * 0.9, 0.5);
+    if (this.cashLed) this.cashLed.material.color.setRGB(this.disp ? (Math.sin(tt * 10) > 0 ? 2.4 : 0.4) : 0.3, this.disp ? (Math.sin(tt * 10) > 0 ? 1.5 : 0.25) : 0.2, 0.05);
     const d = this.disp; if (!d) return;
     d.t += dt;
     if (d.state === 'out') { const k = easeOut(clamp(d.t / 0.9, 0, 1)); d.stack.position.copy(d.from).add(V3(-0.1 * k, 0, 0)); }
@@ -8714,6 +8802,9 @@ const PokieFX = {
     const vg = x.createRadialGradient(128, 128, 60, 128, 128, 190); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.35)'); x.fillStyle = vg; x.fillRect(0, 0, 256, 256);
     this.glareMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false, blending: THREE.NormalBlending });
     this.glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.02, metalness: 0.9, transparent: true, opacity: 0.12, depthWrite: false }); interiorMats.push(this.glassMat);
+    // button geometry: the cap's top face is the legend (a box with the label on +z), sat in a thin chrome bezel
+    this.capGeo = new THREE.BoxGeometry(0.066, 0.068, 0.01); this.bezGeo = new RoundedBoxGeometry(0.08, 0.082, 0.008, 2, 0.004);
+    this._legend = {};
     addEventListener('mousemove', e => { this.mx = e.clientX / innerWidth * 2 - 1; this.my = e.clientY / innerHeight * 2 - 1; });
   },
   attach(m) {
@@ -8728,13 +8819,16 @@ const PokieFX = {
     // glass + glare over the screen
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glassMat); glass.position.set(0, 1.44, 0.047); glass.renderOrder = 3; g.add(glass);
     const glare = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), this.glareMat); glare.position.set(0, 1.44, 0.049); glare.renderOrder = 4; g.add(glare); this.glare = glare;
-    // proper glowing buttons on the deck (sit over the printed ones)
+    // real illuminated push-buttons on the deck: a chrome bezel, a solid lit cap and its printed legend
     this.caps = [];
     for (const b of DECK_BTNS) {
-      const col = new THREE.Color(b.c);
-      const cap = new THREE.Mesh(new RoundedBoxGeometry(0.074, 0.076, 0.014, 2, 0.006), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.25, transparent: true, opacity: 0.5 }));
-      cap.position.set((b.x / 512 - 0.5) * 0.62, (0.5 - 178 / 264) * 0.32, 0.008); m.deck.add(cap); cap.userData.id = b.id; this.caps.push(cap);
+      const x = (b.x / 512 - 0.5) * 0.62, y = (0.5 - 178 / 264) * 0.32;
+      const bez = new THREE.Mesh(this.bezGeo, MAT.chrome); bez.position.set(x, y, 0.003); m.deck.add(bez); this.caps.push(bez);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: this.legend(b), emissive: 0xffffff, emissiveMap: this.legend(b), emissiveIntensity: 0.45, roughness: 0.2, metalness: 0 });
+      const cap = new THREE.Mesh(this.capGeo, mat); cap.position.set(x, y, 0.009); m.deck.add(cap); cap.userData.id = b.id; cap.userData.lit = true; this.caps.push(cap);
     }
+    // this machine's SPIN gets its own material so its pulse doesn't light up the whole room's machines
+    if (m.btns[5]) { this.spinShared = m.btns[5].material; m.btns[5].material = this.spinShared.clone(); }
     // note acceptor bezel that blinks green
     this.acceptor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2.2, 0.6), toneMapped: false })); this.acceptor.position.set(0.2, 0.89, 0.342); g.add(this.acceptor);
     // the screen's own light
@@ -8743,12 +8837,25 @@ const PokieFX = {
   },
   detach() {
     if (!this.m) return;
-    this.m.root.remove(this.group); this.caps.forEach(c => this.m.deck.remove(c));
-    this.group.traverse(o => { if (o.geometry && o.geometry !== MGEO.screen) o.geometry.dispose(); });
+    this.m.root.remove(this.group); this.caps.forEach(c => { this.m.deck.remove(c); if (c.material !== MAT.chrome) c.material.dispose(); });
+    if (this.spinShared && this.m.btns[5]) { this.m.btns[5].material.dispose(); this.m.btns[5].material = this.spinShared; this.spinShared = null; }
+    this.group.traverse(o => { if (o.geometry && o.geometry !== MGEO.screen) o.geometry.dispose(); }); this.caps = [];
     this.m = null; this.light.intensity = 0; this.shake = 0;
   },
+  // printed legend for a deck button: glossy gradient in the button's colour with its label
+  legend(b) {
+    if (this._legend[b.id]) return this._legend[b.id];
+    const c = mkCanvas(128, 128), x = c.getContext('2d');
+    x.fillStyle = lg(x, 0, 0, 0, 128, ['#ffffff', b.c, b.c]); x.fillRect(0, 0, 128, 128);
+    x.fillStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.ellipse(64, 22, 54, 16, 0, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(0,0,0,.35)'; x.lineWidth = 6; x.strokeRect(3, 3, 122, 122);
+    x.fillStyle = '#111'; x.font = 'bold 26px Inter, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const words = b.label.split(' '); words.forEach((w, i) => x.fillText(w, 64, 70 + (i - (words.length - 1) / 2) * 28, 116));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
+    return (this._legend[b.id] = t);
+  },
   celebrate(level) { this.shake = Math.min(1, 0.4 + level / 60); this.flash = 1; this.burstT = 2.5 + Math.min(4, level / 20); },
-  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.003; c.material.emissiveIntensity = 1.4; setTimeout(() => { c.position.z = 0.008; c.material.emissiveIntensity = 0.35; }, 140); } },
+  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.004; c.userData.pressT = 0.14; } },
   update(dt) {
     const m = this.m; if (!m) return;
     this.t += dt; const u = this.ledMat.uniforms; u.uT.value = this.t;
@@ -8762,7 +8869,14 @@ const PokieFX = {
     if (bigWin) this.light.color.setHSL((this.t * 0.8) % 1, 0.8, 0.6); else this.light.color.lerp(_c1.set(m.game.theme.glow), Math.min(1, dt * 3));
     this.acceptor.material.color.setRGB(0.2, (Math.sin(this.t * 4) > 0 ? 2.2 : 0.4), 0.6);
     // deck buttons: SPIN pulses when it's your go; gamble glows when it's on offer
-    for (const c of this.caps) { const on = c.userData.id === 'gamble' ? (m.gambleOK && m.lastWin > 0 && st === 'showWin') : c.userData.id === 'collect' ? m.credit > 0 : true; c.material.opacity = on ? 0.55 : 0.18; }
+    for (const c of this.caps) {
+      const id = c.userData.id; if (!id) continue;
+      const on = id === 'gamble' ? (m.gambleOK && m.lastWin > 0 && st === 'showWin') : id === 'collect' ? m.credit > 0 : true;
+      if (c.userData.pressT > 0) { c.userData.pressT -= dt; if (c.userData.pressT <= 0) c.position.z = 0.009; }
+      const pulse = id === 'gamble' && on ? 0.5 + 0.5 * Math.sin(this.t * 8) : 0;
+      c.material.emissiveIntensity = damp(c.material.emissiveIntensity, c.userData.pressT > 0 ? 1.6 : on ? 0.45 + pulse : 0.04, 14, dt);
+      c.material.color.setScalar(on ? 1 : 0.35);
+    }
     if (m.btns[5] && m.btns[5].material) m.btns[5].material.color.setRGB(0.35, (m.canSpin() ? 1.4 + Math.sin(this.t * 5) * 0.5 : 0.6), 0.55);
     // coins fountain on a big win
     if (bigWin && Math.random() < dt * 40) { const p = m.screenW.clone().addScaledVector(m.fw, 0.3).add(V3(rand(-0.25, 0.25), -0.45, rand(-0.05, 0.05))); sparkFX.emit(p, m.fw.clone().multiplyScalar(rand(0.3, 0.9)).add(V3(rand(-0.4, 0.4), rand(1.6, 2.6), 0)), 0.012, 1.4, 1, [1, 0.82, 0.25]); }

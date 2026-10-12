@@ -33,7 +33,7 @@ const PokieFX = {
     this.glareMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false, blending: THREE.NormalBlending });
     this.glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.02, metalness: 0.9, transparent: true, opacity: 0.12, depthWrite: false }); interiorMats.push(this.glassMat);
     // button geometry: the cap's top face is the legend (a box with the label on +z), sat in a thin chrome bezel
-    this.capGeo = new THREE.BoxGeometry(0.066, 0.068, 0.016); this.bezGeo = new RoundedBoxGeometry(0.08, 0.082, 0.008, 2, 0.004);
+    this.capGeo = new THREE.BoxGeometry(0.066, 0.068, 0.01); this.bezGeo = new RoundedBoxGeometry(0.08, 0.082, 0.008, 2, 0.004);
     this._legend = {};
     addEventListener('mousemove', e => { this.mx = e.clientX / innerWidth * 2 - 1; this.my = e.clientY / innerHeight * 2 - 1; });
   },
@@ -55,7 +55,7 @@ const PokieFX = {
       const x = (b.x / 512 - 0.5) * 0.62, y = (0.5 - 178 / 264) * 0.32;
       const bez = new THREE.Mesh(this.bezGeo, MAT.chrome); bez.position.set(x, y, 0.003); m.deck.add(bez); this.caps.push(bez);
       const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: this.legend(b), emissive: 0xffffff, emissiveMap: this.legend(b), emissiveIntensity: 0.45, roughness: 0.2, metalness: 0 });
-      const cap = new THREE.Mesh(this.capGeo, mat); cap.position.set(x, y, 0.012); m.deck.add(cap); cap.userData.id = b.id; cap.userData.lit = true; this.caps.push(cap);
+      const cap = new THREE.Mesh(this.capGeo, mat); cap.position.set(x, y, 0.009); m.deck.add(cap); cap.userData.id = b.id; cap.userData.lit = true; this.caps.push(cap);
     }
     // this machine's SPIN gets its own material so its pulse doesn't light up the whole room's machines
     if (m.btns[5]) { this.spinShared = m.btns[5].material; m.btns[5].material = this.spinShared.clone(); }
@@ -85,7 +85,7 @@ const PokieFX = {
     return (this._legend[b.id] = t);
   },
   celebrate(level) { this.shake = Math.min(1, 0.4 + level / 60); this.flash = 1; this.burstT = 2.5 + Math.min(4, level / 20); },
-  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.006; c.userData.pressT = 0.14; } },
+  press(id) { const c = this.caps && this.caps.find(c => c.userData.id === id); if (c) { c.position.z = 0.004; c.userData.pressT = 0.14; } },
   update(dt) {
     const m = this.m; if (!m) return;
     this.t += dt; const u = this.ledMat.uniforms; u.uT.value = this.t;
@@ -102,7 +102,7 @@ const PokieFX = {
     for (const c of this.caps) {
       const id = c.userData.id; if (!id) continue;
       const on = id === 'gamble' ? (m.gambleOK && m.lastWin > 0 && st === 'showWin') : id === 'collect' ? m.credit > 0 : true;
-      if (c.userData.pressT > 0) { c.userData.pressT -= dt; if (c.userData.pressT <= 0) c.position.z = 0.012; }
+      if (c.userData.pressT > 0) { c.userData.pressT -= dt; if (c.userData.pressT <= 0) c.position.z = 0.009; }
       const pulse = id === 'gamble' && on ? 0.5 + 0.5 * Math.sin(this.t * 8) : 0;
       c.material.emissiveIntensity = damp(c.material.emissiveIntensity, c.userData.pressT > 0 ? 1.6 : on ? 0.45 + pulse : 0.04, 14, dt);
       c.material.color.setScalar(on ? 1 : 0.35);
