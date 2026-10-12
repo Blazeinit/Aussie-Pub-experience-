@@ -257,7 +257,7 @@ const Game = {
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
     return wrap;
   },
-  spend(amt, cat) { const s = this.state; if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } return true; },
+  spend(amt, cat) { const s = this.state; if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } if (amt > 0) CashFX.pay(amt); return true; },
   drinkPrice(type) {
     const s = this.state, D = DRINKS[type];
     if (s.event === 'knockoff' && type === 'schooner' && s.time >= 16 && s.time < 18) return 8;
@@ -272,7 +272,7 @@ const Game = {
     const rsa = s.drunk >= 80;
     const holding = player.drink && player.drink.fill > 0.08;
     const opts = [];
-    for (const type of ['pot', 'schooner', 'pint', 'pale', 'rum', 'llb', 'water']) {
+    for (const type of ['pot', 'schooner', 'pint', 'pale', 'scotch', 'bourbon', 'rum', 'vodka', 'llb', 'water']) {
       const D = DRINKS[type], price = this.drinkPrice(type);
       opts.push({ label: D.name, d: type === 'water' ? 'Free. Hydrate, legend.' : D.std ? `${D.std} std drinks` : 'No alcohol', price: price ? fmt$(price) : 'FREE', disabled: holding || (rsa && D.std > 0), fn: () => this.order(type, price) });
     }
@@ -318,15 +318,8 @@ const Game = {
     }, 450);
     this.toast(kind === 'chips' ? 'Hot chips with chicken salt. Perfection.' : kind === 'roast' ? 'Roast lamb, crispy spuds, gravy. Sunday sorted.' : 'Crumbed chook, napoli, melted cheese, chips and salad. The size of a hubcap. You feel human again.');
   },
-  openATM() {
-    const s = this.state, fee = 2.5;
-    const w = a => () => { if (s.bank < a + fee) { this.toast('Insufficient funds. Ouch.'); return; } if ((s.night.atm || 0) + a > 500) { this.toast('Daily withdrawal limit reached ($500).'); return; } s.bank -= a + fee; s.wallet += a; s.night.atm += a; s.night.fees += fee; s.stats.atmFees += fee; SFX.atm(); this.toast(`Withdrew ${fmt0(a)} (+${fmt$(fee)} fee)`); this.closePanel(); };
-    this.openPanel('ATM', `Balance <b>${fmt$(s.bank)}</b> · This ATM charges ${fmt$(fee)} per withdrawal`, this.optList([20, 50, 100, 200].map(a => ({ label: `Withdraw ${fmt0(a)}`, price: fmt$(a + fee), disabled: s.bank < a + fee, fn: w(a) }))));
-    SFX.beep();
-  },
-  openJukebox() {
-    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: (sg.file ? '★ ' : '') + sg.name, d: sg.file ? `${sg.artist} · ${sg.feel}` : `${sg.bpm} bpm · ${sg.feel} · house band`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
-  },
+  openATM() { ATM.open(); },
+  openJukebox() { Juke.open(); },
   openKeno() {
     const s = this.state, k = this.keno;
     const picked = new Set();
@@ -390,7 +383,7 @@ const Game = {
   },
   insertCash() {
     const s = this.state, m = player.seated; if (!m) return;
-    const opts = [10, 20, 50, 100].map(a => ({ label: `Insert ${fmt0(a)} note`, price: fmt0(a), disabled: s.wallet < a, fn: () => { s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); m.msg = 'PRESS SPIN TO PLAY'; } }));
+    const opts = [10, 20, 50, 100].map(a => ({ label: `Insert ${fmt0(a)} note`, price: fmt0(a), disabled: s.wallet < a, fn: () => { s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); m.msg = 'PRESS SPIN TO PLAY'; CashFX.pay(a, 'insert'); } }));
     if (s.wallet >= 1) opts.push({ label: 'Insert everything in your wallet', price: fmt$(Math.floor(s.wallet)), fn: () => { const a = Math.floor(s.wallet); s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); } });
     if (s.tickets.length) opts.push({ label: `Insert ticket(s)`, price: fmt$(s.tickets.reduce((a, b) => a + b, 0)), fn: () => { m.credit += s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; SFX.print(); this.closePanel(); } });
     this.openPanel('INSERT CASH', `Wallet ${fmt$(s.wallet)} · Max $5,000 credit · <i>Set a limit. Stick to it.</i>`, this.optList(opts));
@@ -404,7 +397,7 @@ const Game = {
   },
   redeem() {
     const s = this.state; if (!s.tickets.length) { this.toast('No tickets to redeem.'); return; }
-    const amt = s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; s.wallet += amt; SFX.atm(); this.toast(`Redeemed ${fmt$(amt)} cash.`);
+    const amt = s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; s.wallet += amt; SFX.atm(); CashFX.receive(amt); this.toast(`Redeemed ${fmt$(amt)} cash.`);
   },
   onPlayerBet(bet) { const s = this.state; s.night.wagered += bet; s.stats.wagered += bet; s.mood = Math.max(0, s.mood - 0.15); },
   onPlayerWin(amt, feature, gambleCollect) {
@@ -719,7 +712,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt); TOUCH.update();
+    updateZones(dt); updateTraffic(dt); TOUCH.update(); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);

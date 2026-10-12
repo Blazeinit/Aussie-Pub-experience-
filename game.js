@@ -484,7 +484,7 @@ const Music = (() => {
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
+  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();
 
 // ---- src/02-textures.js ----
@@ -1505,11 +1505,9 @@ function buildPublicBar() {
   // jukebox
   const jx = 1.6, jz = -17.45;
   SB.add(new RoundedBoxGeometry(0.9, 1.5, 0.6, 3, 0.12), MAT.darkWood, jx, 0.75, jz);
-  const jt = signTex(['JUKEBOX', '$2 A SONG'], { w: 512, h: 512, bg: ['#ff8a2a', '#d01a6a', '#3a1aa8'], color: '#fff', sizes: [90, 60], font: 'Bungee, sans-serif' });
-  const jf = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.72), new THREE.MeshBasicMaterial({ map: jt, toneMapped: false })); jf.material.color.setScalar(1.4); jf.position.set(jx, 1.05, jz + 0.31); scene.add(jf); dynamic.neon.push(jf);
   addCol(jx, jz, 1.0, 0.7);
   dynamic.jukePos = V3(jx, 1.2, jz);
-  addInteract({ id: 'juke', pos: V3(jx, 1.1, jz + 0.3), r: 2.0, label: () => 'Jukebox — pick a song ($2)', action: () => Game.openJukebox() });
+  addInteract({ id: 'juke', pos: V3(jx, 1.1, jz + 0.3), r: 2.0, label: () => `Jukebox — ♫ ${Music.SONGS[Music.song].name}`, action: () => Game.openJukebox() });
   // memorabilia frames on left & back walls
   [[-3.9, 1.84, Math.PI], [-2.3, 1.84, Math.PI], [2.2, 1.84, Math.PI]].forEach(([fx, fz, fr], i) => framed(fx, 2.4, fz, fr, i));
   framed(2.9, 2.3, -8.1, -Math.PI / 2, 3); framed(2.9, 2.3, -4.75, -Math.PI / 2, 4);
@@ -3235,9 +3233,12 @@ const DRINKS = {
   schooner: { name: 'Schooner of Southerly Bitter', short: 'schooner', price: 9.5, std: 1.4, h: 0.15, rb: 0.029, rt: 0.04, col: [0.9, 0.45, 0.06], col2: [0.45, 0.18, 0.02], foam: 0.014, beer: true },
   pint:     { name: "Pint of Drover's Draught", short: 'pint', price: 12.5, std: 2.0, h: 0.165, rb: 0.032, rt: 0.045, col: [0.85, 0.38, 0.05], col2: [0.4, 0.14, 0.01], foam: 0.016, beer: true },
   pale:     { name: 'Larrikin Pale Ale (schooner)', short: 'pale', price: 10.5, std: 1.5, h: 0.15, rb: 0.029, rt: 0.04, col: [1.0, 0.62, 0.18], col2: [0.7, 0.35, 0.06], foam: 0.016, beer: true, cloudy: 0.5 },
-  rum:      { name: 'Rum & Coke', short: 'rum & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.25, 0.08, 0.02], col2: [0.08, 0.02, 0.0], foam: 0.0, beer: false },
-  llb:      { name: 'Lemon Lime & Bitters', short: 'LLB', price: 5, std: 0, h: 0.135, rb: 0.033, rt: 0.035, col: [1.0, 0.55, 0.45], col2: [0.8, 0.3, 0.25], foam: 0.0, beer: false, cloudy: 0.7 },
-  water:    { name: 'Glass of tap water', short: 'water', price: 0, std: 0, h: 0.12, rb: 0.03, rt: 0.034, col: [0.75, 0.85, 0.9], col2: [0.6, 0.75, 0.85], foam: 0.0, beer: false, clear: true },
+  scotch:   { name: 'Scotch on the rocks', short: 'scotch', price: 12, std: 1.1, h: 0.088, rb: 0.037, rt: 0.041, col: [0.85, 0.42, 0.08], col2: [0.5, 0.2, 0.02], foam: 0.0, beer: false, spirit: 'scotch', ice: 3, pourTo: 0.45 },
+  bourbon:  { name: 'Bourbon & Coke', short: 'bourbon & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.3, 0.1, 0.03], col2: [0.09, 0.03, 0.0], foam: 0.0, beer: false, spirit: 'bourbon', mixer: 'coke', ice: 4, pourTo: 0.2 },
+  rum:      { name: 'Rum & Coke', short: 'rum & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.25, 0.08, 0.02], col2: [0.08, 0.02, 0.0], foam: 0.0, beer: false, spirit: 'rum', mixer: 'coke', ice: 4, pourTo: 0.2 },
+  vodka:    { name: 'Vodka, lime & soda', short: 'vodka soda', price: 11, std: 1.0, h: 0.135, rb: 0.033, rt: 0.035, col: [0.88, 0.95, 0.82], col2: [0.7, 0.85, 0.65], foam: 0.0, beer: false, cloudy: 0.25, spirit: 'vodka', mixer: 'soda', ice: 4, pourTo: 0.2 },
+  llb:      { name: 'Lemon Lime & Bitters', short: 'LLB', price: 5, std: 0, h: 0.135, rb: 0.033, rt: 0.035, col: [1.0, 0.55, 0.45], col2: [0.8, 0.3, 0.25], foam: 0.0, beer: false, cloudy: 0.7, mixer: 'lemonade', ice: 3 },
+  water:    { name: 'Glass of tap water', short: 'water', price: 0, std: 0, h: 0.12, rb: 0.03, rt: 0.034, col: [0.75, 0.85, 0.9], col2: [0.6, 0.75, 0.85], foam: 0.0, beer: false, clear: true, mixer: 'water', ice: 2 },
 };
 const liquidVS = `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*w; }`;
 const liquidFS = `
@@ -3270,6 +3271,9 @@ void main(){
 }`;
 const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 2.2 });
 interiorMats.push(glassMat);
+let _iceGeo, _iceMat;
+function iceGeo() { return _iceGeo || (_iceGeo = new RoundedBoxGeometry(0.022, 0.02, 0.022, 2, 0.004)); }
+function iceMat() { if (!_iceMat) { _iceMat = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }); interiorMats.push(_iceMat); } return _iceMat; }
 function makeGlass(type) {
   const D = DRINKS[type];
   const g = new THREE.Group();
@@ -3283,7 +3287,9 @@ function makeGlass(type) {
     uniforms: { uP: { value: V3() }, uN: { value: V3(0, 1, 0) }, uCol: { value: new THREE.Color(...D.col) }, uCol2: { value: new THREE.Color(...D.col2) }, uFoamCol: { value: new THREE.Color(0.86, 0.8, 0.68) }, uFoamH: { value: D.foam }, uTime: { value: 0 }, uCloudy: { value: D.cloudy || 0 }, uClear: { value: D.clear ? 1 : 0 }, uLight: { value: 1 } }
   });
   const lm = new THREE.Mesh(inner, mat); lm.renderOrder = 2; lm.frustumCulled = false; g.add(lm);
-  const o = { type, D, group: g, mat, liquid: lm, fill: 1, y0, y1, slosh: new THREE.Vector2(), sloshV: new THREE.Vector2(), lastPos: null, lastVel: V3(), foam: D.foam,
+  const ice = new THREE.Group(); g.add(ice);
+  const o = { type, D, group: g, mat, liquid: lm, ice, fill: 1, y0, y1,
+    addIce(n) { for (let i = 0; i < n; i++) { const c = new THREE.Mesh(iceGeo(), iceMat()); const a = i * 2.3 + Math.random(); c.position.set(Math.cos(a) * D.rb * 0.45, 0.02 + i * 0.012, Math.sin(a) * D.rb * 0.45); c.rotation.set(rand(0, 1), rand(0, 3), rand(0, 1)); c.renderOrder = 3; ice.add(c); } }, slosh: new THREE.Vector2(), sloshV: new THREE.Vector2(), lastPos: null, lastVel: V3(), foam: D.foam,
     update(dt, t) {
       const u = mat.uniforms; u.uTime.value = t;
       g.updateWorldMatrix(true, false);
@@ -3296,6 +3302,9 @@ function makeGlass(type) {
       u.uN.value.set(this.slosh.x, 1, this.slosh.y).normalize();
       u.uFoamH.value = this.fill > 0.02 ? this.foam : 0;
       lm.visible = this.fill > 0.004;
+      // ice floats on whatever's in the glass
+      const top = this.y0 + (this.y1 - this.y0) * this.fill;
+      ice.children.forEach((c, i) => { c.position.y = Math.max(0.018 + (i % 2) * 0.012, Math.min(top - 0.008 - (i % 3) * 0.01, this.D.h - 0.02)); });
     },
     // spring-damper slosh driven by acceleration of the glass
     physics(dt) {
@@ -3949,49 +3958,125 @@ function makeBartender() {
 }
 // order: {type, food, forZ, cb}
 function bartenderOrder(o) { bartender.queue.push(o); }
+// which tap pours which beer (each T-bar tower has the same four handles)
+const TAP_FOR = { pot: 0, schooner: 1, pale: 2, pint: 3 };
+const SPIRIT_Z = { scotch: -9.6, bourbon: -8.4, rum: -7.0, vodka: -5.6 }; // where each bottle lives on the back-bar shelves
+const SPIRIT_COL = { scotch: 0x8a5a14, bourbon: 0x7a3010, rum: 0x2a1206, vodka: 0xd8e4e8 };
+const MIXER_COL = { coke: [0.18, 0.06, 0.02], soda: [0.85, 0.92, 0.95], lemonade: [0.95, 0.95, 0.85], water: [0.8, 0.88, 0.95] };
+const BAR_WORK = { iceZ: -10.35, pourZ: -9.85, gunZ: -10.85 };
+let iceScoop = null, sodaGun = null;
+function buildBarService() {
+  const F = BAR.front;
+  // ice well set into the back of the counter, full of ice, with the scoop in it
+  addBoxS(SB, MAT.chrome, F - 0.5, 1.07, BAR_WORK.iceZ, 0.3, 0.1, 0.42);
+  for (let i = 0; i < 26; i++) SB.add(iceGeo(), iceMat(), F - 0.5 + rand(-0.12, 0.12), 1.115 + rand(0, 0.012), BAR_WORK.iceZ + rand(-0.18, 0.18), rand(0, 3), rand(0, 1), rand(0, 1));
+  iceScoop = new THREE.Group();
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.09, 12, 1, true, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0xe8e8ee, metalness: 1, roughness: 0.15, side: THREE.DoubleSide })); cup.rotation.z = Math.PI / 2; iceScoop.add(cup);
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 6), MAT.chrome); handle.rotation.z = Math.PI / 2; handle.position.x = -0.08; iceScoop.add(handle);
+  iceScoop.userData.home = V3(F - 0.45, 1.13, BAR_WORK.iceZ + 0.1); iceScoop.position.copy(iceScoop.userData.home); iceScoop.rotation.set(0.4, 0, 0); scene.add(iceScoop);
+  // soda gun in its holster by the drip tray
+  sodaGun = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.05), MAT.chrome); sodaGun.add(body);
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.009, 0.04, 8), MAT.blackPlastic); nozzle.position.y = -0.075; sodaGun.add(nozzle);
+  for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.008, 0.012), M({ color: [0xc8201a, 0x2a8a3a, 0xf0d040, 0x3a6ad8, 0xffffff][i], roughness: 0.4 })); b.position.set(0.022, 0.04 - i * 0.016, 0); sodaGun.add(b); }
+  sodaGun.userData.home = V3(F - 0.62, 1.22, BAR_WORK.gunZ); sodaGun.position.copy(sodaGun.userData.home); scene.add(sodaGun);
+  addBoxS(SB, MAT.chrome, F - 0.64, 1.17, BAR_WORK.gunZ, 0.05, 0.1, 0.06);
+  // a black rubber hose snaking down under the bar
+  SB.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V3(F - 0.64, 1.12, BAR_WORK.gunZ), V3(F - 0.7, 0.9, BAR_WORK.gunZ - 0.05), V3(F - 0.68, 0.5, BAR_WORK.gunZ - 0.1)]), 10, 0.008, 5), MAT.rubber);
+}
+function makeBottle(kind) {
+  const g = new THREE.Group(), col = SPIRIT_COL[kind] || 0x6a3a10;
+  const glass = M({ color: col, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.85 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.2, 14), glass); body.position.y = 0.1; g.add(body);
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.038, 0.05, 14), glass); sh.position.y = 0.225; g.add(sh);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.06, 10), glass); neck.position.y = 0.28; g.add(neck);
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.007, 0.045, 8), MAT.chrome); spout.position.set(0, 0.33, 0); spout.rotation.z = 0.35; g.add(spout);
+  const lbl = new THREE.Mesh(new THREE.CylinderGeometry(0.0385, 0.0385, 0.08, 14, 1, true, -0.9, 1.8), M({ color: kind === 'vodka' ? 0x1a3a8a : kind === 'rum' ? 0xe8c070 : 0xf2e6c8, roughness: 0.8 })); lbl.position.y = 0.1; g.add(lbl);
+  g.userData.tip = V3(0.012, 0.35, 0);
+  return g;
+}
 function updateBartender(n, dt, t, player) {
   const a = n.a; let p;
+  const F = BAR.front;
   const goTo = (x, z, spd = 1.5) => { const dx = x - n.pos.x, dz = z - n.pos.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const s = Math.min(d, spd * dt); n.pos.x += dx / d * s; n.pos.z += dz / d * s; n.ry += angleDiff(n.ry, Math.atan2(dx, dz)) * Math.min(1, dt * 10); a.walkPh += dt * 7; return false; };
-  if (!n.job && n.queue.length) { n.job = n.queue.shift(); n.job.phase = 'toTap'; n.job.t = 0; const D = n.job.type ? DRINKS[n.job.type] : null; n.job.tap = BAR.taps.reduce((b, tp) => Math.abs(tp.z - n.job.forZ) < Math.abs(b.z - n.job.forZ) ? tp : b, BAR.taps[0]); }
+  const face = (ry, k = 8) => { n.ry += angleDiff(n.ry, ry) * Math.min(1, dt * k); };
+  if (!n.job && n.queue.length) {
+    const j = n.job = n.queue.shift(); j.t = 0;
+    const D = j.type ? DRINKS[j.type] : null;
+    if (D && D.beer) { // right beer, right tap, nearest tower
+      const base = Math.abs(-11.5 - j.forZ) < Math.abs(-6.5 - j.forZ) ? 0 : 4;
+      j.tap = BAR.taps[base + (TAP_FOR[j.type] ?? 1)]; j.phase = 'toTap';
+    } else if (D) j.phase = D.ice ? 'toIce' : 'toShelf';
+    else j.phase = 'toCustomer';
+  }
   const j = n.job;
-  let ik = null, ikL = null, walking = false;
+  let ik = null, ikL = null, walking = false, pole = V3(0.6, -0.8, -0.6);
+  const glassAt = V3(F - 0.5, 1.115, BAR_WORK.pourZ);
+  const newGlass = () => { if (!j.glass) { j.glass = makeGlass(j.type); j.glass.fill = 0; j.glass.foam = 0; scene.add(j.glass.group); j.glass.group.position.copy(glassAt); } };
+  const stream = (from, toY, col) => { beerStream.visible = true; beerStream.material.uniforms.uTime.value = t; beerStream.material.uniforms.uCol.value.setRGB(...col); const len = Math.max(0.01, from.y - toY); beerStream.position.set(from.x, from.y - len / 2, from.z); beerStream.scale.set(1, len, 1); };
   if (!j) {
     walking = !goTo(BAR.tender.home.x, BAR.shift ? -12.6 : clamp(player.z, BAR.z0 + 1, BAR.z1 - 1) * 0.3 + BAR.tender.home.z * 0.7, 0.8);
-    if (!walking) n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 4);
+    if (!walking) face(Math.PI / 2, 4);
     p = poseFor(walking ? 'walk' : (Math.sin(t * 0.13) > 0.2 ? 'wipe' : 'stand'), t, a);
   } else {
     j.t += dt;
-    if (j.phase === 'toTap') {
-      if (goTo(-9.42, j.tap.z)) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); if (j.t > 0.6) { j.phase = 'grab'; j.t = 0; } } else walking = true;
-    } else if (j.phase === 'grab') {
-      if (!j.glass && !j.food) { if (j.type) { j.glass = makeGlass(j.type); j.glass.fill = 0; scene.add(j.glass.group); } }
-      if (j.food) { j.phase = 'toCustomer'; j.t = 0; }
-      else if (j.t > 0.5) { j.phase = 'pour'; j.t = 0; SFX.pourStart(); }
-    } else if (j.phase === 'pour') {
-      const D = j.glass.D, dur = D.beer ? 4.2 : 2.6, k = clamp(j.t / dur, 0, 1);
+    const D = j.type ? DRINKS[j.type] : null;
+    // ---------------- beer from the tap
+    if (j.phase === 'toTap') { if (goTo(-9.42, j.tap.z)) { face(Math.PI / 2); if (j.t > 0.5) { j.phase = 'grab'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'grab') { newGlass(); if (j.t > 0.45) { j.phase = 'pour'; j.t = 0; SFX.pourStart(); } }
+    else if (j.phase === 'pour') {
+      const dur = 4.2, k = clamp(j.t / dur, 0, 1);
       j.glass.fill = k;
-      // proper pour: glass tilted 45° early, straightens as it fills
-      const tilt = D.beer ? lerp(0.75, 0.0, smooth(clamp((k - 0.15) / 0.6, 0, 1))) : 0;
-      j.glass.foam = D.beer ? D.foam * smooth(clamp((k - 0.55) / 0.45, 0, 1)) * 1.4 : 0;
+      const tilt = lerp(0.75, 0.0, smooth(clamp((k - 0.15) / 0.6, 0, 1)));
+      j.glass.foam = D.foam * smooth(clamp((k - 0.55) / 0.45, 0, 1)) * 1.4;
       const spout = j.tap.spout;
-      ik = V3(spout.x - 0.01, spout.y - 0.16 + (D.beer ? 0.03 * (1 - k) : 0), spout.z);
-      j.tilt = tilt;
-      ikL = V3(BAR.front - 0.43, 1.62, spout.z + 0.02);
+      ik = V3(spout.x - 0.01, spout.y - 0.16 + 0.03 * (1 - k), spout.z); j.tilt = tilt;
+      ikL = V3(F - 0.43, 1.62, spout.z + 0.02);
       j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0.7, 10, dt);
-      beerStream.visible = true; beerStream.material.uniforms.uTime.value = t; beerStream.material.uniforms.uCol.value.setRGB(...D.col);
       j.glass.group.updateWorldMatrix(true, false);
-      const surf = _v1.setFromMatrixPosition(j.glass.group.matrixWorld).y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * k;
-      const top = spout.y - 0.005, len = Math.max(0.01, top - surf);
-      beerStream.position.set(spout.x, top - len / 2, spout.z); beerStream.scale.set(1, len, 1);
+      stream(V3(spout.x, spout.y - 0.005, spout.z), _v1.setFromMatrixPosition(j.glass.group.matrixWorld).y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * k, D.col);
       SFX.pourUpdate(k);
-      if (Math.random() < dt * 30) dropFX.emit(V3(spout.x, surf + 0.005, spout.z), V3(rand(-.1, .1), rand(0.2, 0.5), rand(-.1, .1)), 0.004, 0.3, 0.5, [1, 0.95, 0.85]);
+      if (Math.random() < dt * 30) dropFX.emit(V3(spout.x, ik.y, spout.z), V3(rand(-.1, .1), rand(0.2, 0.5), rand(-.1, .1)), 0.004, 0.3, 0.5, [1, 0.95, 0.85]);
       if (k >= 1) { j.phase = 'settle'; j.t = 0; SFX.pourStop(); beerStream.visible = false; }
-    } else if (j.phase === 'settle') {
-      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
-      if (j.t > 0.5) { j.phase = 'toCustomer'; j.t = 0; }
-    } else if (j.phase === 'toCustomer') {
-      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
-      if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); j.phase = 'place'; j.t = 0; } else walking = true;
+    } else if (j.phase === 'settle') { j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt); if (j.t > 0.5) { j.phase = 'toCustomer'; j.t = 0; } }
+    // ---------------- spirits & mixers: ice → bottle → pour → mixer → bottle back → serve
+    else if (j.phase === 'toIce') { if (goTo(-9.42, BAR_WORK.iceZ)) { face(Math.PI / 2); newGlass(); if (j.t > 0.3) { j.phase = 'scoop'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'scoop') {
+      const k = j.t;
+      const well = V3(F - 0.5, 1.12, BAR_WORK.iceZ), above = glassAt.clone().add(V3(0, 0.22, 0));
+      ik = k < 0.5 ? well.clone().add(V3(0, 0.08 - k * 0.1, 0)) : above.clone().lerp(well.clone().add(V3(0, 0.1, 0)), Math.max(0, 1 - (k - 0.5) * 2.5));
+      iceScoop.position.copy(ik).add(V3(0.02, -0.04, 0)); iceScoop.rotation.set(0.4, 0, k > 0.9 ? -1.2 : 0);
+      if (k > 0.5 && !j.scooped) { j.scooped = true; SFX.noise(0.25, { freq: 2600, q: 1.2, gain: 0.08, pos: well }); }
+      if (k > 1.05 && !j.iced) { j.iced = true; j.glass.addIce(D.ice || 3); for (let i = 0; i < 3; i++) SFX.tone(rand(2800, 4200), 0.12, { delay: i * 0.06, gain: 0.04, pos: glassAt }); }
+      if (k > 1.5) { iceScoop.position.copy(iceScoop.userData.home); iceScoop.rotation.set(0.4, 0, 0); j.phase = D.spirit ? 'toShelf' : 'mixer'; j.t = 0; }
+    } else if (j.phase === 'toShelf') {
+      const z = SPIRIT_Z[D.spirit] ?? -8;
+      if (goTo(-12.05, z)) { face(-Math.PI / 2); ik = V3(-12.62, 1.78, z); if (j.t > 0.6 && !j.bottle) { j.bottle = makeBottle(D.spirit); scene.add(j.bottle); SFX.tone(1800, 0.05, { gain: 0.04, pos: ik }); } if (j.t > 0.9) { j.phase = 'toPour'; j.t = 0; } } else walking = true;
+    } else if (j.phase === 'toPour') { if (goTo(-9.42, BAR_WORK.pourZ + 0.08)) { face(Math.PI / 2); if (j.t > 0.3) { j.phase = 'pourSpirit'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'pourSpirit') {
+      const dur = 1.8, k = clamp(j.t / dur, 0, 1), tilt = smooth(clamp(j.t / 0.35, 0, 1)) * (1 - smooth(clamp((j.t - dur) / 0.3, 0, 1)));
+      ik = glassAt.clone().add(V3(-0.06, 0.25, 0.05)); j.bottleTilt = tilt * 2.1;
+      ikL = glassAt.clone().add(V3(0.02, 0.07, -0.03)); // steadying the glass
+      if (tilt > 0.8 && k < 1) { j.glass.fill = Math.max(j.glass.fill, (D.pourTo || 0.3) * clamp((j.t - 0.3) / (dur - 0.3), 0, 1)); j.pouring = true; SFX.pourUpdate(0.3); if (!j.glug) { j.glug = true; SFX.pourStart(); } } else j.pouring = false;
+      if (j.t > dur + 0.35) { SFX.pourStop(); beerStream.visible = false; j.phase = D.mixer ? 'mixer' : 'putBack'; j.t = 0; }
+    } else if (j.phase === 'mixer') {
+      if (!goTo(-9.42, BAR_WORK.pourZ + 0.08)) { walking = true; }
+      else {
+        face(Math.PI / 2);
+        const dur = 2.0, k = clamp(j.t / dur, 0, 1), aboveGlass = glassAt.clone().add(V3(0, 0.24, 0));
+        ikL = aboveGlass.clone().add(V3(0, 0.07, 0)); sodaGun.position.copy(ikL).add(V3(0, -0.02, 0)); sodaGun.rotation.set(0, 0, 0);
+        if (j.t > 0.3 && k < 1) { if (!j.gun) { j.gun = true; SFX.pourStart(); } const from = (D.pourTo || 0); j.glass.fill = from + (0.95 - from) * clamp((j.t - 0.3) / (dur - 0.3), 0, 1); stream(aboveGlass, glassAt.y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * j.glass.fill, MIXER_COL[D.mixer] || [0.8, 0.8, 0.8]); SFX.pourUpdate(0.6); }
+        if (k >= 1) { SFX.pourStop(); beerStream.visible = false; sodaGun.position.copy(sodaGun.userData.home); j.phase = j.bottle ? 'putBack' : 'toCustomer'; j.t = 0; }
+      }
+    } else if (j.phase === 'putBack') {
+      const z = SPIRIT_Z[D.spirit] ?? -8;
+      if (goTo(-12.05, z)) { face(-Math.PI / 2); ik = V3(-12.62, 1.78, z); if (j.t > 0.5 && j.bottle) { scene.remove(j.bottle); j.bottle = null; SFX.tone(1500, 0.05, { gain: 0.04, pos: ik }); } if (j.t > 0.8) { j.phase = 'fetchGlass'; j.t = 0; } } else walking = true;
+    } else if (j.phase === 'fetchGlass') { if (goTo(-9.42, BAR_WORK.pourZ)) { face(Math.PI / 2); ik = glassAt.clone().add(V3(0, 0.07, 0)); if (j.t > 0.4) { j.phase = 'toCustomer'; j.t = 0; j.carry = true; } } else walking = true; }
+    // ---------------- serve
+    else if (j.phase === 'toCustomer') {
+      j.tap && (j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt));
+      if (j.glass && !j.tap) j.carry = true;
+      if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { face(Math.PI / 2); j.phase = 'place'; j.t = 0; } else walking = true;
     } else if (j.phase === 'place') {
       const spot = V3(BAR.front - 0.18, 1.115, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6));
       ik = spot.clone().add(V3(0, 0.07, 0));
@@ -4007,17 +4092,28 @@ function updateBartender(n, dt, t, player) {
     p = poseFor(walking ? 'walk' : 'stand', t, a);
   }
   if (walking) p = poseFor('walk', t, a);
-  applyPose(n.h, p, dt, 10, ik ? { rUA: 1, rEL: 1 } : {});
+  applyPose(n.h, p, dt, 10, ik ? (ikL ? { rUA: 1, rEL: 1, lUA: 1, lEL: 1 } : { rUA: 1, rEL: 1 }) : ikL ? { lUA: 1, lEL: 1 } : {});
   n.h.root.position.set(n.pos.x, 0, n.pos.z); n.h.root.rotation.y = n.ry;
   n.h.root.updateMatrixWorld(true);
-  if (ik) armIK(n.h, 'r', ik, V3(0.6, -0.8, -0.6));
-  if (ikL) armIK(n.h, 'l', ikL, V3(0.6, -0.8, -0.6));
-  if (j && j.glass) {
-    const g = j.glass.group;
-    if (j.phase === 'pour' && ik) { g.position.copy(ik).add(V3(0, -0.075, 0)); g.rotation.set(0, 0, -(j.tilt || 0)); }
-    else if (j.phase === 'place' && ik) { g.position.copy(ik).add(V3(0, -0.07, 0)); g.rotation.set(0, 0, 0); }
-    else { n.h.J.rH.updateWorldMatrix(true, false); g.position.setFromMatrixPosition(n.h.J.rH.matrixWorld).add(V3(0, -0.1, 0)); g.rotation.set(0, 0, 0); }
-    j.glass.update(dt, t);
+  if (ik) armIK(n.h, 'r', ik, pole);
+  if (ikL) armIK(n.h, 'l', ikL, pole);
+  if (j) {
+    // the bottle sits in his right hand, tipped up while pouring
+    if (j.bottle) {
+      n.h.J.rH.updateWorldMatrix(true, false);
+      const hp = _v1.setFromMatrixPosition(n.h.J.rH.matrixWorld);
+      j.bottle.position.copy(hp).add(V3(0, -0.12, 0)); j.bottle.rotation.set(0, 0, -(j.bottleTilt || 0));
+      j.bottle.updateMatrixWorld(true);
+      if (j.phase === 'pourSpirit' && j.pouring) { const tip = j.bottle.userData.tip.clone().applyMatrix4(j.bottle.matrixWorld); stream(tip, glassAt.y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * j.glass.fill, DRINKS[j.type].col); }
+    }
+    if (j.glass) {
+      const g = j.glass.group;
+      if (j.phase === 'pour' && ik) { g.position.copy(ik).add(V3(0, -0.075, 0)); g.rotation.set(0, 0, -(j.tilt || 0)); }
+      else if (j.phase === 'place' && ik) { g.position.copy(ik).add(V3(0, -0.07, 0)); g.rotation.set(0, 0, 0); }
+      else if (j.carry || j.tap) { n.h.J.rH.updateWorldMatrix(true, false); g.position.setFromMatrixPosition(n.h.J.rH.matrixWorld).add(V3(0, -0.1, 0)); g.rotation.set(0, 0, 0); }
+      else { g.position.copy(glassAt); g.rotation.set(0, 0, 0); }
+      j.glass.update(dt, t);
+    }
   }
 }
 // food on a plate: a crumbed schnitzel with napoli + melted cheese, chips and salad (parma); a roast; or a bowl of chips
@@ -4763,7 +4859,7 @@ const Game = {
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
     return wrap;
   },
-  spend(amt, cat) { const s = this.state; if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } return true; },
+  spend(amt, cat) { const s = this.state; if (s.wallet + 1e-9 < amt) { this.toast(`Not enough cash (${fmt$(s.wallet)}). ATM's in the lounge.`); return false; } s.wallet -= amt; if (cat) { s.night[cat] += amt; s.stats[cat] += amt; } if (amt > 0) CashFX.pay(amt); return true; },
   drinkPrice(type) {
     const s = this.state, D = DRINKS[type];
     if (s.event === 'knockoff' && type === 'schooner' && s.time >= 16 && s.time < 18) return 8;
@@ -4778,7 +4874,7 @@ const Game = {
     const rsa = s.drunk >= 80;
     const holding = player.drink && player.drink.fill > 0.08;
     const opts = [];
-    for (const type of ['pot', 'schooner', 'pint', 'pale', 'rum', 'llb', 'water']) {
+    for (const type of ['pot', 'schooner', 'pint', 'pale', 'scotch', 'bourbon', 'rum', 'vodka', 'llb', 'water']) {
       const D = DRINKS[type], price = this.drinkPrice(type);
       opts.push({ label: D.name, d: type === 'water' ? 'Free. Hydrate, legend.' : D.std ? `${D.std} std drinks` : 'No alcohol', price: price ? fmt$(price) : 'FREE', disabled: holding || (rsa && D.std > 0), fn: () => this.order(type, price) });
     }
@@ -4824,15 +4920,8 @@ const Game = {
     }, 450);
     this.toast(kind === 'chips' ? 'Hot chips with chicken salt. Perfection.' : kind === 'roast' ? 'Roast lamb, crispy spuds, gravy. Sunday sorted.' : 'Crumbed chook, napoli, melted cheese, chips and salad. The size of a hubcap. You feel human again.');
   },
-  openATM() {
-    const s = this.state, fee = 2.5;
-    const w = a => () => { if (s.bank < a + fee) { this.toast('Insufficient funds. Ouch.'); return; } if ((s.night.atm || 0) + a > 500) { this.toast('Daily withdrawal limit reached ($500).'); return; } s.bank -= a + fee; s.wallet += a; s.night.atm += a; s.night.fees += fee; s.stats.atmFees += fee; SFX.atm(); this.toast(`Withdrew ${fmt0(a)} (+${fmt$(fee)} fee)`); this.closePanel(); };
-    this.openPanel('ATM', `Balance <b>${fmt$(s.bank)}</b> · This ATM charges ${fmt$(fee)} per withdrawal`, this.optList([20, 50, 100, 200].map(a => ({ label: `Withdraw ${fmt0(a)}`, price: fmt$(a + fee), disabled: s.bank < a + fee, fn: w(a) }))));
-    SFX.beep();
-  },
-  openJukebox() {
-    this.openPanel('JUKEBOX', 'Two bucks a song', this.optList(Music.SONGS.map((sg, i) => ({ label: (sg.file ? '★ ' : '') + sg.name, d: sg.file ? `${sg.artist} · ${sg.feel}` : `${sg.bpm} bpm · ${sg.feel} · house band`, price: '$2.00', fn: () => { if (this.spend(2)) { this.state.night.extra -= 2; Music.song = i; Music.level = 0.9; this.state.mood = Math.min(100, this.state.mood + 4); this.toast('♫ ' + sg.name); this.closePanel(); } } }))));
-  },
+  openATM() { ATM.open(); },
+  openJukebox() { Juke.open(); },
   openKeno() {
     const s = this.state, k = this.keno;
     const picked = new Set();
@@ -4896,7 +4985,7 @@ const Game = {
   },
   insertCash() {
     const s = this.state, m = player.seated; if (!m) return;
-    const opts = [10, 20, 50, 100].map(a => ({ label: `Insert ${fmt0(a)} note`, price: fmt0(a), disabled: s.wallet < a, fn: () => { s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); m.msg = 'PRESS SPIN TO PLAY'; } }));
+    const opts = [10, 20, 50, 100].map(a => ({ label: `Insert ${fmt0(a)} note`, price: fmt0(a), disabled: s.wallet < a, fn: () => { s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); m.msg = 'PRESS SPIN TO PLAY'; CashFX.pay(a, 'insert'); } }));
     if (s.wallet >= 1) opts.push({ label: 'Insert everything in your wallet', price: fmt$(Math.floor(s.wallet)), fn: () => { const a = Math.floor(s.wallet); s.wallet -= a; m.credit += a; SFX.print(); this.closePanel(); } });
     if (s.tickets.length) opts.push({ label: `Insert ticket(s)`, price: fmt$(s.tickets.reduce((a, b) => a + b, 0)), fn: () => { m.credit += s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; SFX.print(); this.closePanel(); } });
     this.openPanel('INSERT CASH', `Wallet ${fmt$(s.wallet)} · Max $5,000 credit · <i>Set a limit. Stick to it.</i>`, this.optList(opts));
@@ -4910,7 +4999,7 @@ const Game = {
   },
   redeem() {
     const s = this.state; if (!s.tickets.length) { this.toast('No tickets to redeem.'); return; }
-    const amt = s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; s.wallet += amt; SFX.atm(); this.toast(`Redeemed ${fmt$(amt)} cash.`);
+    const amt = s.tickets.reduce((a, b) => a + b, 0); s.tickets = []; s.wallet += amt; SFX.atm(); CashFX.receive(amt); this.toast(`Redeemed ${fmt$(amt)} cash.`);
   },
   onPlayerBet(bet) { const s = this.state; s.night.wagered += bet; s.stats.wagered += bet; s.mood = Math.max(0, s.mood - 0.15); },
   onPlayerWin(amt, feature, gambleCollect) {
@@ -5225,7 +5314,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt); TOUCH.update();
+    updateZones(dt); updateTraffic(dt); TOUCH.update(); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);
@@ -7013,7 +7102,7 @@ const Karaoke = {
   build() {
     // mic stand + speaker + lyric screen in the lounge, by the gaming room wall
     addCylS(SB, MAT.iron, 11.2, 0.75, -3.15, 0.012, 1.5, 6); addCylS(SB, MAT.iron, 11.2, 0.01, -3.15, 0.18, 0.02, 12); SB.add(G.sph, MAT.blackPlastic, 11.2, 1.52, -3.15, 0, 0, 0, 0.025, 0.04, 0.025);
-    addBoxS(SB, MAT.blackPlastic, 12.4, 0.45, -3.5, 0.45, 0.9, 0.4); addCol(12.4, -3.5, 0.5, 0.45);
+    addBoxS(SB, MAT.blackPlastic, 10.1, 0.45, -3.62, 0.45, 0.9, 0.4); addCol(10.1, -3.62, 0.5, 0.45); // PA speaker (well clear of the ATM)
     const c = mkCanvas(512, 288); this.screen = { c, tex: canvasTex(c, 1, 1) };
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.68), new THREE.MeshBasicMaterial({ map: this.screen.tex })); scr.position.set(11.2, 2.05, -3.86); scene.add(scr);
     SB.add(G.box, MAT.blackPlastic, 11.2, 2.05, -3.9, 0, 0, 0, 1.26, 0.74, 0.04);
@@ -8090,6 +8179,176 @@ const TOUCH = {
   },
 };
 
+// ---- src/19-service.js ----
+
+// =====================================================================
+//  CASH, THE ATM AND THE JUKEBOX
+// =====================================================================
+// ---------------------------------------------------------------- banknotes
+const NOTE_COL = { 5: ['#e8a8d8', '#a0408a'], 10: ['#7ab0f0', '#1a4aa8'], 20: ['#f08a5a', '#a8301a'], 50: ['#f0d85a', '#a8800a'], 100: ['#7ad8a0', '#1a7a4a'] };
+const _noteTex = {};
+function noteTex(d) {
+  if (_noteTex[d]) return _noteTex[d];
+  const [c1, c2] = NOTE_COL[d], c = mkCanvas(256, 128), x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 256, 128); g.addColorStop(0, c1); g.addColorStop(1, c2); x.fillStyle = g; x.fillRect(0, 0, 256, 128);
+  x.strokeStyle = 'rgba(255,255,255,.35)'; for (let i = 0; i < 18; i++) { x.beginPath(); x.arc(70, 64, 8 + i * 4, 0, 7); x.stroke(); }
+  x.fillStyle = 'rgba(255,255,255,.55)'; x.beginPath(); x.ellipse(70, 64, 26, 32, 0, 0, 7); x.fill();
+  x.fillStyle = 'rgba(40,20,40,.45)'; x.beginPath(); x.ellipse(70, 58, 12, 15, 0, 0, 7); x.fill(); x.fillRect(56, 72, 28, 18);
+  x.fillStyle = 'rgba(220,240,255,.75)'; x.fillRect(196, 14, 44, 100); // the clear window
+  x.fillStyle = '#fff'; x.font = 'bold 44px Bebas Neue, Impact'; x.textAlign = 'right'; x.fillText(d, 188, 50);
+  x.font = 'bold 12px Inter, sans-serif'; x.fillText('AUSTRALIA', 188, 112);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (_noteTex[d] = t);
+}
+function notesFor(amount) { const out = []; let a = Math.round(amount); for (const d of [100, 50, 20, 10, 5]) while (a >= d && out.length < 8) { out.push(d); a -= d; } if (!out.length) out.push(5); return out; }
+const noteGeo = new THREE.PlaneGeometry(0.15, 0.075);
+
+const CashFX = {
+  vm: null, anim: null,
+  build() {
+    // a first-person hand holding a fan of notes
+    const g = new THREE.Group(); g.visible = false;
+    const hand = buildGripHand(0.005, 0.005, 0.03); hand.rotation.set(0, 0, Math.PI / 2); hand.position.set(-0.01, -0.02, 0); g.add(hand);
+    this.notes = new THREE.Group(); g.add(this.notes);
+    g.traverse(o => { o.frustumCulled = false; });
+    vm.root.add(g); this.vm = g;
+  },
+  fan(amount) {
+    while (this.notes.children.length) this.notes.remove(this.notes.children[0]);
+    notesFor(amount).slice(0, 5).forEach((d, i, a) => { const m = new THREE.Mesh(noteGeo, new THREE.MeshBasicMaterial({ map: noteTex(d), side: THREE.DoubleSide })); m.rotation.set(-0.15, 0, (i - (a.length - 1) / 2) * 0.18); m.position.set(0.03 + i * 0.006, 0.03, -0.002 * i); this.notes.add(m); });
+  },
+  // hand the money over (paying at the bar, feeding a pokie)
+  pay(amount, style = 'hand') {
+    if (!this.vm || player.cig || MG.active || Game.mode !== 'play') return;
+    this.fan(amount); this.anim = { t: 0, T: style === 'insert' ? 1.0 : 1.15, style, dir: 1 };
+    SFX.noise(0.12, { freq: 3500, q: 1, gain: 0.05 });
+  },
+  // take money (ATM, winnings)
+  receive(amount) {
+    if (!this.vm || Game.mode !== 'play') return;
+    this.fan(amount); this.anim = { t: 0, T: 1.2, style: 'receive', dir: -1 };
+    SFX.noise(0.18, { freq: 3200, q: 1, gain: 0.06 });
+  },
+  update(dt) {
+    const a = this.anim; if (!a || !this.vm) return;
+    a.t += dt; const k = clamp(a.t / a.T, 0, 1), up = Math.sin(k * Math.PI);
+    const v = this.vm; v.visible = true;
+    if (a.style === 'insert') { v.position.set(0.02, -0.32 + up * 0.12, -0.42 - k * 0.12); v.rotation.set(-0.9 * up, 0, 0); v.scale.setScalar(1); this.notes.scale.set(1, 1 - Math.max(0, k - 0.5) * 1.6, 1); }
+    else if (a.style === 'receive') { v.position.set(-0.05, -0.45 + up * 0.22, -0.48 + k * 0.1); v.rotation.set(-0.5, 0.2, 0.15 * up); this.notes.scale.set(1, 1, 1); }
+    else { v.position.set(-0.04, -0.45 + up * 0.24, -0.4 - up * 0.12); v.rotation.set(-0.6 * up, 0.15, -0.2 * up); this.notes.scale.set(1, 1, 1); this.notes.visible = k < 0.62; }
+    if (k >= 1) { this.anim = null; v.visible = false; this.notes.visible = true; }
+  },
+};
+
+// ---------------------------------------------------------------- the ATM: card, PIN, menu, dispense
+const ATM = {
+  pos: V3(12.6, 0, -3.3), FEE: 2.5,
+  open() {
+    const s = Game.state; this.st = { stage: 'card', pin: '', amt: 0 };
+    const wrap = document.createElement('div'); wrap.className = 'atm';
+    wrap.innerHTML = `<div class="atmscr"><div class="atmhead">ROYAL CREDIT UNION · ATM 2047</div><div class="atmbody"></div></div>
+      <div class="atmpad">${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CANCEL', '0', 'ENTER'].map(k => `<button data-k="${k}" class="${isNaN(+k) ? 'w ' + k.toLowerCase() : ''}">${k}</button>`).join('')}</div>`;
+    this.el = wrap;
+    wrap.querySelectorAll('.atmpad button').forEach(b => b.onclick = () => this.key(b.dataset.k));
+    Game.openPanel('ATM', 'Royal Credit Union · this machine charges $2.50 per withdrawal', wrap, []);
+    this.render(); SFX.beep();
+  },
+  render() {
+    const s = Game.state, st = this.st, body = this.el.querySelector('.atmbody');
+    const opt = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = 'atmopt ' + cls; b.innerHTML = label; b.onclick = () => { SFX.beep(); fn(); }; return b; };
+    body.innerHTML = '';
+    if (st.stage === 'card') { body.innerHTML = '<p class="big">WELCOME</p><p>Please insert your card</p><div class="cardslot"></div>'; body.appendChild(opt('Insert card ▸', () => { SFX.noise(0.4, { freq: 600, q: 1, gain: 0.08 }); st.stage = 'reading'; this.render(); setTimeout(() => { st.stage = 'pin'; this.render(); }, 900); })); }
+    else if (st.stage === 'reading') body.innerHTML = '<p class="big">READING CARD…</p><div class="spin"></div>';
+    else if (st.stage === 'pin') body.innerHTML = `<p>Enter your PIN, then press ENTER</p><p class="pin">${'●'.repeat(st.pin.length)}${'○'.repeat(4 - st.pin.length)}</p><p class="small">Cover the keypad when entering your PIN</p>`;
+    else if (st.stage === 'menu') { body.innerHTML = '<p>Select a transaction</p>'; const g = document.createElement('div'); g.className = 'atmgrid'; g.append(opt('Withdrawal', () => { st.stage = 'amount'; this.render(); }), opt('Balance', () => { st.stage = 'balance'; this.render(); }), opt('Cancel', () => this.close())); body.appendChild(g); }
+    else if (st.stage === 'balance') { body.innerHTML = `<p>Available balance</p><p class="big">${fmt$(s.bank)}</p><p class="small">Withdrawn today: ${fmt0(s.night.atm || 0)} of $500 limit</p>`; body.appendChild(opt('Back', () => { st.stage = 'menu'; this.render(); })); }
+    else if (st.stage === 'amount') {
+      body.innerHTML = '<p>Select amount</p>'; const g = document.createElement('div'); g.className = 'atmgrid';
+      for (const a of [20, 50, 100, 200, 300, 500]) g.appendChild(opt(fmt0(a), () => { st.amt = a; st.stage = 'confirm'; this.render(); }, s.bank < a + this.FEE || (s.night.atm || 0) + a > 500 ? 'off' : ''));
+      body.appendChild(g); body.appendChild(opt('Back', () => { st.stage = 'menu'; this.render(); }));
+    } else if (st.stage === 'confirm') {
+      const bad = s.bank < st.amt + this.FEE ? 'Insufficient funds.' : (s.night.atm || 0) + st.amt > 500 ? 'Daily limit of $500 exceeded.' : null;
+      if (bad) { body.innerHTML = `<p class="big err">${bad}</p>`; body.appendChild(opt('Back', () => { st.stage = 'amount'; this.render(); })); return; }
+      body.innerHTML = `<p>This ATM operator charges a fee of <b>${fmt$(this.FEE)}</b> for this withdrawal.</p><p class="big">${fmt0(st.amt)} + ${fmt$(this.FEE)}</p><p>Do you accept?</p>`;
+      const g = document.createElement('div'); g.className = 'atmgrid'; g.append(opt('Accept', () => this.withdraw()), opt('Decline', () => { st.stage = 'menu'; this.render(); })); body.appendChild(g);
+    } else if (st.stage === 'processing') body.innerHTML = '<p class="big">PROCESSING…</p><p>Please wait</p><div class="spin"></div>';
+    else if (st.stage === 'take') { body.innerHTML = '<p class="big">PLEASE TAKE YOUR CASH</p><p>Then take your card</p>'; }
+  },
+  key(k) {
+    const st = this.st; SFX.tone(1300, 0.06, { gain: 0.05, type: 'square' });
+    if (k === 'CANCEL') { this.close(); return; }
+    if (st.stage === 'pin') {
+      if (/\d/.test(k) && st.pin.length < 4) st.pin += k;
+      if (k === 'ENTER' && st.pin.length === 4) { st.stage = 'reading'; this.render(); setTimeout(() => { st.stage = 'menu'; this.render(); }, 700); return; }
+      this.render();
+    }
+  },
+  withdraw() {
+    const s = Game.state, st = this.st, a = st.amt;
+    s.bank -= a + this.FEE; s.night.atm = (s.night.atm || 0) + a; s.night.fees += this.FEE; s.stats.atmFees += this.FEE;
+    st.stage = 'processing'; this.render(); SFX.atm();
+    setTimeout(() => { st.stage = 'take'; this.render(); setTimeout(() => { Game.closePanel(); this.dispense(a); }, 600); }, 1500);
+  },
+  close() { Game.closePanel(); SFX.noise(0.3, { freq: 600, q: 1, gain: 0.06 }); },
+  // notes slide out of the slot, then you take them
+  dispense(a) {
+    const slot = V3(this.pos.x - 0.36, 0.95, this.pos.z);
+    const stack = new THREE.Group(); scene.add(stack);
+    notesFor(a).forEach((d, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.002, 0.075), [0, 1, 2, 3, 4, 5].map(f => f === 2 || f === 3 ? new THREE.MeshStandardMaterial({ map: noteTex(d), roughness: 0.7 }) : new THREE.MeshStandardMaterial({ color: NOTE_COL[d][0], roughness: 0.7 }))); m.position.y = i * 0.0025; m.rotation.y = rand(-0.05, 0.05); stack.add(m); });
+    stack.position.copy(slot); stack.rotation.y = Math.PI / 2;
+    this.disp = { stack, t: 0, a, from: slot.clone(), state: 'out' };
+    for (let i = 0; i < 14; i++) SFX.noise(0.04, { delay: 0.1 + i * 0.05, freq: 2200, q: 2, gain: 0.05, pos: slot });
+    const ia = addInteract({ id: 'cash', temp: true, pos: slot.clone().add(V3(-0.1, 0.1, 0)), r: 2.4, label: () => `Take your ${fmt0(a)}`, action: () => { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } });
+    this.disp.ia = ia;
+    setTimeout(() => { if (this.disp && this.disp.state === 'out') { interactables.splice(interactables.indexOf(ia), 1); this.disp.state = 'take'; this.disp.t = 0; } }, 6000);
+  },
+  update(dt) {
+    const d = this.disp; if (!d) return;
+    d.t += dt;
+    if (d.state === 'out') { const k = easeOut(clamp(d.t / 0.9, 0, 1)); d.stack.position.copy(d.from).add(V3(-0.1 * k, 0, 0)); }
+    else if (d.state === 'take') {
+      const k = clamp(d.t / 0.35, 0, 1), cam = camera.position.clone().add(V3(0, -0.25, 0));
+      d.stack.position.lerp(cam, k * 0.5);
+      if (k >= 1) { scene.remove(d.stack); const s = Game.state; s.wallet += d.a; CashFX.receive(d.a); Game.toast(`Took ${fmt0(d.a)} from the ATM (${fmt$(this.FEE)} fee).`); this.disp = null; }
+    }
+  },
+};
+
+// ---------------------------------------------------------------- the jukebox
+const Juke = {
+  build() {
+    const c = mkCanvas(512, 512); this.screen = { c, tex: canvasTex(c, 1, 1) };
+    const jx = 1.6, jz = -17.45;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.72), new THREE.MeshBasicMaterial({ map: this.screen.tex, toneMapped: false })); m.material.color.setScalar(1.3); m.position.set(jx, 1.05, jz + 0.315); scene.add(m);
+    this.lastSong = -1; this.draw(0);
+  },
+  draw(t) {
+    const x = this.screen.c.getContext('2d'), W = 512, S = Music.SONGS[Music.song] || Music.SONGS[0];
+    const g = x.createLinearGradient(0, 0, W, W); g.addColorStop(0, '#ff8a2a'); g.addColorStop(0.5, '#d01a6a'); g.addColorStop(1, '#3a1aa8'); x.fillStyle = g; x.fillRect(0, 0, W, W);
+    x.fillStyle = 'rgba(0,0,0,.45)'; x.fillRect(30, 150, W - 60, 220);
+    x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = '62px Bungee, Impact'; x.fillText('JUKEBOX', W / 2, 90);
+    x.font = '22px Inter, sans-serif'; x.fillStyle = '#ffd84a'; x.fillText('♫ NOW PLAYING ♫', W / 2, 195);
+    x.fillStyle = '#fff'; let fs = 44; x.font = `bold ${fs}px Inter, sans-serif`; while (x.measureText(S.name).width > W - 90 && fs > 20) { fs -= 2; x.font = `bold ${fs}px Inter, sans-serif`; } x.fillText(S.name, W / 2, 262);
+    x.font = '24px Inter, sans-serif'; x.fillStyle = '#ddd'; x.fillText(S.file ? S.artist : 'The Royal House Band', W / 2, 305);
+    for (let i = 0; i < 24; i++) { const h = 10 + Math.abs(Math.sin(t * 6 + i * 0.7) * Math.cos(t * 2.3 + i)) * 40; x.fillStyle = `hsl(${i * 15},90%,65%)`; x.fillRect(48 + i * 17.5, 345 - h * 0.5, 12, h * 0.5); }
+    x.fillStyle = '#fff'; x.font = '30px Bebas Neue, Impact'; x.fillText('$2 A SONG · PICK ONE', W / 2, 440);
+    this.screen.tex.needsUpdate = true;
+  },
+  update(dt) { this.t = (this.t || 0) + dt; if (camera.position.distanceTo(V3(1.6, 1.2, -17.45)) < 12 && Game.frameN % 6 === 0) this.draw(this.t); },
+  open() {
+    const s = Game.state;
+    const list = Music.SONGS.map((sg, i) => ({ sg, i })).sort((a, b) => (b.sg.file ? 1 : 0) - (a.sg.file ? 1 : 0));
+    const wrap = document.createElement('div'); wrap.className = 'opts juke';
+    for (const { sg, i } of list) {
+      const b = document.createElement('button'); b.className = 'opt' + (Music.song === i ? ' playing' : '');
+      b.innerHTML = `<span>${Music.song === i ? '▶ ' : ''}${sg.name}<span class="d">${sg.file ? `${sg.artist} · ${sg.feel}` : `The Royal House Band · ${sg.bpm} bpm ${sg.feel}`}</span></span><span class="price">$2.00</span>`;
+      b.onclick = () => { SFX.click(); if (!Game.spend(2)) return; s.night.extra -= 2; Music.song = i; Music.level = 0.95; s.mood = Math.min(100, s.mood + 4); SFX.coin(V3(1.6, 1.0, -17.2)); Game.toast('♫ ' + sg.name + (sg.file ? ' — ' + sg.artist : '')); Game.closePanel(); };
+      wrap.appendChild(b);
+    }
+    Game.openPanel('JUKEBOX', `Now playing: <b>${Music.SONGS[Music.song].name}</b> · two bucks a song`, wrap);
+  },
+};
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -8110,14 +8369,14 @@ async function boot() {
     setLoad(0.4, 'Hanging the cast-iron lace…'); await tick();
     buildFacade(); buildDoors();
     setLoad(0.55, 'Tapping the kegs…'); await tick();
-    buildShared(); buildInterior(); buildDartboard();
-    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build();
+    buildShared(); buildInterior(); buildBarService(); buildDartboard();
+    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build(); Juke.build();
     setLoad(0.7, 'Wiring up the pokies…'); await tick();
     MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
     buildAtmosphere();
     SB.flush(scene, true, true); SBX.flush(scene, true, true);
     setLoad(0.8, 'Hiring the locals…'); await tick();
-    initFX(); buildViewmodel(); makeBartender(); buildPlayerBody();
+    initFX(); buildViewmodel(); CashFX.build(); makeBartender(); buildPlayerBody();
     { // the back mirror re-renders the room: do it every other frame and only when you're near enough to see it
       const mob = backMirror.onBeforeRender;
       backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };
@@ -8142,5 +8401,5 @@ async function boot() {
 }
 requestAnimationFrame(frame);
 boot();
-window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
+window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__music = Music; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
 window.__game = { Game, REG, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

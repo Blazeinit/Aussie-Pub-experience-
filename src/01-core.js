@@ -483,5 +483,5 @@ const Music = (() => {
     pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.2);
     out.frequency.setTargetAtTime(state.inside ? 4200 : 900, ctx.currentTime, 0.3);
   }
-  return { init, update, SONGS, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
+  return { init, update, SONGS, get audio() { return audioEl; }, set song(v) { setSong(v); }, get song() { return song; }, set level(v) { level = v; }, get file() { return !!SONGS[song].file; }, pick(event) { const f = SONGS.map((s, k) => s.file && !broken[k] ? k : -1).filter(k => k >= 0); if (event === 'knockoff' && f.includes(4)) return 4; return f.length && Math.random() < 0.75 ? choice(f) : randi(0, 3); } };
 })();

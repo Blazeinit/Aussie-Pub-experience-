@@ -388,7 +388,7 @@ const Karaoke = {
   build() {
     // mic stand + speaker + lyric screen in the lounge, by the gaming room wall
     addCylS(SB, MAT.iron, 11.2, 0.75, -3.15, 0.012, 1.5, 6); addCylS(SB, MAT.iron, 11.2, 0.01, -3.15, 0.18, 0.02, 12); SB.add(G.sph, MAT.blackPlastic, 11.2, 1.52, -3.15, 0, 0, 0, 0.025, 0.04, 0.025);
-    addBoxS(SB, MAT.blackPlastic, 12.4, 0.45, -3.5, 0.45, 0.9, 0.4); addCol(12.4, -3.5, 0.5, 0.45);
+    addBoxS(SB, MAT.blackPlastic, 10.1, 0.45, -3.62, 0.45, 0.9, 0.4); addCol(10.1, -3.62, 0.5, 0.45); // PA speaker (well clear of the ATM)
     const c = mkCanvas(512, 288); this.screen = { c, tex: canvasTex(c, 1, 1) };
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.68), new THREE.MeshBasicMaterial({ map: this.screen.tex })); scr.position.set(11.2, 2.05, -3.86); scene.add(scr);
     SB.add(G.box, MAT.blackPlastic, 11.2, 2.05, -3.9, 0, 0, 0, 1.26, 0.74, 0.04);

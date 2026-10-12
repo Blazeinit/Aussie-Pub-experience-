@@ -17,14 +17,14 @@ async function boot() {
     setLoad(0.4, 'Hanging the cast-iron lace…'); await tick();
     buildFacade(); buildDoors();
     setLoad(0.55, 'Tapping the kegs…'); await tick();
-    buildShared(); buildInterior(); buildDartboard();
-    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build();
+    buildShared(); buildInterior(); buildBarService(); buildDartboard();
+    buildToilets(); buildGarden(); buildTABCorner(); buildBottleO(); buildUpstairs(); buildKebab(); buildTraffic(); buildZoneLights(); Karaoke.build(); STORY.build(); Juke.build();
     setLoad(0.7, 'Wiring up the pokies…'); await tick();
     MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
     buildAtmosphere();
     SB.flush(scene, true, true); SBX.flush(scene, true, true);
     setLoad(0.8, 'Hiring the locals…'); await tick();
-    initFX(); buildViewmodel(); makeBartender(); buildPlayerBody();
+    initFX(); buildViewmodel(); CashFX.build(); makeBartender(); buildPlayerBody();
     { // the back mirror re-renders the room: do it every other frame and only when you're near enough to see it
       const mob = backMirror.onBeforeRender;
       backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };
@@ -49,5 +49,5 @@ async function boot() {
 }
 requestAnimationFrame(frame);
 boot();
-window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
+window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__music = Music; window.__MG = MG; window.__Darts = Darts; window.__X = { Racing, BarShift, Karaoke, Scratchie, Shops, Needs, Traffic, RANDOM, POOL: typeof POOL !== 'undefined' ? POOL : null };
 window.__game = { Game, REG, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

@@ -7,9 +7,12 @@ const DRINKS = {
   schooner: { name: 'Schooner of Southerly Bitter', short: 'schooner', price: 9.5, std: 1.4, h: 0.15, rb: 0.029, rt: 0.04, col: [0.9, 0.45, 0.06], col2: [0.45, 0.18, 0.02], foam: 0.014, beer: true },
   pint:     { name: "Pint of Drover's Draught", short: 'pint', price: 12.5, std: 2.0, h: 0.165, rb: 0.032, rt: 0.045, col: [0.85, 0.38, 0.05], col2: [0.4, 0.14, 0.01], foam: 0.016, beer: true },
   pale:     { name: 'Larrikin Pale Ale (schooner)', short: 'pale', price: 10.5, std: 1.5, h: 0.15, rb: 0.029, rt: 0.04, col: [1.0, 0.62, 0.18], col2: [0.7, 0.35, 0.06], foam: 0.016, beer: true, cloudy: 0.5 },
-  rum:      { name: 'Rum & Coke', short: 'rum & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.25, 0.08, 0.02], col2: [0.08, 0.02, 0.0], foam: 0.0, beer: false },
-  llb:      { name: 'Lemon Lime & Bitters', short: 'LLB', price: 5, std: 0, h: 0.135, rb: 0.033, rt: 0.035, col: [1.0, 0.55, 0.45], col2: [0.8, 0.3, 0.25], foam: 0.0, beer: false, cloudy: 0.7 },
-  water:    { name: 'Glass of tap water', short: 'water', price: 0, std: 0, h: 0.12, rb: 0.03, rt: 0.034, col: [0.75, 0.85, 0.9], col2: [0.6, 0.75, 0.85], foam: 0.0, beer: false, clear: true },
+  scotch:   { name: 'Scotch on the rocks', short: 'scotch', price: 12, std: 1.1, h: 0.088, rb: 0.037, rt: 0.041, col: [0.85, 0.42, 0.08], col2: [0.5, 0.2, 0.02], foam: 0.0, beer: false, spirit: 'scotch', ice: 3, pourTo: 0.45 },
+  bourbon:  { name: 'Bourbon & Coke', short: 'bourbon & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.3, 0.1, 0.03], col2: [0.09, 0.03, 0.0], foam: 0.0, beer: false, spirit: 'bourbon', mixer: 'coke', ice: 4, pourTo: 0.2 },
+  rum:      { name: 'Rum & Coke', short: 'rum & coke', price: 11, std: 1.2, h: 0.135, rb: 0.033, rt: 0.035, col: [0.25, 0.08, 0.02], col2: [0.08, 0.02, 0.0], foam: 0.0, beer: false, spirit: 'rum', mixer: 'coke', ice: 4, pourTo: 0.2 },
+  vodka:    { name: 'Vodka, lime & soda', short: 'vodka soda', price: 11, std: 1.0, h: 0.135, rb: 0.033, rt: 0.035, col: [0.88, 0.95, 0.82], col2: [0.7, 0.85, 0.65], foam: 0.0, beer: false, cloudy: 0.25, spirit: 'vodka', mixer: 'soda', ice: 4, pourTo: 0.2 },
+  llb:      { name: 'Lemon Lime & Bitters', short: 'LLB', price: 5, std: 0, h: 0.135, rb: 0.033, rt: 0.035, col: [1.0, 0.55, 0.45], col2: [0.8, 0.3, 0.25], foam: 0.0, beer: false, cloudy: 0.7, mixer: 'lemonade', ice: 3 },
+  water:    { name: 'Glass of tap water', short: 'water', price: 0, std: 0, h: 0.12, rb: 0.03, rt: 0.034, col: [0.75, 0.85, 0.9], col2: [0.6, 0.75, 0.85], foam: 0.0, beer: false, clear: true, mixer: 'water', ice: 2 },
 };
 const liquidVS = `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*w; }`;
 const liquidFS = `
@@ -42,6 +45,9 @@ void main(){
 }`;
 const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 2.2 });
 interiorMats.push(glassMat);
+let _iceGeo, _iceMat;
+function iceGeo() { return _iceGeo || (_iceGeo = new RoundedBoxGeometry(0.022, 0.02, 0.022, 2, 0.004)); }
+function iceMat() { if (!_iceMat) { _iceMat = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }); interiorMats.push(_iceMat); } return _iceMat; }
 function makeGlass(type) {
   const D = DRINKS[type];
   const g = new THREE.Group();
@@ -55,7 +61,9 @@ function makeGlass(type) {
     uniforms: { uP: { value: V3() }, uN: { value: V3(0, 1, 0) }, uCol: { value: new THREE.Color(...D.col) }, uCol2: { value: new THREE.Color(...D.col2) }, uFoamCol: { value: new THREE.Color(0.86, 0.8, 0.68) }, uFoamH: { value: D.foam }, uTime: { value: 0 }, uCloudy: { value: D.cloudy || 0 }, uClear: { value: D.clear ? 1 : 0 }, uLight: { value: 1 } }
   });
   const lm = new THREE.Mesh(inner, mat); lm.renderOrder = 2; lm.frustumCulled = false; g.add(lm);
-  const o = { type, D, group: g, mat, liquid: lm, fill: 1, y0, y1, slosh: new THREE.Vector2(), sloshV: new THREE.Vector2(), lastPos: null, lastVel: V3(), foam: D.foam,
+  const ice = new THREE.Group(); g.add(ice);
+  const o = { type, D, group: g, mat, liquid: lm, ice, fill: 1, y0, y1,
+    addIce(n) { for (let i = 0; i < n; i++) { const c = new THREE.Mesh(iceGeo(), iceMat()); const a = i * 2.3 + Math.random(); c.position.set(Math.cos(a) * D.rb * 0.45, 0.02 + i * 0.012, Math.sin(a) * D.rb * 0.45); c.rotation.set(rand(0, 1), rand(0, 3), rand(0, 1)); c.renderOrder = 3; ice.add(c); } }, slosh: new THREE.Vector2(), sloshV: new THREE.Vector2(), lastPos: null, lastVel: V3(), foam: D.foam,
     update(dt, t) {
       const u = mat.uniforms; u.uTime.value = t;
       g.updateWorldMatrix(true, false);
@@ -68,6 +76,9 @@ function makeGlass(type) {
       u.uN.value.set(this.slosh.x, 1, this.slosh.y).normalize();
       u.uFoamH.value = this.fill > 0.02 ? this.foam : 0;
       lm.visible = this.fill > 0.004;
+      // ice floats on whatever's in the glass
+      const top = this.y0 + (this.y1 - this.y0) * this.fill;
+      ice.children.forEach((c, i) => { c.position.y = Math.max(0.018 + (i % 2) * 0.012, Math.min(top - 0.008 - (i % 3) * 0.01, this.D.h - 0.02)); });
     },
     // spring-damper slosh driven by acceleration of the glass
     physics(dt) {
@@ -721,49 +732,125 @@ function makeBartender() {
 }
 // order: {type, food, forZ, cb}
 function bartenderOrder(o) { bartender.queue.push(o); }
+// which tap pours which beer (each T-bar tower has the same four handles)
+const TAP_FOR = { pot: 0, schooner: 1, pale: 2, pint: 3 };
+const SPIRIT_Z = { scotch: -9.6, bourbon: -8.4, rum: -7.0, vodka: -5.6 }; // where each bottle lives on the back-bar shelves
+const SPIRIT_COL = { scotch: 0x8a5a14, bourbon: 0x7a3010, rum: 0x2a1206, vodka: 0xd8e4e8 };
+const MIXER_COL = { coke: [0.18, 0.06, 0.02], soda: [0.85, 0.92, 0.95], lemonade: [0.95, 0.95, 0.85], water: [0.8, 0.88, 0.95] };
+const BAR_WORK = { iceZ: -10.35, pourZ: -9.85, gunZ: -10.85 };
+let iceScoop = null, sodaGun = null;
+function buildBarService() {
+  const F = BAR.front;
+  // ice well set into the back of the counter, full of ice, with the scoop in it
+  addBoxS(SB, MAT.chrome, F - 0.5, 1.07, BAR_WORK.iceZ, 0.3, 0.1, 0.42);
+  for (let i = 0; i < 26; i++) SB.add(iceGeo(), iceMat(), F - 0.5 + rand(-0.12, 0.12), 1.115 + rand(0, 0.012), BAR_WORK.iceZ + rand(-0.18, 0.18), rand(0, 3), rand(0, 1), rand(0, 1));
+  iceScoop = new THREE.Group();
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.09, 12, 1, true, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0xe8e8ee, metalness: 1, roughness: 0.15, side: THREE.DoubleSide })); cup.rotation.z = Math.PI / 2; iceScoop.add(cup);
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 6), MAT.chrome); handle.rotation.z = Math.PI / 2; handle.position.x = -0.08; iceScoop.add(handle);
+  iceScoop.userData.home = V3(F - 0.45, 1.13, BAR_WORK.iceZ + 0.1); iceScoop.position.copy(iceScoop.userData.home); iceScoop.rotation.set(0.4, 0, 0); scene.add(iceScoop);
+  // soda gun in its holster by the drip tray
+  sodaGun = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.05), MAT.chrome); sodaGun.add(body);
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.009, 0.04, 8), MAT.blackPlastic); nozzle.position.y = -0.075; sodaGun.add(nozzle);
+  for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.008, 0.012), M({ color: [0xc8201a, 0x2a8a3a, 0xf0d040, 0x3a6ad8, 0xffffff][i], roughness: 0.4 })); b.position.set(0.022, 0.04 - i * 0.016, 0); sodaGun.add(b); }
+  sodaGun.userData.home = V3(F - 0.62, 1.22, BAR_WORK.gunZ); sodaGun.position.copy(sodaGun.userData.home); scene.add(sodaGun);
+  addBoxS(SB, MAT.chrome, F - 0.64, 1.17, BAR_WORK.gunZ, 0.05, 0.1, 0.06);
+  // a black rubber hose snaking down under the bar
+  SB.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V3(F - 0.64, 1.12, BAR_WORK.gunZ), V3(F - 0.7, 0.9, BAR_WORK.gunZ - 0.05), V3(F - 0.68, 0.5, BAR_WORK.gunZ - 0.1)]), 10, 0.008, 5), MAT.rubber);
+}
+function makeBottle(kind) {
+  const g = new THREE.Group(), col = SPIRIT_COL[kind] || 0x6a3a10;
+  const glass = M({ color: col, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.85 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.2, 14), glass); body.position.y = 0.1; g.add(body);
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.038, 0.05, 14), glass); sh.position.y = 0.225; g.add(sh);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.06, 10), glass); neck.position.y = 0.28; g.add(neck);
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.007, 0.045, 8), MAT.chrome); spout.position.set(0, 0.33, 0); spout.rotation.z = 0.35; g.add(spout);
+  const lbl = new THREE.Mesh(new THREE.CylinderGeometry(0.0385, 0.0385, 0.08, 14, 1, true, -0.9, 1.8), M({ color: kind === 'vodka' ? 0x1a3a8a : kind === 'rum' ? 0xe8c070 : 0xf2e6c8, roughness: 0.8 })); lbl.position.y = 0.1; g.add(lbl);
+  g.userData.tip = V3(0.012, 0.35, 0);
+  return g;
+}
 function updateBartender(n, dt, t, player) {
   const a = n.a; let p;
+  const F = BAR.front;
   const goTo = (x, z, spd = 1.5) => { const dx = x - n.pos.x, dz = z - n.pos.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const s = Math.min(d, spd * dt); n.pos.x += dx / d * s; n.pos.z += dz / d * s; n.ry += angleDiff(n.ry, Math.atan2(dx, dz)) * Math.min(1, dt * 10); a.walkPh += dt * 7; return false; };
-  if (!n.job && n.queue.length) { n.job = n.queue.shift(); n.job.phase = 'toTap'; n.job.t = 0; const D = n.job.type ? DRINKS[n.job.type] : null; n.job.tap = BAR.taps.reduce((b, tp) => Math.abs(tp.z - n.job.forZ) < Math.abs(b.z - n.job.forZ) ? tp : b, BAR.taps[0]); }
+  const face = (ry, k = 8) => { n.ry += angleDiff(n.ry, ry) * Math.min(1, dt * k); };
+  if (!n.job && n.queue.length) {
+    const j = n.job = n.queue.shift(); j.t = 0;
+    const D = j.type ? DRINKS[j.type] : null;
+    if (D && D.beer) { // right beer, right tap, nearest tower
+      const base = Math.abs(-11.5 - j.forZ) < Math.abs(-6.5 - j.forZ) ? 0 : 4;
+      j.tap = BAR.taps[base + (TAP_FOR[j.type] ?? 1)]; j.phase = 'toTap';
+    } else if (D) j.phase = D.ice ? 'toIce' : 'toShelf';
+    else j.phase = 'toCustomer';
+  }
   const j = n.job;
-  let ik = null, ikL = null, walking = false;
+  let ik = null, ikL = null, walking = false, pole = V3(0.6, -0.8, -0.6);
+  const glassAt = V3(F - 0.5, 1.115, BAR_WORK.pourZ);
+  const newGlass = () => { if (!j.glass) { j.glass = makeGlass(j.type); j.glass.fill = 0; j.glass.foam = 0; scene.add(j.glass.group); j.glass.group.position.copy(glassAt); } };
+  const stream = (from, toY, col) => { beerStream.visible = true; beerStream.material.uniforms.uTime.value = t; beerStream.material.uniforms.uCol.value.setRGB(...col); const len = Math.max(0.01, from.y - toY); beerStream.position.set(from.x, from.y - len / 2, from.z); beerStream.scale.set(1, len, 1); };
   if (!j) {
     walking = !goTo(BAR.tender.home.x, BAR.shift ? -12.6 : clamp(player.z, BAR.z0 + 1, BAR.z1 - 1) * 0.3 + BAR.tender.home.z * 0.7, 0.8);
-    if (!walking) n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 4);
+    if (!walking) face(Math.PI / 2, 4);
     p = poseFor(walking ? 'walk' : (Math.sin(t * 0.13) > 0.2 ? 'wipe' : 'stand'), t, a);
   } else {
     j.t += dt;
-    if (j.phase === 'toTap') {
-      if (goTo(-9.42, j.tap.z)) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); if (j.t > 0.6) { j.phase = 'grab'; j.t = 0; } } else walking = true;
-    } else if (j.phase === 'grab') {
-      if (!j.glass && !j.food) { if (j.type) { j.glass = makeGlass(j.type); j.glass.fill = 0; scene.add(j.glass.group); } }
-      if (j.food) { j.phase = 'toCustomer'; j.t = 0; }
-      else if (j.t > 0.5) { j.phase = 'pour'; j.t = 0; SFX.pourStart(); }
-    } else if (j.phase === 'pour') {
-      const D = j.glass.D, dur = D.beer ? 4.2 : 2.6, k = clamp(j.t / dur, 0, 1);
+    const D = j.type ? DRINKS[j.type] : null;
+    // ---------------- beer from the tap
+    if (j.phase === 'toTap') { if (goTo(-9.42, j.tap.z)) { face(Math.PI / 2); if (j.t > 0.5) { j.phase = 'grab'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'grab') { newGlass(); if (j.t > 0.45) { j.phase = 'pour'; j.t = 0; SFX.pourStart(); } }
+    else if (j.phase === 'pour') {
+      const dur = 4.2, k = clamp(j.t / dur, 0, 1);
       j.glass.fill = k;
-      // proper pour: glass tilted 45° early, straightens as it fills
-      const tilt = D.beer ? lerp(0.75, 0.0, smooth(clamp((k - 0.15) / 0.6, 0, 1))) : 0;
-      j.glass.foam = D.beer ? D.foam * smooth(clamp((k - 0.55) / 0.45, 0, 1)) * 1.4 : 0;
+      const tilt = lerp(0.75, 0.0, smooth(clamp((k - 0.15) / 0.6, 0, 1)));
+      j.glass.foam = D.foam * smooth(clamp((k - 0.55) / 0.45, 0, 1)) * 1.4;
       const spout = j.tap.spout;
-      ik = V3(spout.x - 0.01, spout.y - 0.16 + (D.beer ? 0.03 * (1 - k) : 0), spout.z);
-      j.tilt = tilt;
-      ikL = V3(BAR.front - 0.43, 1.62, spout.z + 0.02);
+      ik = V3(spout.x - 0.01, spout.y - 0.16 + 0.03 * (1 - k), spout.z); j.tilt = tilt;
+      ikL = V3(F - 0.43, 1.62, spout.z + 0.02);
       j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0.7, 10, dt);
-      beerStream.visible = true; beerStream.material.uniforms.uTime.value = t; beerStream.material.uniforms.uCol.value.setRGB(...D.col);
       j.glass.group.updateWorldMatrix(true, false);
-      const surf = _v1.setFromMatrixPosition(j.glass.group.matrixWorld).y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * k;
-      const top = spout.y - 0.005, len = Math.max(0.01, top - surf);
-      beerStream.position.set(spout.x, top - len / 2, spout.z); beerStream.scale.set(1, len, 1);
+      stream(V3(spout.x, spout.y - 0.005, spout.z), _v1.setFromMatrixPosition(j.glass.group.matrixWorld).y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * k, D.col);
       SFX.pourUpdate(k);
-      if (Math.random() < dt * 30) dropFX.emit(V3(spout.x, surf + 0.005, spout.z), V3(rand(-.1, .1), rand(0.2, 0.5), rand(-.1, .1)), 0.004, 0.3, 0.5, [1, 0.95, 0.85]);
+      if (Math.random() < dt * 30) dropFX.emit(V3(spout.x, ik.y, spout.z), V3(rand(-.1, .1), rand(0.2, 0.5), rand(-.1, .1)), 0.004, 0.3, 0.5, [1, 0.95, 0.85]);
       if (k >= 1) { j.phase = 'settle'; j.t = 0; SFX.pourStop(); beerStream.visible = false; }
-    } else if (j.phase === 'settle') {
-      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
-      if (j.t > 0.5) { j.phase = 'toCustomer'; j.t = 0; }
-    } else if (j.phase === 'toCustomer') {
-      j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt);
-      if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 8); j.phase = 'place'; j.t = 0; } else walking = true;
+    } else if (j.phase === 'settle') { j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt); if (j.t > 0.5) { j.phase = 'toCustomer'; j.t = 0; } }
+    // ---------------- spirits & mixers: ice → bottle → pour → mixer → bottle back → serve
+    else if (j.phase === 'toIce') { if (goTo(-9.42, BAR_WORK.iceZ)) { face(Math.PI / 2); newGlass(); if (j.t > 0.3) { j.phase = 'scoop'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'scoop') {
+      const k = j.t;
+      const well = V3(F - 0.5, 1.12, BAR_WORK.iceZ), above = glassAt.clone().add(V3(0, 0.22, 0));
+      ik = k < 0.5 ? well.clone().add(V3(0, 0.08 - k * 0.1, 0)) : above.clone().lerp(well.clone().add(V3(0, 0.1, 0)), Math.max(0, 1 - (k - 0.5) * 2.5));
+      iceScoop.position.copy(ik).add(V3(0.02, -0.04, 0)); iceScoop.rotation.set(0.4, 0, k > 0.9 ? -1.2 : 0);
+      if (k > 0.5 && !j.scooped) { j.scooped = true; SFX.noise(0.25, { freq: 2600, q: 1.2, gain: 0.08, pos: well }); }
+      if (k > 1.05 && !j.iced) { j.iced = true; j.glass.addIce(D.ice || 3); for (let i = 0; i < 3; i++) SFX.tone(rand(2800, 4200), 0.12, { delay: i * 0.06, gain: 0.04, pos: glassAt }); }
+      if (k > 1.5) { iceScoop.position.copy(iceScoop.userData.home); iceScoop.rotation.set(0.4, 0, 0); j.phase = D.spirit ? 'toShelf' : 'mixer'; j.t = 0; }
+    } else if (j.phase === 'toShelf') {
+      const z = SPIRIT_Z[D.spirit] ?? -8;
+      if (goTo(-12.05, z)) { face(-Math.PI / 2); ik = V3(-12.62, 1.78, z); if (j.t > 0.6 && !j.bottle) { j.bottle = makeBottle(D.spirit); scene.add(j.bottle); SFX.tone(1800, 0.05, { gain: 0.04, pos: ik }); } if (j.t > 0.9) { j.phase = 'toPour'; j.t = 0; } } else walking = true;
+    } else if (j.phase === 'toPour') { if (goTo(-9.42, BAR_WORK.pourZ + 0.08)) { face(Math.PI / 2); if (j.t > 0.3) { j.phase = 'pourSpirit'; j.t = 0; } } else walking = true; }
+    else if (j.phase === 'pourSpirit') {
+      const dur = 1.8, k = clamp(j.t / dur, 0, 1), tilt = smooth(clamp(j.t / 0.35, 0, 1)) * (1 - smooth(clamp((j.t - dur) / 0.3, 0, 1)));
+      ik = glassAt.clone().add(V3(-0.06, 0.25, 0.05)); j.bottleTilt = tilt * 2.1;
+      ikL = glassAt.clone().add(V3(0.02, 0.07, -0.03)); // steadying the glass
+      if (tilt > 0.8 && k < 1) { j.glass.fill = Math.max(j.glass.fill, (D.pourTo || 0.3) * clamp((j.t - 0.3) / (dur - 0.3), 0, 1)); j.pouring = true; SFX.pourUpdate(0.3); if (!j.glug) { j.glug = true; SFX.pourStart(); } } else j.pouring = false;
+      if (j.t > dur + 0.35) { SFX.pourStop(); beerStream.visible = false; j.phase = D.mixer ? 'mixer' : 'putBack'; j.t = 0; }
+    } else if (j.phase === 'mixer') {
+      if (!goTo(-9.42, BAR_WORK.pourZ + 0.08)) { walking = true; }
+      else {
+        face(Math.PI / 2);
+        const dur = 2.0, k = clamp(j.t / dur, 0, 1), aboveGlass = glassAt.clone().add(V3(0, 0.24, 0));
+        ikL = aboveGlass.clone().add(V3(0, 0.07, 0)); sodaGun.position.copy(ikL).add(V3(0, -0.02, 0)); sodaGun.rotation.set(0, 0, 0);
+        if (j.t > 0.3 && k < 1) { if (!j.gun) { j.gun = true; SFX.pourStart(); } const from = (D.pourTo || 0); j.glass.fill = from + (0.95 - from) * clamp((j.t - 0.3) / (dur - 0.3), 0, 1); stream(aboveGlass, glassAt.y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * j.glass.fill, MIXER_COL[D.mixer] || [0.8, 0.8, 0.8]); SFX.pourUpdate(0.6); }
+        if (k >= 1) { SFX.pourStop(); beerStream.visible = false; sodaGun.position.copy(sodaGun.userData.home); j.phase = j.bottle ? 'putBack' : 'toCustomer'; j.t = 0; }
+      }
+    } else if (j.phase === 'putBack') {
+      const z = SPIRIT_Z[D.spirit] ?? -8;
+      if (goTo(-12.05, z)) { face(-Math.PI / 2); ik = V3(-12.62, 1.78, z); if (j.t > 0.5 && j.bottle) { scene.remove(j.bottle); j.bottle = null; SFX.tone(1500, 0.05, { gain: 0.04, pos: ik }); } if (j.t > 0.8) { j.phase = 'fetchGlass'; j.t = 0; } } else walking = true;
+    } else if (j.phase === 'fetchGlass') { if (goTo(-9.42, BAR_WORK.pourZ)) { face(Math.PI / 2); ik = glassAt.clone().add(V3(0, 0.07, 0)); if (j.t > 0.4) { j.phase = 'toCustomer'; j.t = 0; j.carry = true; } } else walking = true; }
+    // ---------------- serve
+    else if (j.phase === 'toCustomer') {
+      j.tap && (j.tap.handle.rotation.z = damp(j.tap.handle.rotation.z, 0, 10, dt));
+      if (j.glass && !j.tap) j.carry = true;
+      if (goTo(-9.35, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6))) { face(Math.PI / 2); j.phase = 'place'; j.t = 0; } else walking = true;
     } else if (j.phase === 'place') {
       const spot = V3(BAR.front - 0.18, 1.115, clamp(j.forZ, BAR.z0 + 0.6, BAR.z1 - 0.6));
       ik = spot.clone().add(V3(0, 0.07, 0));
@@ -779,17 +866,28 @@ function updateBartender(n, dt, t, player) {
     p = poseFor(walking ? 'walk' : 'stand', t, a);
   }
   if (walking) p = poseFor('walk', t, a);
-  applyPose(n.h, p, dt, 10, ik ? { rUA: 1, rEL: 1 } : {});
+  applyPose(n.h, p, dt, 10, ik ? (ikL ? { rUA: 1, rEL: 1, lUA: 1, lEL: 1 } : { rUA: 1, rEL: 1 }) : ikL ? { lUA: 1, lEL: 1 } : {});
   n.h.root.position.set(n.pos.x, 0, n.pos.z); n.h.root.rotation.y = n.ry;
   n.h.root.updateMatrixWorld(true);
-  if (ik) armIK(n.h, 'r', ik, V3(0.6, -0.8, -0.6));
-  if (ikL) armIK(n.h, 'l', ikL, V3(0.6, -0.8, -0.6));
-  if (j && j.glass) {
-    const g = j.glass.group;
-    if (j.phase === 'pour' && ik) { g.position.copy(ik).add(V3(0, -0.075, 0)); g.rotation.set(0, 0, -(j.tilt || 0)); }
-    else if (j.phase === 'place' && ik) { g.position.copy(ik).add(V3(0, -0.07, 0)); g.rotation.set(0, 0, 0); }
-    else { n.h.J.rH.updateWorldMatrix(true, false); g.position.setFromMatrixPosition(n.h.J.rH.matrixWorld).add(V3(0, -0.1, 0)); g.rotation.set(0, 0, 0); }
-    j.glass.update(dt, t);
+  if (ik) armIK(n.h, 'r', ik, pole);
+  if (ikL) armIK(n.h, 'l', ikL, pole);
+  if (j) {
+    // the bottle sits in his right hand, tipped up while pouring
+    if (j.bottle) {
+      n.h.J.rH.updateWorldMatrix(true, false);
+      const hp = _v1.setFromMatrixPosition(n.h.J.rH.matrixWorld);
+      j.bottle.position.copy(hp).add(V3(0, -0.12, 0)); j.bottle.rotation.set(0, 0, -(j.bottleTilt || 0));
+      j.bottle.updateMatrixWorld(true);
+      if (j.phase === 'pourSpirit' && j.pouring) { const tip = j.bottle.userData.tip.clone().applyMatrix4(j.bottle.matrixWorld); stream(tip, glassAt.y + j.glass.y0 + (j.glass.y1 - j.glass.y0) * j.glass.fill, DRINKS[j.type].col); }
+    }
+    if (j.glass) {
+      const g = j.glass.group;
+      if (j.phase === 'pour' && ik) { g.position.copy(ik).add(V3(0, -0.075, 0)); g.rotation.set(0, 0, -(j.tilt || 0)); }
+      else if (j.phase === 'place' && ik) { g.position.copy(ik).add(V3(0, -0.07, 0)); g.rotation.set(0, 0, 0); }
+      else if (j.carry || j.tap) { n.h.J.rH.updateWorldMatrix(true, false); g.position.setFromMatrixPosition(n.h.J.rH.matrixWorld).add(V3(0, -0.1, 0)); g.rotation.set(0, 0, 0); }
+      else { g.position.copy(glassAt); g.rotation.set(0, 0, 0); }
+      j.glass.update(dt, t);
+    }
   }
 }
 // food on a plate: a crumbed schnitzel with napoli + melted cheese, chips and salad (parma); a roast; or a bowl of chips

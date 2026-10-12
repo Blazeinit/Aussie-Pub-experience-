@@ -735,11 +735,9 @@ function buildPublicBar() {
   // jukebox
   const jx = 1.6, jz = -17.45;
   SB.add(new RoundedBoxGeometry(0.9, 1.5, 0.6, 3, 0.12), MAT.darkWood, jx, 0.75, jz);
-  const jt = signTex(['JUKEBOX', '$2 A SONG'], { w: 512, h: 512, bg: ['#ff8a2a', '#d01a6a', '#3a1aa8'], color: '#fff', sizes: [90, 60], font: 'Bungee, sans-serif' });
-  const jf = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.72), new THREE.MeshBasicMaterial({ map: jt, toneMapped: false })); jf.material.color.setScalar(1.4); jf.position.set(jx, 1.05, jz + 0.31); scene.add(jf); dynamic.neon.push(jf);
   addCol(jx, jz, 1.0, 0.7);
   dynamic.jukePos = V3(jx, 1.2, jz);
-  addInteract({ id: 'juke', pos: V3(jx, 1.1, jz + 0.3), r: 2.0, label: () => 'Jukebox — pick a song ($2)', action: () => Game.openJukebox() });
+  addInteract({ id: 'juke', pos: V3(jx, 1.1, jz + 0.3), r: 2.0, label: () => `Jukebox — ♫ ${Music.SONGS[Music.song].name}`, action: () => Game.openJukebox() });
   // memorabilia frames on left & back walls
   [[-3.9, 1.84, Math.PI], [-2.3, 1.84, Math.PI], [2.2, 1.84, Math.PI]].forEach(([fx, fz, fr], i) => framed(fx, 2.4, fz, fr, i));
   framed(2.9, 2.3, -8.1, -Math.PI / 2, 3); framed(2.9, 2.3, -4.75, -Math.PI / 2, 4);
