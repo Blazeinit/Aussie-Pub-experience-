@@ -3,23 +3,38 @@
 //  WORLD: layout constants, collision, materials, builders
 // =====================================================================
 const PUB = { x0: -13, x1: 13, z0: -18, z1: 2, ceil: 4.0 };
-function isInside(x, z) { return x > PUB.x0 && x < PUB.x1 && z > PUB.z0 && z < PUB.z1; }
+// covered rooms beyond the main bar: the toilets, the drive-through bottle shop and the kebab shop over the road
+const ROOMS = [
+  { id: 'toilets', x0: -13, x1: -9.4, z0: -22.6, z1: -18, ceil: 2.9, surface: 'tile' },
+  { id: 'bottleo', x0: 13, x1: 19.6, z0: -7.85, z1: 2, ceil: 3.4, surface: 'concrete' },
+  { id: 'kebab', x0: 7.6, x1: 12.4, z0: 24.05, z1: 27.6, ceil: 3.0, surface: 'tile' },
+];
+const UP = { y: 4.29, x0: -13, x1: 13, z0: -2.0, z1: 9.5 }; // level 1: Room 4 upstairs + the verandah balcony
+function roomAt(x, z) { for (const r of ROOMS) if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return r; return null; }
+function isInside(x, z) { return (x > PUB.x0 && x < PUB.x1 && z > PUB.z0 && z < PUB.z1) || !!roomAt(x, z); }
 function inGaming(x, z) { return x > 3 && x < 13 && z > -18 && z < -4; }
 function onTerrace(x, z) { return x >= 13 && x < 19.6 && z > -18 && z < -8; }
+function inGarden(x, z) { return x > -9.4 && x < 19.6 && z > -29 && z <= -18.1 && !roomAt(x, z); }
 function smokingAllowed(x, z) { return !isInside(x, z); }
-function groundY(x, z) { return (z > 10.05 && z < 17.95) ? -0.15 : 0; }
-function surfaceAt(x, z) {
+// y (optional) lets particles find the upstairs floor
+function groundY(x, z, y) { if (y !== undefined && y > UP.y - 0.2 && x > UP.x0 && x < UP.x1 && z > UP.z0 && z < UP.z1) return UP.y; return (z > 10.05 && z < 17.95) ? -0.15 : 0; }
+function surfaceAt(x, z, lv = 0) {
+  if (lv === 1) return z > 2 ? 'timber' : 'carpet';
+  const r = roomAt(x, z); if (r) return r.surface;
   if (onTerrace(x, z)) return 'deck';
+  if (inGarden(x, z)) return 'gravel';
   if (isInside(x, z)) return inGaming(x, z) ? 'carpet' : 'timber';
   if (z > 10.05 && z < 17.95) return 'road';
   return 'concrete';
 }
 
-const colliders = [];   // 2D AABBs {x0,x1,z0,z1}
-function addCol(cx, cz, w, d) { colliders.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 }); }
-function addColBox(x0, x1, z0, z1) { colliders.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }); }
-function collideCircle(p, r) {
+const colliders = [];   // 2D AABBs {x0,x1,z0,z1,lv}; lv 1 = upstairs
+let colLevel = 0;      // builders set this while adding upstairs walls
+function addCol(cx, cz, w, d) { colliders.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, lv: colLevel }); }
+function addColBox(x0, x1, z0, z1) { const c = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), lv: colLevel }; colliders.push(c); return c; }
+function collideCircle(p, r, lv = 0) {
   for (let it = 0; it < 2; it++) for (const c of colliders) {
+    if (c.lv !== lv || c.off) continue;
     const nx = clamp(p.x, c.x0, c.x1), nz = clamp(p.z, c.z0, c.z1);
     const dx = p.x - nx, dz = p.z - nz, d2 = dx * dx + dz * dz;
     if (d2 < r * r) {
@@ -172,7 +187,7 @@ function addBoxFaces(batch, geo, mats, matrix) {
 // ---- walls with openings --------------------------------------------------
 // axis 'x': wall runs along X at fixed z; 'z': wall runs along Z at fixed x.
 // mats: {low:[inMat,outMat], high:[inMat,outMat]}, outSign: which side (+1/-1) is "out"
-function buildWall(axis, fixed, a0, a1, h, mats, outSign = 1, openings = [], t = 0.22, split = 1.1, collide = true) {
+function buildWall(axis, fixed, a0, a1, h, mats, outSign = 1, openings = [], t = 0.22, split = 1.1, collide = true, yBase = 0) {
   const segs = []; let cur = a0;
   openings = openings.slice().sort((p, q) => p.a - q.a);
   for (const o of openings) { if (o.a > cur) segs.push({ a: cur, b: o.a, y0: 0, y1: h }); if (o.bottom > 0) segs.push({ a: o.a, b: o.b, y0: 0, y1: o.bottom, sill: true }); if (o.top < h) segs.push({ a: o.a, b: o.b, y0: o.top, y1: h }); cur = o.b; }
@@ -187,10 +202,10 @@ function buildWall(axis, fixed, a0, a1, h, mats, outSign = 1, openings = [], t =
       let geo, arr, pos;
       if (axis === 'x') {
         geo = uvBox(new THREE.BoxGeometry(len, hh, t), len, hh, t, 1.2);
-        arr = [mi, mi, mi, mi, outSign > 0 ? mo : mi, outSign > 0 ? mi : mo]; pos = V3(mid, y0 + hh / 2, fixed);
+        arr = [mi, mi, mi, mi, outSign > 0 ? mo : mi, outSign > 0 ? mi : mo]; pos = V3(mid, yBase + y0 + hh / 2, fixed);
       } else {
         geo = uvBox(new THREE.BoxGeometry(t, hh, len), t, hh, len, 1.2);
-        arr = [outSign > 0 ? mo : mi, outSign > 0 ? mi : mo, mi, mi, mi, mi]; pos = V3(fixed, y0 + hh / 2, mid);
+        arr = [outSign > 0 ? mo : mi, outSign > 0 ? mi : mo, mi, mi, mi, mi]; pos = V3(fixed, yBase + y0 + hh / 2, mid);
       }
       addBoxFaces(SBX, geo, arr, new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z));
     }
@@ -294,17 +309,18 @@ function buildStreet() {
   blandBlock(-50, -30, 24, 12, 6.5, -1, shopMat[0]);
   blandBlock(-30, -12, 24, 10, 4.2, -1, shopMat[2]);
   blandBlock(-12, 6, 24, 10, 5.0, -1, shopMat[1]);
-  blandBlock(6, 26, 24, 12, 7.0, -1, shopMat[0]);
+  blandBlock(6, 7.6, 24, 12, 7.0, -1, shopMat[0]);
+  blandBlock(12.4, 26, 24, 12, 7.0, -1, shopMat[0]); // the gap is the kebab shop (buildKebab)
   blandBlock(26, 50, 24, 10, 4.5, -1, shopMat[2]);
   // FOR LEASE sign
   const fl = signTex(['FOR LEASE', '0400 000 000'], { w: 512, h: 256, bg: '#f4f4f0', color: ['#c7352b', '#222'], sizes: [110, 50], border: '#c7352b' });
   signPlane(fl, 1.6, 0.8, -20, 2.2, 2.09, 0);
   signPlane(fl, 1.6, 0.8, 16, 2.2, 23.9, Math.PI);
   // side lane wall between pub and neighbour
-  addBoxS(SBX, MAT.brick, 16.3, 1.1, 2.0, 6.6, 2.2, 0.25, 0, 1.2); addColBox(13, 19.6, 1.85, 2.15);
+  // (the side lane is now the drive-through bottle shop; see buildBottleO)
   // world bounds
   addColBox(-60, 60, 26, 27); addColBox(-61, -60, -30, 30); addColBox(60, 61, -30, 30);
-  addColBox(-14, -13, -18, 2); addColBox(13, 19.7, -19, -18); addColBox(19.6, 19.9, -19, 2.1); addColBox(13, 19.6, -8.1, -7.85);
+  addColBox(-14, -13, -18, 2); addColBox(13, 15.6, -18.2, -17.9); addColBox(17.0, 19.7, -18.2, -17.9); addColBox(19.6, 19.9, -18.2, 2.1); addColBox(13, 19.6, -8.1, -7.85);
 }
 
 function buildUte(x, z, col, ry = 0, sedan = false) {
@@ -346,12 +362,20 @@ function buildFacade() {
   const open = signTex(['OPEN'], { w: 512, h: 200, color: '#ff4a5a', glow: '#ff0022', glowB: 40, font: "Bungee, sans-serif", size: 130, transparent: true });
   const openSign = signPlane(open, 1.0, 0.4, 9.4, 2.5, 1.9, 0, { transparent: true, toneMapped: false, intensity: 2.2 });
   dynamic.neon.push(openSign);
-  // upper storey: brick with sash windows
-  const up = new THREE.Mesh(uvBox(new THREE.BoxGeometry(26.2, H2 - H1, 0.3), 26.2, H2 - H1, 0.3, 2.4), MAT.brick);
-  up.position.set(0, (H1 + H2) / 2, 2); up.castShadow = up.receiveShadow = true; scene.add(up);
+  // upper storey: brick with sash windows. Room 4 (behind windows 4 & 5) is real: a glass window and French doors onto the balcony.
+  colLevel = 1;
+  buildWall('x', 2, -13.1, 13.1, H2 - H1, { low: [MAT.paintCream, MAT.brick], high: [MAT.paintCream, MAT.brick] }, 1, [{ a: 5.64, b: 6.84, bottom: 0.9, top: 2.9 }, { a: 9.8, b: 11.0, bottom: 0, top: 2.42 }], 0.3, 99, true, H1);
+  colLevel = 0;
   for (let i = 0; i < 6; i++) {
-    const wx = -10.4 + i * 4.16, lit = i === 1 || i === 4;
-    SBX.add(G.box, lit ? MAT.litWindow : MAT.darkWindow, wx, 6.1, 2.16, 0, 0, 0, 1.2, 2.0, 0.04);
+    const wx = -10.4 + i * 4.16, lit = i === 1;
+    if (i === 4) { // real glass, with a warm lace curtain that glows when you're not in the room
+      mesh(new THREE.PlaneGeometry(1.2, 2.0), MAT.window, wx, 6.1, 2.1);
+      dynamic.roomGlow = signPlane(texLaceCurtain(), 1.18, 1.96, wx, 6.1, 1.95, 0, { transparent: true, intensity: 1.0 });
+    } else if (i === 5) { // French doors standing open onto the balcony
+      for (const sd of [-1, 1]) { addBoxS(SBX, MAT.creamPaint, wx + sd * 0.64, 5.47, 2.17, 0.1, 2.36, 0.12); const leaf = new THREE.Group(); leaf.position.set(wx + sd * 0.6, 4.3, 2.22); leaf.rotation.y = sd * 1.25; scene.add(leaf); const fr = new THREE.Mesh(new THREE.BoxGeometry(0.58, 2.3, 0.05), MAT.greenPaint); fr.position.set(-sd * 0.29, 1.15, 0); leaf.add(fr); const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 1.7), MAT.window); gl.position.set(-sd * 0.29, 1.3, 0.03); leaf.add(gl); }
+      addBoxS(SBX, MAT.creamPaint, wx, 6.68, 2.17, 1.4, 0.12, 0.12); addBoxS(SBX, MAT.creamPaint, wx, 7.15, 2.2, 1.5, 0.14, 0.12);
+      continue;
+    } else SBX.add(G.box, lit ? MAT.litWindow : MAT.darkWindow, wx, 6.1, 2.16, 0, 0, 0, 1.2, 2.0, 0.04);
     addBoxS(SBX, MAT.creamPaint, wx, 6.1, 2.17, 1.36, 0.08, 0.06); addBoxS(SBX, MAT.creamPaint, wx, 7.15, 2.2, 1.5, 0.14, 0.12); addBoxS(SBX, MAT.creamPaint, wx, 5.05, 2.2, 1.5, 0.1, 0.16);
     addBoxS(SBX, MAT.creamPaint, wx - 0.64, 6.1, 2.17, 0.08, 2.1, 0.06); addBoxS(SBX, MAT.creamPaint, wx + 0.64, 6.1, 2.17, 0.08, 2.1, 0.06);
   }
@@ -367,12 +391,14 @@ function buildFacade() {
   const name = signTex(['ROYAL HOTEL'], { w: 2048, h: 256, color: '#7a1f14', font: "Rye, serif", size: 200, stroke: '#f3e2b8', strokeW: 6 });
   signPlane(name, 14, 1.75, 0, H2 + 0.92, 2.16, 0, { transparent: true });
   // rear/upper volume so the building has depth from the street
-  const body = new THREE.Mesh(uvBox(new THREE.BoxGeometry(26.2, 4.4, 20), 26.2, 4.4, 20, 2.4), MAT.brick);
-  body.position.set(0, H1 + 2.2, -8); body.castShadow = true; scene.add(body);
+  // (stops short of the front rooms upstairs so the real room behind the facade isn't buried in it)
+  const body = new THREE.Mesh(uvBox(new THREE.BoxGeometry(26.2, 4.4, 15.85), 26.2, 4.4, 15.85, 2.4), MAT.brick);
+  body.position.set(0, H1 + 2.2, -10.075); body.castShadow = true; scene.add(body);
+  for (const sx of [-13.05, 13.05]) addBoxS(SBX, MAT.brick, sx, H1 + 2.2, -0.15, 0.1, 4.4, 4.0, 0, 2.4);
   const roof = new THREE.Mesh(new THREE.BoxGeometry(26.4, 0.15, 20.4), MAT.corr); roof.position.set(0, H2 + 0.08, -8); scene.add(roof);
   // side walls (exterior only visible from lane)
   buildWall('z', -13, -18, 2, H1, { low: [MAT.wainscot, MAT.brick], high: [MAT.paintCream, MAT.brick] }, -1, [], 0.3);
-  buildWall('x', -18, -13.1, 13.1, H1, { low: [MAT.wainscot, MAT.brick], high: [MAT.paintCream, MAT.brick] }, -1, [], 0.3);
+  buildWall('x', -18, -13.1, 13.1, H1, { low: [MAT.wainscot, MAT.brick], high: [MAT.paintCream, MAT.brick] }, -1, [{ a: -12.45, b: -11.55, bottom: 0, top: 2.1 }], 0.3);
 
   // ---- two-storey verandah with cast-iron lace ----
   const postX = [-12.8, -8.6, -4.3, 4.3, 8.6, 12.8];
@@ -675,12 +701,11 @@ function buildPublicBar() {
   // cue rack + dartboard + toilets on back wall
   SB.add(G.box, MAT.darkWood, 0.2, 1.4, -17.85, 0, 0, 0, 0.8, 1.2, 0.06);
   for (let i = 0; i < 5; i++) SB.add(G.cyl8, MAT.darkWood, -0.1 + i * 0.15, 1.35, -17.8, 0, 0, 0.0, 0.012, 1.4, 0.012);
-  const dart = signTex([''], { w: 256, h: 256 }); { const x = dart.image.getContext('2d'); const cols = ['#111', '#f0e6c8']; for (let i = 0; i < 20; i++) { x.fillStyle = cols[i % 2]; x.beginPath(); x.moveTo(128, 128); x.arc(128, 128, 120, i * Math.PI / 10, (i + 1) * Math.PI / 10); x.fill(); } for (const [r, c1, c2] of [[120, '#b5241b', '#1a7a3a'], [76, '#b5241b', '#1a7a3a']]) for (let i = 0; i < 20; i++) { x.strokeStyle = i % 2 ? c1 : c2; x.lineWidth = 8; x.beginPath(); x.arc(128, 128, r - 4, i * Math.PI / 10, (i + 1) * Math.PI / 10); x.stroke(); } x.fillStyle = '#1a7a3a'; x.beginPath(); x.arc(128, 128, 12, 0, 7); x.fill(); x.fillStyle = '#b5241b'; x.beginPath(); x.arc(128, 128, 6, 0, 7); x.fill(); dart.needsUpdate = true; }
-  const db = new THREE.Mesh(new THREE.CircleGeometry(0.23, 32), new THREE.MeshStandardMaterial({ map: dart, roughness: 0.9 })); db.position.set(-7.0, 1.73, -17.83); scene.add(db);
-  SB.add(G.box, MAT.darkWood, -7.0, 1.73, -17.87, 0, 0, 0, 0.7, 0.7, 0.04);
+  SB.add(G.box, MAT.darkWood, -7.0, 1.73, -17.87, 0, 0, 0, 0.78, 0.78, 0.04); // backboard (the board itself is built by the darts game)
   addSpot({ kind: 'stand', pos: V3(-7.0, 0, -15.6), ry: Math.PI, area: 'bar', anim: 'darts' });
   for (const [tx, t] of [[-12.0, 'GENTS'], [-10.3, 'LADIES']]) {
-    SB.add(G.box, MAT.darkWood, tx, 1.05, -17.86, 0, 0, 0, 0.9, 2.1, 0.06); SB.add(G.box, MAT.brass, tx + 0.32, 1.0, -17.82, 0, 0, 0, 0.04, 0.12, 0.04);
+    if (t === 'LADIES') { SB.add(G.box, MAT.darkWood, tx, 1.05, -17.86, 0, 0, 0, 0.9, 2.1, 0.06); SB.add(G.box, MAT.brass, tx + 0.32, 1.0, -17.82, 0, 0, 0, 0.04, 0.12, 0.04); }
+    else { addBoxS(SB, MAT.darkWood, tx, 2.16, -17.83, 1.06, 0.12, 0.08); for (const dx of [-0.49, 0.49]) addBoxS(SB, MAT.darkWood, tx + dx, 1.05, -17.83, 0.08, 2.1, 0.08); }
     signPlane(signTex([t], { w: 256, h: 96, bg: '#1a1a1a', color: '#e8c56a', size: 64 }), 0.5, 0.18, tx, 1.75, -17.82, 0);
   }
   addSpot({ kind: 'toilet', pos: V3(-11.1, 0, -17.2), ry: Math.PI, area: 'bar', hidden: true });
@@ -819,7 +844,10 @@ function buildTerrace() {
   SB.add(G.box, MAT.creamPaint, 16.3, 3.25, -8.3, 0, 0, 0, 6.6, 0.12, 0.12); SB.add(G.box, MAT.creamPaint, 19.3, 3.25, -13, 0, 0, 0, 0.12, 0.12, 9.6);
   // slatted screens
   for (let y = 0.1; y < 2.4; y += 0.16) { SB.add(G.box, MAT.darkWood, 19.45, y, -13, 0, 0, 0, 0.04, 0.1, 10); SB.add(G.box, MAT.darkWood, 16.3, y, -8.1, 0, 0, 0, 6.6, 0.1, 0.04); }
-  SB.add(uvBox(new THREE.BoxGeometry(6.6, 3.2, 0.25), 6.6, 3.2, .25, 1.2), MAT.brick, 16.3, 1.6, -18.05);
+  // back wall with a gate through to the beer garden
+  SB.add(uvBox(new THREE.BoxGeometry(2.6, 3.2, 0.25), 2.6, 3.2, .25, 1.2), MAT.brick, 14.3, 1.6, -18.05);
+  SB.add(uvBox(new THREE.BoxGeometry(2.6, 3.2, 0.25), 2.6, 3.2, .25, 1.2), MAT.brick, 18.3, 1.6, -18.05);
+  SB.add(uvBox(new THREE.BoxGeometry(1.4, 0.9, 0.25), 1.4, 0.9, .25, 1.2), MAT.brick, 16.3, 2.75, -18.05);
   // festoon lights strung across the terrace
   for (const zz of [-16.5, -13.5, -10.5]) {
     const a = V3(13.3, 3.0, zz), b = V3(19.3, 3.0, zz + 0.6), pts = [];
@@ -863,7 +891,8 @@ function makeTV(x, y, z, ry, kind) {
 }
 function drawTV(tv, dt) {
   tv.t += dt; const x = tv.c.getContext('2d'), W = 320, H = 180, t = tv.t;
-  if (tv.kind === 'racing') {
+  if (tv.kind === 'racing' && Racing.races.length) { Racing.drawTV(x, W, H, t); }
+  else if (tv.kind === 'racing') {
     const race = t % 40, prog = clamp(race / 32, 0, 1);
     x.fillStyle = '#4a8a3a'; x.fillRect(0, 0, W, H);
     x.fillStyle = '#7fb8e8'; x.fillRect(0, 0, W, 40);

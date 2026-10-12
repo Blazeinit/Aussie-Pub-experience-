@@ -5,7 +5,7 @@
 const keys = {};
 const input = { mx: 0, my: 0, locked: false };
 const player = {
-  pos: V3(-6, 0, 21), yaw: 0, pitch: 0, vel: V3(), eye: 1.64, bob: 0, stepT: 0, lastStep: 0,
+  pos: V3(-6, 0, 21), level: 0, yaw: 0, pitch: 0, vel: V3(), eye: 1.64, bob: 0, stepT: 0, lastStep: 0,
   drink: null, seated: null, seatT: 0, camFrom: null, sip: 0, sipping: false,
   cig: null, vm: null, food: null, standT: 0, swayT: 0, bump: 0, look: { yaw: 0, pitch: 0 },
 };
@@ -153,6 +153,7 @@ function layoutCig(len, ashLen) {
 function setupInput() {
   addEventListener('keydown', e => {
     if (e.code === 'Tab') e.preventDefault();
+    if (e.code === 'F3') { e.preventDefault(); perf.show = !perf.show; return; }
     if (keys[e.code]) return; keys[e.code] = true;
     Game.onKey(e.code, e);
   });
@@ -160,6 +161,7 @@ function setupInput() {
   addEventListener('mousemove', e => { if (input.locked) { input.mx += e.movementX; input.my += e.movementY; } });
   document.addEventListener('pointerlockchange', () => { input.locked = document.pointerLockElement === renderer.domElement; Game.onLockChange(input.locked); });
   renderer.domElement.addEventListener('mousedown', e => Game.onCanvasClick(e));
+  addEventListener('mouseup', e => { if (MG.active) MG.up(e); });
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 }
 function lockPointer() { try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
@@ -291,7 +293,7 @@ function updateDrinkVM(dt, t, moving) {
     const k = 1 - player.sip / 1.7, s = Math.sin(clamp(k, 0, 1) * Math.PI);
     target.lerp(V3(0.01, -0.125, -0.2), s);
     tilt = s * (0.95 + (1 - (d ? d.fill : 0)) * 0.75);
-    if (k > 0.35 && k < 0.7 && d && d.fill > 0) { const take = Math.min(d.fill, dt * 0.28); d.fill -= take; Game.onSipAmount(take * d.D.std); if (Math.random() < dt * 4) SFX.gulp(); }
+    if (k > 0.35 && k < 0.7 && d && d.fill > 0) { const take = Math.min(d.fill, dt * 0.28); d.fill -= take; Game.onSipAmount(take * d.D.std, take); if (Math.random() < dt * 4) SFX.gulp(); }
     if (player.sip <= 0) { SFX.ahh(); if (d && seated && d.wasLedge) { placeOnLedge(); } }
   }
   if (vm.pressT > 0) { vm.pressT -= dt; const k = Math.sin((1 - vm.pressT / 0.25) * Math.PI); target.add(V3(0, -0.018 * k, -0.004 * k)); }
@@ -355,6 +357,7 @@ function seatCam() {
 
 function updatePlayer(dt, t) {
   const s = Game.state, drunk = s.drunk / 100;
+  if (MG.active) { MG.update(dt, t); if (player.drink) player.drink.update(dt, t); return; }
   // look
   if (input.locked && !player.seated) {
     const sens = 0.0022 * settings.sens;
@@ -384,6 +387,7 @@ function updatePlayer(dt, t) {
       if (keys.KeyW || keys.ArrowUp) wish.add(fw); if (keys.KeyS || keys.ArrowDown) wish.sub(fw);
       if (keys.KeyD || keys.ArrowRight) wish.add(rt); if (keys.KeyA || keys.ArrowLeft) wish.sub(rt);
     }
+    if (player.auto) { wish.set(player.auto.x - player.pos.x, 0, player.auto.z - player.pos.z); player.yaw += angleDiff(player.yaw, Math.atan2(-wish.x, -wish.z)) * Math.min(1, dt * 3); }
     const run = keys.ShiftLeft || keys.ShiftRight;
     const spd = (run ? 4.2 : 1.9) * (1 - drunk * 0.25);
     if (wish.lengthSq() > 0) { wish.normalize(); moving = true; }
@@ -392,9 +396,10 @@ function updatePlayer(dt, t) {
     const acc = moving ? 12 : 9;
     player.vel.x = damp(player.vel.x, wish.x * spd, acc, dt); player.vel.z = damp(player.vel.z, wish.z * spd, acc, dt);
     player.pos.x += player.vel.x * dt; player.pos.z += player.vel.z * dt;
-    collideCircle(player.pos, 0.32);
+    collideCircle(player.pos, 0.32, player.level);
     // bump into NPCs
     for (const n of NPCS) {
+      if (player.level) break;
       const dx = player.pos.x - n.pos.x, dz = player.pos.z - n.pos.z, d = Math.hypot(dx, dz), r = 0.55;
       if (d < r && d > 0.001) {
         player.pos.x += dx / d * (r - d); player.pos.z += dz / d * (r - d);
@@ -404,10 +409,10 @@ function updatePlayer(dt, t) {
     }
     const sp = Math.hypot(player.vel.x, player.vel.z);
     player.bob += dt * sp * (run ? 2.6 : 3.3);
-    const gy = groundY(player.pos.x, player.pos.z);
+    const gy = player.level === 1 ? UP.y : groundY(player.pos.x, player.pos.z);
     player.groundY = damp(player.groundY ?? gy, gy, 12, dt);
     // footsteps
-    if (sp > 0.4 && Math.floor(player.bob / Math.PI) !== player.lastStep) { player.lastStep = Math.floor(player.bob / Math.PI); SFX.step(surfaceAt(player.pos.x, player.pos.z), player.pos.clone()); }
+    if (sp > 0.4 && Math.floor(player.bob / Math.PI) !== player.lastStep) { player.lastStep = Math.floor(player.bob / Math.PI); SFX.step(surfaceAt(player.pos.x, player.pos.z, player.level), player.pos.clone()); }
     const bobY = Math.abs(Math.sin(player.bob)) * 0.045 * Math.min(1, sp / 2), bobX = Math.cos(player.bob) * 0.025 * Math.min(1, sp / 2);
     camera.position.set(player.pos.x + rt.x * bobX, player.groundY + player.eye - bobY + 0.02, player.pos.z + rt.z * bobX);
     const sway = drunk * drunk;

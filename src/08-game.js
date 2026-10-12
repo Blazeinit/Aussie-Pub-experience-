@@ -43,21 +43,21 @@ const KENO_PAY = { 0: 2, 5: 2, 6: 15, 7: 50, 8: 400, 9: 4000, 10: 100000 };
 
 const Game = {
   mode: 'loading', paused: false, uiOpen: false, player, time: 0, frameN: 0, entered: false,
-  state: { day: 0, time: 19, wallet: 0, bank: 0, drunk: 0, mood: 60, crave: 30, cigs: 0, tickets: [], event: null, stats: {}, night: {}, debts: [], next: {}, cigsTonight: 0, strikes: 0 },
+  state: { day: 0, time: 19, wallet: 0, bank: 0, drunk: 0, mood: 60, crave: 30, hunger: 20, bladder: 0, cigs: 0, tickets: [], event: null, stats: {}, night: {}, debts: [], next: {}, cigsTonight: 0, strikes: 0, rel: {}, flags: {}, tonight: {} },
   items: [], // drinks/food sitting on the bar for the player
   keno: { next: 0, drawing: false, drawn: [], shown: 0, t: 0, game: 412, tickets: [] },
   trivia: { done: false }, raffle: { tickets: 0, drawn: false },
   // -------------------------------------------------- lifecycle
   newWeek(diff) {
     const D = DIFF[diff];
-    Object.assign(this.state, { diff, day: 0, wallet: D.wallet, bank: D.bank, cigs: D.cigs, tickets: [], debts: [], next: {}, mood: 60,
+    Object.assign(this.state, { diff, day: 0, wallet: D.wallet, bank: D.bank, cigs: D.cigs, tickets: [], debts: [], next: {}, mood: 60, rel: {}, flags: {},
       stats: { wagered: 0, won: 0, drinks: 0, spentDrinks: 0, spentFood: 0, spentSmokes: 0, cigs: 0, jackpots: 0, biggest: 0, glasses: 0, meat: 0, keno: 0, trivia: 0, shouts: 0, atmFees: 0, startWorth: D.wallet + D.bank } });
     rtpMod = D.rtp;
     this.save(); this.showDayCard();
   },
   netWorth() { const s = this.state; return s.wallet + s.bank + s.tickets.reduce((a, b) => a + b, 0) + this.machineCredit(); },
   machineCredit() { return player.seated ? player.seated.credit : 0; },
-  save() { const s = this.state; store('ld_save', { diff: s.diff, day: s.day, wallet: s.wallet, bank: s.bank, cigs: s.cigs, tickets: s.tickets, debts: s.debts, next: s.next, stats: s.stats, mood: s.mood, JP }); },
+  save() { const s = this.state; store('ld_save', { diff: s.diff, day: s.day, wallet: s.wallet, bank: s.bank, cigs: s.cigs, tickets: s.tickets, debts: s.debts, next: s.next, stats: s.stats, mood: s.mood, rel: s.rel, flags: s.flags, JP }); },
   load() { const d = store('ld_save'); if (!d || d.day == null || d.day > 6) return false; Object.assign(this.state, d); if (d.JP) Object.assign(JP, d.JP); rtpMod = DIFF[d.diff].rtp; return true; },
   showDayCard() {
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
@@ -96,7 +96,7 @@ const Game = {
   },
   startNight() {
     const s = this.state, D = DAYS[s.day];
-    s.event = D.event; s.time = s.startTime; s.drunk = s.startHang ? 12 : 0; s.crave = 40; s.cigsTonight = 0; s.strikes = 0; s.kicked = false;
+    s.event = D.event; s.time = s.startTime; s.drunk = s.startHang ? 12 : 0; s.crave = 40; s.hunger = 35; s.bladder = 5; s.cigsTonight = 0; s.strikes = 0; s.kicked = false; s.tonight = {}; s.rel = s.rel || {}; s.flags = s.flags || {};
     s.night = { startWallet: s.wallet, startBank: s.bank, startTickets: s.tickets.reduce((a, b) => a + b, 0), drinks: 0, spentDrinks: 0, spentFood: 0, spentSmokes: 0, wagered: 0, won: 0, atm: 0, fees: 0, keno: 0, extra: 0, glasses: 0 };
     s.next = {}; s.morningDone = false;
     this.trivia = { done: false }; this.raffle = { tickets: 0, drawn: false }; this.keno.tickets = []; this.keno.next = s.time + 0.05; this.lastDrinks = false; this.entered = false; this.footyT = 0;
@@ -110,7 +110,9 @@ const Game = {
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
+    REG.spawnAll(); Shops.spawnStaff();
     spawnPatrons(Math.round(D.crowd * (0.85 + Math.random() * 0.3) * (HIGH() ? 1 : 0.75)));
+    RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
     Music.song = D.event === 'sunday' ? 1 : randi(0, 3); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
@@ -127,17 +129,19 @@ const Game = {
   endNight(reason) {
     if (this.mode !== 'play') return;
     const s = this.state, D = DAYS[s.day], dd = DIFF[s.diff];
+    if (MG.active) MG.stop(true);
     if (player.seated) this.collect(true), standUp();
     this.mode = 'ending'; this.fade(0, 1); document.exitPointerLock && document.exitPointerLock();
     setTimeout(() => {
       $('hud').classList.add('hidden'); $('deck').classList.add('hidden'); this.closePanel();
-      const early = s.time < 22 && s.drunk < 35 && reason === 'home';
+      const early = s.time < 22 && s.drunk < 35 && ['home', 'taxi', 'room'].includes(reason);
+      if (early) achieve('early'); if (reason === 'kicked') achieve('legless');
       const hung = s.drunk > 62 || reason === 'kicked';
-      s.next = { early, hang: hung };
+      s.next = { early, hang: hung, room: reason === 'room' };
       const n = s.night, tick = s.tickets.reduce((a, b) => a + b, 0);
       const worthNow = s.wallet + s.bank + tick, worthStart = n.startWallet + n.startBank + n.startTickets;
       const isSunday = s.day === 6;
-      const reasonTxt = { home: early ? 'You called it early and walked home under the streetlights.' : 'You wandered home.', close: '"Righto folks, time to go!" — you got turfed out at close.', kicked: 'The bouncer walked you out. Not your finest hour.', broke: 'Skint. Nothing left but the walk home.' }[reason] || '';
+      const reasonTxt = { home: early ? 'You called it early and walked home under the streetlights.' : 'You wandered home.', close: '"Righto folks, time to go!" — you got turfed out at close.', kicked: 'The bouncer walked you out. Not your finest hour.', broke: 'Skint. Nothing left but the walk home.', taxi: 'You caught a cab home. The driver had opinions about the footy.', room: 'You crashed in Room 4 upstairs. The pub hummed through the floorboards.' }[reason] || '';
       const rows = [['Started with (wallet + bank)', fmt$(n.startWallet + n.startBank)], ['Drinks (' + n.drinks + ')', fmt$(-n.spentDrinks)], ['Food', fmt$(-n.spentFood)], ['Smokes', fmt$(-n.spentSmokes)], ['Pokies — wagered', fmt$(-n.wagered)], ['Pokies — won', fmt$(n.won)], ['Keno / raffle / trivia', fmt$(n.keno + n.extra)], ['ATM fees', fmt$(-n.fees)]];
       let rentHtml = '';
       if (isSunday) {
@@ -181,6 +185,7 @@ const Game = {
     this.mode = 'title'; $('hud').classList.add('hidden'); $('deck').classList.add('hidden'); $('resume').classList.add('hidden'); this.closePanel();
     $('title').classList.remove('hidden'); $('diffMenu').classList.add('hidden'); $('mainMenu').classList.remove('hidden');
     const sv = store('ld_save'); $('btnContinue').classList.toggle('hidden', !(sv && sv.day != null && sv.day <= 6));
+    $('achInfo').textContent = `${Object.keys(ACH.got).length} of ${ACH_LIST.length} unlocked`;
     if (sv && sv.day != null) $('contInfo').textContent = `${DAYS[Math.min(6, sv.day)].name} · ${DIFF[sv.diff].label} · ${fmt0(sv.wallet + sv.bank)}`;
     setTimeOfDay(18.4, 'clear'); this.fade(1, 0);
   },
@@ -197,6 +202,8 @@ const Game = {
     const tk = s.tickets.reduce((a, b) => a + b, 0);
     this.setText('items', `${s.cigs} smokes${tk > 0 ? ` · ${s.tickets.length} ticket${s.tickets.length > 1 ? 's' : ''} (${fmt$(tk)})` : ''}${player.drink ? ` · ${player.drink.D.short} ${Math.round(player.drink.fill * 100)}%` : ''}`);
     $('mDrunk').querySelector('i').style.width = s.drunk + '%'; $('mMood').querySelector('i').style.width = s.mood + '%'; $('mCrave').querySelector('i').style.width = s.crave + '%';
+    $('mHunger').querySelector('i').style.width = s.hunger + '%'; $('mBladder').querySelector('i').style.width = s.bladder + '%';
+    this.setText('hungerTxt', s.hunger > 80 ? 'Starving' : s.hunger > 55 ? 'Peckish' : 'Fed'); this.setText('bladderTxt', s.bladder > 80 ? 'Busting' : s.bladder > 50 ? 'Could go' : '');
     this.setText('drunkTxt', s.drunk < 12 ? 'Sober' : s.drunk < 30 ? 'Merry' : s.drunk < 50 ? 'Tipsy' : s.drunk < 70 ? 'Pissed' : s.drunk < 85 ? 'Maggot' : 'Legless');
     this.setText('moodTxt', s.mood > 75 ? 'Stoked' : s.mood > 50 ? 'Good' : s.mood > 30 ? 'Meh' : s.mood > 15 ? 'Cranky' : 'Gutted');
     if (player.seated) {
@@ -242,7 +249,7 @@ const Game = {
     $('pBtns').innerHTML = ''; for (const b of btns) { const e = document.createElement('button'); e.className = 'pbtn'; e.textContent = b.label; e.onclick = b.fn; $('pBtns').appendChild(e); }
     $('panel').classList.remove('hidden');
   },
-  closePanel() { $('panel').classList.add('hidden'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated) lockPointer(); } },
+  closePanel() { $('panel').classList.add('hidden'); if (this.uiOpen) { this.uiOpen = false; if (this.mode === 'play' && !player.seated && !(MG.active && MG.active.cursor)) lockPointer(); } },
   optList(opts) {
     const wrap = document.createElement('div'); wrap.className = 'opts';
     for (const o of opts) { const b = document.createElement('button'); b.className = 'opt'; b.disabled = !!o.disabled; b.innerHTML = `<span>${o.label}${o.d ? `<span class="d">${o.d}</span>` : ''}</span>${o.price != null ? `<span class="price">${o.price}</span>` : ''}`; b.onclick = () => { SFX.click(); o.fn(); }; wrap.appendChild(b); }
@@ -269,6 +276,7 @@ const Game = {
     }
     if (s.event === 'parma') opts.push({ label: 'Parma & Pot (Tuesday special)', d: 'Chicken parmigiana, chips, salad + a pot', price: '$15.00', disabled: holding || rsa, fn: () => this.order('pot', 15, 'parma', 'spentFood') });
     opts.push({ label: s.event === 'sunday' ? 'Sunday roast' : 'Chicken Parma', d: 'Soaks up the grog (−drunk, +mood)', price: s.event === 'sunday' ? '$22.00' : '$26.00', fn: () => this.order(null, s.event === 'sunday' ? 22 : 26, 'parma', 'spentFood') });
+    if (!s.tonight.shift && s.drunk < 25 && s.day < 5 && s.time < DAYS[s.day].close - 2) opts.push({ label: 'Ask about a shift behind the bar', d: 'Cash in hand + tips. You need to be sober.', fn: () => { this.closePanel(); BarShift.offer(); } });
     opts.push({ label: 'Bowl of chips', d: 'With chicken salt, obviously', price: '$9.00', fn: () => this.order(null, 9, 'chips', 'spentFood') });
     opts.push({ label: 'Pack of smokes (20)', d: `You have ${s.cigs}. Yes, they're really this much.`, price: '$45.00', fn: () => { if (this.spend(45, 'spentSmokes')) { s.cigs += 20; SFX.register(V3(-9, 1.2, -9)); this.toast('20 smokes. Your wallet weeps.'); this.closePanel(); } } });
     if (s.event === 'raffle' && !this.raffle.drawn) opts.push({ label: 'Meat raffle tickets ×3', d: `Draw at 5pm. You have ${this.raffle.tickets}.`, price: '$5.00', fn: () => { if (this.spend(5)) { s.night.extra -= 5; this.raffle.tickets += 3; SFX.register(V3(-9, 1.2, -9)); this.toast('Three raffle tickets. Come on, meat tray!'); this.closePanel(); } } });
@@ -295,8 +303,7 @@ const Game = {
     } });
   },
   eat(item) {
-    const s = this.state; SFX.eat();
-    s.drunk = Math.max(0, s.drunk - (item.food === 'chips' ? 6 : 14)); s.mood = Math.min(100, s.mood + (item.food === 'chips' ? 5 : 10));
+    const s = this.state; Needs.eat(item.food === 'chips' ? 'chips' : s.event === 'sunday' ? 'roast' : 'parma');
     let k = 0; const m = item.mesh; const iv = setInterval(() => { k++; m.children.slice(1).forEach((c, i) => { if (Math.random() < 0.3) c.visible = false; }); if (k > 6) { clearInterval(iv); scene.remove(m); } }, 350);
     this.toast(item.food === 'chips' ? 'Hot chips with chicken salt. Perfection.' : 'That parma was the size of a hubcap. You feel human again.');
   },
@@ -404,7 +411,8 @@ const Game = {
   },
   onDrag() { const s = this.state; s.crave = Math.max(0, s.crave - 12); s.mood = Math.min(100, s.mood + 2.5); s.cigsTonight++; },
   onIndoorSmoke() { this.state.strikes++; this.subtitle(`<b>${bartender.name}:</b> ${this.state.strikes > 1 ? 'Last warning! Out the front with that or you\'re out!' : 'Oi! Not inside, mate! Put that out!'}`, 3.5); this.state.mood -= 5; if (this.state.strikes >= 3) this.kickOut(); },
-  onSipAmount(std) { const s = this.state; s.drunk = Math.min(100, s.drunk + std * 7.2 * DIFF[s.diff].hang ** 0.5); s.mood = Math.min(100, s.mood + std * 2.2); },
+  onSipAmount(std, vol = 0) { const s = this.state; s.drunk = Math.min(100, s.drunk + std * 7.2 * DIFF[s.diff].hang ** 0.5 * (s.hunger > 70 ? 1.3 : s.hunger < 25 ? 0.85 : 1)); s.mood = Math.min(100, s.mood + std * 2.2); s.bladder = Math.min(100, s.bladder + vol * 30); },
+  walkHome() { if (this.mode !== 'play' || player.auto) return; player.auto = V3(player.pos.x - 30, 0, 21.2); this.subtitle('<i>The street\'s quiet. The Royal hums behind you.</i>', 3); setTimeout(() => { player.auto = null; this.endNight('home'); }, 3600); },
   onSpill(a) { if (a > 0.05) this.toast(choice(['Whoa — sloshed half your beer.', 'Steady! You\'re wearing it.', 'That\'s a waste of good beer.'])); },
   onBump() { this.state.mood = Math.max(0, this.state.mood - 2); },
   onGlassSmash(pos) {
@@ -418,6 +426,8 @@ const Game = {
   // -------------------------------------------------- talking
   talkTo(n) {
     const s = this.state; n.a.talk = 2;
+    if (n.regular) { REG.talk(n); return; }
+    if (n.eventTalk) { n.eventTalk(); return; }
     const line = choice((BARKS[n.spot ? (n.spot.kind === 'pokie' ? 'pokie' : n.a.smoking ? 'smoke' : n.spot.area) : 'any'] || BARKS.any).concat(this.dayBarks()));
     const opts = [{ label: 'Have a yarn', d: 'Chew the fat for a bit', fn: () => { this.closePanel(); if (!n.yarned) { s.mood = Math.min(100, s.mood + 4); n.yarned = true; } bark(n, choice(["Ha! Too right.", "You're alright, you know that?", "Heard the Grand went off at the Commercial last week. Forty grand!", "My cousin won a meat tray three weeks running. Rigged, I reckon.", "Nah you're dreamin', mate.", "Machine four's due. Trust me. (It isn't.)"]), true); } }];
     if (n.smoker && s.cigs > 0 && !n.gotCig) opts.push({ label: 'Offer a smoke', d: 'They look like they need one', fn: () => { this.closePanel(); s.cigs--; n.gotCig = true; s.mood = Math.min(100, s.mood + 5); bark(n, 'Ahh, you beauty. Owe ya one.', true); } });
@@ -447,6 +457,7 @@ const Game = {
     // last drinks + close
     if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
+    RANDOM.update(dt); Needs.update(dt); Racing.update(dt); Karaoke.tick(dt);
     // arrivals
     this.arriveT -= dt;
     if (this.arrivals > 0 && this.arriveT <= 0 && s.time < D.close - 1) {
@@ -465,7 +476,7 @@ const Game = {
     if (s.crave > 75) s.mood = Math.max(0, s.mood - 0.04 * gm);
     if (s.drunk >= 98 && !s.kicked) this.kickOut();
     // leaving via the street
-    if (this.entered && player.pos.z > 18.6 && !this.askedHome && !this.uiOpen) { this.askedHome = true; this.openPanel('HEAD HOME?', `It's ${this.clockText()}. ${s.time < 22 && s.drunk < 35 ? 'An early, sober night means a bonus tomorrow.' : ''}`, '', [{ label: 'Walk home', fn: () => { this.closePanel(); this.endNight('home'); } }, { label: 'One more', fn: () => { this.closePanel(); } }]); }
+    if (this.entered && player.pos.z > 18.6 && !this.askedHome && !this.uiOpen) { this.askedHome = true; this.openPanel('HEAD HOME?', `It's ${this.clockText()}. ${s.time < 22 && s.drunk < 35 ? 'An early, sober night means a bonus tomorrow.' : ''}`, '', [{ label: 'Walk home', fn: () => { this.closePanel(); this.walkHome(); } }, { label: 'One more', fn: () => { this.closePanel(); } }]); }
     if (player.pos.z < 17 && this.askedHome) this.askedHome = false;
     if (!this.entered && isInside(player.pos.x, player.pos.z)) { this.entered = true; this.toast('Welcome to the Royal.'); this.objective(); this.subtitle(`<b>${bartender.name}:</b> ${choice(["G'day! What can I get ya?", 'Evenin\'! Bar\'s open.', "How ya goin', mate?"])}`, 3); }
     if (s.wallet + s.bank + s.tickets.reduce((a, b) => a + b, 0) + this.machineCredit() < 0.5 && !this.brokeWarned) { this.brokeWarned = true; this.toast('You\'re completely skint. Water\'s free, the walk home is too.', true); }
@@ -489,11 +500,12 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
     if (code === 'Escape') { if (!$('panel').classList.contains('hidden')) { this.closePanel(); return; } if (player.seated) { this.leaveMachine(); return; } return; }
     if (this.uiOpen || this.paused) return;
+    if (MG.active) { MG.key(code); return; }
     const m = player.seated;
     if (m) {
       if (code === 'Space') { this.deckSpin(); }
@@ -528,11 +540,12 @@ const Game = {
   betDn() { const m = player.seated; if (!m) return; if (m.state === 'gamble') { m.gamble('red'); return; } if (!m.canSpin()) return; m.betIdx = Math.max(0, m.betIdx - 1); SFX.button(); },
   onLockChange(locked) {
     if (this.mode !== 'play') return;
-    if (!locked && !this.uiOpen && !player.seated && this.mode === 'play') { this.paused = true; $('resume').classList.remove('hidden'); }
+    if (!locked && !this.uiOpen && (!player.seated || MG.active) && !(MG.active && MG.active.cursor) && this.mode === 'play') { this.paused = true; $('resume').classList.remove('hidden'); }
     if (locked) { this.paused = false; $('resume').classList.add('hidden'); }
   },
   onCanvasClick(e) {
     if (this.mode !== 'play') return;
+    if (MG.active) { if (!this.uiOpen && !this.paused) MG.down(e); return; }
     if (player.seated) {
       const m = player.seated;
       const ray = new THREE.Raycaster(), nd = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -555,7 +568,7 @@ const Game = {
   // -------------------------------------------------- interaction targeting
   target: null,
   findTarget() {
-    if (player.seated || this.uiOpen) return null;
+    if (player.seated || this.uiOpen || MG.active) return null;
     const fw = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position;
     let best = null, bs = 0;
     for (const it of interactables) {
@@ -613,7 +626,9 @@ function frame() {
   fxPass.uniforms.uTime.value = elapsed;
   // shadows are static-ish: refresh a couple of times a second instead of every frame
   if (shadowDirty > 0) { renderer.shadowMap.needsUpdate = true; shadowDirty--; }
+  renderer.info.reset();
   composer.render();
+  perfOverlay(dt);
   // dynamic resolution: keep ~55-60fps by trading pixels for frames
   perf.ema = perf.ema * 0.95 + dt * 0.05; perf.t += dt;
   // one-way: only ever steps DOWN after sustained slowness, so it can't oscillate or pop back and forth
@@ -623,7 +638,19 @@ function frame() {
     if (perf.slow >= 3 && renderScale > 0.62) { setRenderScale(renderScale - 0.15); perf.slow = 0; }
   }
 }
-const perf = { ema: 1 / 60, t: 0, slow: 0 };
+const perf = { ema: 1 / 60, t: 0, slow: 0, show: /[?&]perf/.test(location.search), ot: 0, frames: 0, worst: 0 };
+// F3: frame rate, frame time, draw calls and triangles (counted across every post-processing pass)
+function perfOverlay(dt) {
+  perf.frames++; perf.ot += dt; perf.worst = Math.max(perf.worst, dt);
+  if (perf.ot < 0.5) return;
+  const el = $('perf');
+  if (perf.show) {
+    const i = renderer.info;
+    el.innerHTML = `<b>${Math.round(perf.frames / perf.ot)}</b> fps · ${(perf.ot / perf.frames * 1000).toFixed(1)} ms (worst ${(perf.worst * 1000).toFixed(0)})<br>${i.render.calls} draws · ${(i.render.triangles / 1000).toFixed(0)}k tris · ${i.memory.textures} tex<br>${settings.quality.toUpperCase()} · res ${Math.round(renderScale * 100)}% · ${renderer.getPixelRatio().toFixed(2)}x${ASSETS.lightmaps ? ' · baked light' : ''}${window.__gpu ? '<br><span>' + window.__gpu.slice(0, 48) + '</span>' : ''}`;
+  }
+  el.classList.toggle('hidden', !perf.show);
+  perf.frames = 0; perf.ot = 0; perf.worst = 0;
+}
 // debug/test helper: fast-forward the simulation without rendering
 window.__sim = (sec, step = 1 / 30) => { for (let i = 0; i < sec / step; i++) simulate(step); };
 function simulate(dt) {
@@ -636,7 +663,7 @@ function simulate(dt) {
     camera.position.set(Math.sin(a) * 19 + 2, 2.4 + Math.sin(titleT * 0.1) * 0.4, 6 + Math.cos(a) * 15);
     camera.lookAt(0, 4.2, 1);
   }
-  vm.root.visible = Game.mode === 'play';
+  vm.root.visible = Game.mode === 'play' && !MG.active;
   if (playing) {
     s.time += dt * Game.timeScale;
     updatePlayer(dt, elapsed);
@@ -667,7 +694,7 @@ function simulate(dt) {
     topT += dt; if (topT > 0.5) { topT = 0; for (const id in shared) drawTopper(id); }
     jpT += dt; if (jpT > 0.25) { jpT = 0; drawJPBoard(elapsed); }
     tvT += dt; if (tvT > 0.1) { for (const tv of dynamic.tvs) drawTV(tv, tvT); tvT = 0; }
-    kenoT += dt; if (kenoT > 0.25) { kenoT = 0; Game.drawKeno(); }
+    kenoT += dt; if (kenoT > 0.25) { kenoT = 0; Game.drawKeno(); Racing.drawBoard(); }
     for (const f of dynamic.fans) f.rotation.y += dt * 3.2;
     if (dynamic.flames) dynamic.flames.forEach((f, i) => { f.scale.set(0.28 + Math.sin(elapsed * 2.1 + i) * 0.03, 0.44 + Math.sin(elapsed * 3.3 + i * 2) * 0.06, 1); });
     dynamic.fire.intensity = 7.5 + Math.sin(elapsed * 1.9) * 0.6 + Math.sin(elapsed * 3.1) * 0.3; dynamic.heater.intensity = 9;
@@ -681,6 +708,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     fxPass.uniforms.uWarm.value = atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
+    updateZones(dt); updateTraffic(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, inside ? 1.15 : lerp(1.25, 0.62, window.__dayF || 0), 2, dt);
@@ -697,6 +725,7 @@ function wireUI() {
   $('btnNew').onclick = () => { AudioSys.init(); $('mainMenu').classList.add('hidden'); $('diffMenu').classList.remove('hidden'); };
   document.querySelectorAll('.dcard').forEach(c => c.onclick = () => { AudioSys.init(); SFX.click(); Game.newWeek(c.dataset.diff); });
   $('btnContinue').onclick = () => { AudioSys.init(); if (Game.load()) Game.showDayCard(); };
+  $('btnAch').onclick = () => { $('title').classList.add('hidden'); achievementsPanel(() => $('title').classList.remove('hidden')); };
   $('btnControls').onclick = () => {
     $('title').classList.add('hidden');
     Game.openPanel('HOW TO PLAY', 'A week at the Royal Hotel. Make rent on Sunday. Have a good time.', `
@@ -734,51 +763,3 @@ function wireUI() {
   D('dkLeave', () => Game.leaveMachine());
 }
 
-// =====================================================================
-//  BOOT
-// =====================================================================
-const tick = () => new Promise(r => setTimeout(r, 0));
-async function boot() {
-  try {
-    setLoad(0.05, 'Waiting for the signwriter…');
-    await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]);
-    try { await Promise.all(['Bebas Neue', 'Bungee', 'Rye', 'Permanent Marker'].map(f => document.fonts.load(`40px "${f}"`))); } catch (e) {}
-    setLoad(0.12, 'Sanding the floorboards…'); await tick();
-    buildTextures(); buildMaterials();
-    setLoad(0.25, 'Painting the street…'); await tick();
-    buildSky(); buildStreet();
-    setLoad(0.4, 'Hanging the cast-iron lace…'); await tick();
-    buildFacade(); buildDoors();
-    setLoad(0.55, 'Tapping the kegs…'); await tick();
-    buildShared(); buildInterior();
-    setLoad(0.7, 'Wiring up the pokies…'); await tick();
-    MACHINE_DEFS.forEach((d, i) => buildMachineMesh(d, i));
-    buildAtmosphere();
-    SB.flush(scene, true, true); SBX.flush(scene, true, true);
-    setLoad(0.8, 'Hiring the locals…'); await tick();
-    initFX(); buildViewmodel(); makeBartender(); buildPlayerBody();
-    { // the back mirror re-renders the room: do it every other frame and only when you're near enough to see it
-      const mob = backMirror.onBeforeRender;
-      backMirror.onBeforeRender = function (...a) { const c = camera.position; if (Game.frameN % 2 || c.distanceTo(backMirror.position) > 15 || !isInside(c.x, c.z)) return; mob.apply(this, a); };
-    }
-    setupInput(); wireUI();
-    setTimeOfDay(18.4, 'clear');
-    Game.state.day = 0; Game.state.event = 'monday';
-    spawnPatrons(10);
-    setLoad(0.9, 'Polishing the mirrors…'); await tick();
-    // warm up shaders + bake interior reflections
-    renderer.compile(scene, camera);
-    captureInteriorEnv();
-    applyQuality();
-    setLoad(1, 'Doors open.');
-    await new Promise(r => setTimeout(r, 300));
-    $('loading').classList.add('hidden');
-    Game.toTitle();
-    window.__ready = true;
-  } catch (e) {
-    console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message;
-  }
-}
-requestAnimationFrame(frame);
-boot();
-window.__game = { Game, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

@@ -38,6 +38,32 @@ const HIGH = () => settings.quality === 'high';
 
 function setLoad(p, t) { $('loadbar').firstElementChild.style.width = (p * 100) + '%'; if (t) $('loadtxt').textContent = t; }
 
+// ---- asset files (assets/…): served next to index.html, or embedded as data: URIs in the offline build.
+// Every asset is optional: if one fails to load, the game falls back to its procedural version.
+const ASSETS = { tex: {}, manifest: null, bodies: null, lightmaps: null };
+function assetURL(p) { const E = window.__ASSETS; return (E && E[p]) || 'assets/' + p; }
+async function fetchJSON(p) { try { const r = await fetch(assetURL(p)); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+function loadTexture(p, srgb = true) {
+  return new Promise(res => new THREE.TextureLoader().load(assetURL(p), t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
+  }, undefined, () => res(null)));
+}
+async function loadAssets(progress) {
+  const work = (async () => {
+    const [man, bodies, lm] = await Promise.all([fetchJSON('tex/manifest.json'), fetchJSON('char/bodies.json'), fetchJSON('light/lightmaps.json')]);
+    ASSETS.manifest = man; ASSETS.bodies = bodies; ASSETS.lightmaps = lm;
+    const jobs = [];
+    if (man) for (const k in man) for (const ch of ['c', 'n', 'r']) if (man[k][ch]) jobs.push(loadTexture('tex/' + man[k][ch], ch === 'c').then(t => { (ASSETS.tex[k] = ASSETS.tex[k] || {})[ch] = t; }));
+    if (lm) for (const k in lm.maps || {}) jobs.push(loadTexture('light/' + lm.maps[k].file, false).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.channel = 1; t.flipY = false; lm.maps[k].tex = t; } }));
+    let done = 0; jobs.forEach(j => j.then(() => progress && progress(++done / jobs.length)));
+    await Promise.all(jobs);
+  })();
+  await Promise.race([work, new Promise(r => setTimeout(r, 30000))]);
+}
+// physical-size aware texture: repeat so one tile covers its real-world size given UVs in metres/k
+function pbr(name) { const t = ASSETS.tex[name]; return t && t.c ? t : null; }
+
 // =====================================================================
 //  RENDERER / SCENE / POST
 // =====================================================================
@@ -52,16 +78,11 @@ renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 // first launch: pick Low automatically on integrated / mobile / software GPUs
-if (!savedSettings || !savedSettings.quality) {
-  try {
-    const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
-    window.__gpu = gpu;
-    if (/intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(gpu)) { settings.quality = 'low'; renderer.setPixelRatio(Math.min(window.devicePixelRatio, 0.8)); }
-  } catch (e) {}
-}
+try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); window.__gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; } catch (e) { window.__gpu = ''; }
+if ((!savedSettings || !savedSettings.quality) && /intel|uhd|hd graphics|iris|mali|adreno|powervr|swiftshader|llvmpipe|basic render/i.test(window.__gpu)) { settings.quality = 'low'; renderer.setPixelRatio(Math.min(window.devicePixelRatio, 0.8)); }
 renderer.shadowMap.type = HIGH() ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false; // static world: shadow maps are refreshed on demand (big perf win)
+renderer.info.autoReset = false; // counted per frame across all post passes (see the F3 overlay)
 let shadowDirty = 3;
 
 const scene = new THREE.Scene();
@@ -210,7 +231,7 @@ const AudioSys = (() => {
   // --- SFX library ---
   const S = {
     step(surface, pos) {
-      const m = { concrete: [900, 0.09, 0.07], timber: [420, 0.12, 0.12], carpet: [260, 0.05, 0.08], deck: [520, 0.12, 0.1], road: [700, 0.08, 0.07] }[surface] || [600, .08, .08];
+      const m = { concrete: [900, 0.09, 0.07], timber: [420, 0.12, 0.12], carpet: [260, 0.05, 0.08], deck: [520, 0.12, 0.1], road: [700, 0.08, 0.07], tile: [1500, 0.08, 0.06], gravel: [1300, 0.16, 0.12] }[surface] || [600, .08, .08];
       noise(m[2], { freq: m[0] * rand(.85, 1.15), q: 1.2, gain: m[1], pos });
       if (surface === 'timber' || surface === 'deck') tone(rand(85, 110), 0.08, { gain: 0.06, pos });
     },
@@ -267,6 +288,7 @@ const AudioSys = (() => {
     pourUpdate(fill) { if (loops.pour) loops.pour.f.frequency.setTargetAtTime(500 + fill * 1400, now(), 0.1); },
     pourStop() { if (!loops.pour) return; const l = loops.pour; l.g.gain.setTargetAtTime(0, now(), 0.06); l.src.stop(now() + 0.4); loops.pour = null; },
     car() {
+      if (S.carHook) S.carHook();
       if (!started) return;
       const dur = 6, t = now();
       const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;

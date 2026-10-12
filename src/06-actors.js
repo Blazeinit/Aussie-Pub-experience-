@@ -135,7 +135,7 @@ class Particles {
       } else {
         this.vel[k + 1] -= 9.8 * dt;
         this.alpha[i] = this.a0[i] * Math.min(1, f * 3);
-        const gy = groundY(this.pos[k], this.pos[k + 2]);
+        const gy = groundY(this.pos[k], this.pos[k + 2], this.pos[k + 1]);
         if (this.pos[k + 1] < gy + 0.005 && this.vel[k + 1] < 0) {
           if (this.onHit) this.onHit(this.pos[k], gy, this.pos[k + 2], i);
           this.life[i] = 0; this.alpha[i] = 0;
@@ -177,13 +177,13 @@ function shatterGlass(pos, glass) {
     const m = new THREE.Mesh(geo, glassMat); m.position.copy(pos).add(V3(rand(-.03, .03), rand(0, .1), rand(-.03, .03))); m.renderOrder = 3; scene.add(m);
     shards.push({ m, v: V3(rand(-2, 2), rand(0.5, 2.8), rand(-2, 2)), w: V3(rand(-20, 20), rand(-20, 20), rand(-20, 20)), life: 25 + rand(0, 10) });
   }
-  if (glass.fill > 0.02) { spillDrops(pos, glass.fill * 0.8, [D.col[0] * 0.8, D.col[1] * 0.8, D.col[2] * 0.8]); addPuddle(pos.x, groundY(pos.x, pos.z), pos.z, 0.25 + glass.fill * 0.35); }
+  if (glass.fill > 0.02) { spillDrops(pos, glass.fill * 0.8, [D.col[0] * 0.8, D.col[1] * 0.8, D.col[2] * 0.8]); addPuddle(pos.x, groundY(pos.x, pos.z, pos.y), pos.z, 0.25 + glass.fill * 0.35); }
   SFX.smash(pos);
 }
 function updateShards(dt) {
   for (let i = shards.length - 1; i >= 0; i--) {
     const s = shards[i]; s.life -= dt;
-    const gy = groundY(s.m.position.x, s.m.position.z) + 0.004;
+    const gy = groundY(s.m.position.x, s.m.position.z, s.m.position.y) + 0.004;
     s.v.y -= 9.8 * dt; s.m.position.addScaledVector(s.v, dt);
     s.m.rotation.x += s.w.x * dt; s.m.rotation.y += s.w.y * dt; s.m.rotation.z += s.w.z * dt;
     if (s.m.position.y < gy) { s.m.position.y = gy; if (s.v.y < -0.3) { s.v.y *= -0.35; s.v.x *= 0.6; s.v.z *= 0.6; s.w.multiplyScalar(0.5); if (Math.random() < 0.3) SFX.tone(rand(4000, 7000), 0.05, { gain: 0.02, pos: s.m.position }); } else { s.v.set(0, 0, 0); s.w.multiplyScalar(0.8); } }
@@ -206,7 +206,7 @@ function updateFalling(dt, t) {
     g.rotateX(f.w.x * dt); g.rotateZ(f.w.z * dt);
     f.glass.update(dt, t);
     if (f.glass.fill > 0.02 && Math.random() < 0.6) { dropFX.emit(g.position.clone().add(V3(0, 0.12, 0)), V3(rand(-.3, .3), 0, rand(-.3, .3)), 0.01, 2, 0.9, f.glass.D.col); f.glass.fill -= dt * 0.5; }
-    if (g.position.y < groundY(g.position.x, g.position.z) + 0.02) { shatterGlass(g.position.clone(), f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(g.position.clone()); }
+    if (g.position.y < groundY(g.position.x, g.position.z, g.position.y) + 0.02) { shatterGlass(g.position.clone(), f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(g.position.clone()); }
   }
 }
 
@@ -340,8 +340,9 @@ function makeHuman(o = {}) {
   } else part(J.head, sphGeoH, 'hair', hairC, 0, 0.07, -0.03, 0.098, 0.05, 0.09); // fringe of a bald head
   if (style === 'cap') { const cc = choice([0x1a2a5a, 0x8a1a1a, 0x161616, 0x2a5a2a, 0xe8e8e8]); part(J.head, sphGeoH, 'cloth', cc, 0, 0.14, 0, 0.102, 0.075, 0.112); part(J.head, new THREE.CylinderGeometry(1, 1, 1, 18), 'cloth', cc, 0, 0.145, 0.1, 0.07, 0.008, 0.056, 0.15); if (Math.random() < 0.4) part(J.head, new THREE.BoxGeometry(1, 1, 1), 'cloth', 0x111111, 0, 0.17, 0.06, 0.12, 0.03, 0.03, 0.2); }
   if (style === 'bucket') { const hc = choice([0xd8c8a0, 0x3a4a2a]); part(J.head, new THREE.CylinderGeometry(0.85, 1, 1, 18), 'cloth', hc, 0, 0.175, 0, 0.1, 0.08, 0.1); part(J.head, new THREE.CylinderGeometry(1, 1, 1, 20), 'cloth', hc, 0, 0.14, 0, 0.15, 0.008, 0.15, 0.08); }
-  if (!fem && Math.random() < 0.4) { const full = Math.random() < 0.6; part(J.head, sphGeoH, 'hair', hairC, 0, full ? 0.022 : 0.05, full ? 0.05 : 0.093, full ? 0.083 : 0.03, full ? 0.06 : 0.009, full ? 0.068 : 0.012); }
-  if (Math.random() < 0.18) { const gc = Math.random() < 0.5 ? 0x111111 : 0x6a4a2a; for (const s of [-1, 1]) part(J.head, new THREE.TorusGeometry(1, 0.18, 6, 16), 'cloth', gc, s * 0.034, 0.1, 0.104, 0.018, 0.014, 0.01); part(J.head, new THREE.BoxGeometry(1, 1, 1), 'cloth', gc, 0, 0.103, 0.106, 0.03, 0.003, 0.003); }
+  const beard = o.beard ?? (!fem && Math.random() < 0.4 ? (Math.random() < 0.6 ? 'full' : 'mo') : null);
+  if (beard) { const full = beard === 'full'; part(J.head, sphGeoH, 'hair', hairC, 0, full ? 0.022 : 0.05, full ? 0.05 : 0.093, full ? 0.083 : 0.03, full ? 0.06 : 0.009, full ? 0.068 : 0.012); }
+  if (o.glasses ?? Math.random() < 0.18) { const gc = Math.random() < 0.5 ? 0x111111 : 0x6a4a2a; for (const s of [-1, 1]) part(J.head, new THREE.TorusGeometry(1, 0.18, 6, 16), 'cloth', gc, s * 0.034, 0.1, 0.104, 0.018, 0.014, 0.01); part(J.head, new THREE.BoxGeometry(1, 1, 1), 'cloth', gc, 0, 0.103, 0.106, 0.03, 0.003, 0.003); }
   // arms & legs
   for (const s of [1, -1]) {
     const side = s > 0 ? 'l' : 'r';
@@ -431,7 +432,7 @@ function poseFor(kind, t, a) {
     } else { p.lUAx = -0.35; p.rUAx = -0.35; p.lEL = -1.0; p.rEL = -1.0; p.lUAz = 0.1; p.rUAz = -0.1; }
   } else if (kind === 'lean') { p.spine = 0.08; p.lUAx = -0.6; p.lEL = -1.3; p.rUAx = -0.2; p.rEL = -1.1; p.lTH = -0.1; p.rKN = 0.2; p.rTH = 0.15; }
   else if (kind === 'pool') { p.spine = 0.65; p.chest = 0.25; p.headX = -0.6; p.rUAx = 0.3 + Math.sin(t * 2) * 0.25; p.rEL = -1.4; p.lUAx = -1.2; p.lEL = -0.2; p.lTH = -0.3; p.lKN = 0.3; p.rTH = 0.25; }
-  else if (kind === 'darts') { const th = (t % 4) < 0.5 ? Math.sin(((t % 4) / 0.5) * Math.PI) : 0; p.rUAx = -1.6 + th * 0.4; p.rEL = -1.8 + th * 1.6; p.lUAx = 0; p.headX = -0.05; p.rTH = 0.15; }
+  else if (kind === 'darts') { const th = a.dartT != null ? (a.dartT > 0 ? Math.sin((1 - a.dartT / 0.5) * Math.PI) : 0) : (t % 4) < 0.5 ? Math.sin(((t % 4) / 0.5) * Math.PI) : 0; p.rUAx = -1.6 + th * 0.4; p.rEL = -1.8 + th * 1.6; p.lUAx = 0; p.headX = -0.05; p.rTH = 0.15; }
   else if (kind === 'cheer') { p.lUAx = -2.8; p.rUAx = -2.8; p.lUAz = 0.3; p.rUAz = -0.3; p.lEL = -0.3 + Math.sin(t * 12) * 0.3; p.rEL = -0.3 + Math.sin(t * 12 + 1) * 0.3; p.headX = -0.3; }
   else if (kind === 'wipe') { p.spine = 0.2; p.rUAx = -0.9; p.rEL = -0.6 + Math.sin(t * 5) * 0.4; p.rUAz = -0.2 + Math.sin(t * 5) * 0.25; p.headX = 0.3; }
   else if (kind === 'stand') {
@@ -496,8 +497,8 @@ function nearestNode(p, filter) {
   for (const k in NODES) { if (k === 'FB') continue; if (filter && !filter(k)) continue; const n = NODES[k]; const d = (n.x - p.x) ** 2 + (n.z - p.z) ** 2; if (d < bd) { bd = d; best = k; } }
   return best;
 }
-function nodeRegion(k) { return k[0] === 'S' ? 'out' : k[0] === 'T' ? 'ter' : k[0] === 'G' ? 'gam' : k[0] === 'L' ? 'lou' : 'bar'; }
-function regionOf(p) { if (onTerrace(p.x, p.z)) return 'ter'; if (!isInside(p.x, p.z)) return 'out'; if (inGaming(p.x, p.z)) return 'gam'; if (p.x > 3 && p.z > -4) return 'lou'; return 'bar'; }
+function nodeRegion(k) { return k[0] === 'S' ? 'out' : k[0] === 'T' ? 'ter' : k[0] === 'G' ? 'gam' : k[0] === 'L' ? 'lou' : k[0] === 'Y' ? 'gar' : 'bar'; }
+function regionOf(p) { if (onTerrace(p.x, p.z)) return 'ter'; if (inGarden(p.x, p.z)) return 'gar'; if (!isInside(p.x, p.z)) return 'out'; if (inGaming(p.x, p.z)) return 'gam'; if (p.x > 3 && p.z > -4) return 'lou'; return 'bar'; }
 function findPath(from, to) {
   const rf = regionOf(from), rt = regionOf(to);
   const a = nearestNode(from, k => nodeRegion(k) === rf || (rf === 'lou' && k === 'D1')) || nearestNode(from);
@@ -556,6 +557,7 @@ function chooseNextSpot(n) {
   add(s => s.area === 'lounge', ev === 'parma' ? 4 : 1.5);
   add(s => s.kind === 'pool' || s.anim === 'darts', 0.8);
   if (n.smoker) add(s => s.smoke && s.kind !== 'pokie', 1.6);
+  add(s => s.area === 'garden', Game.state.time < 19 ? 2.2 : 1.1);
   if (!w.length) return null;
   const list = wpick(w.map(x => x[0]), w.map(x => x[1]));
   return choice(list);
@@ -591,6 +593,7 @@ function updateNPC(n, dt, t, player) {
   const a = n.a;
   a.tapT = Math.max(0, a.tapT - dt); a.sipT = Math.max(0, a.sipT - dt); a.talk = Math.max(0, a.talk - dt); a.dragT = Math.max(0, a.dragT - dt); n.cheerT = Math.max(0, n.cheerT - dt);
   if (n.role === 'bartender') return updateBartender(n, dt, t, player);
+  if (n.mg) return updateMGNPC(n, dt, t, player);
   if (n.state === 'walk') {
     if (n.glassOnLedge) { n.h.J.rH.attach(n.glass.group); n.glass.group.position.set(0, -0.08, 0.03); n.glass.group.rotation.set(0, 0, 0); n.glassOnLedge = false; }
     const tgt = n.path[0];
@@ -725,7 +728,7 @@ function updateBartender(n, dt, t, player) {
   const j = n.job;
   let ik = null, ikL = null, walking = false;
   if (!j) {
-    walking = !goTo(BAR.tender.home.x, clamp(player.z, BAR.z0 + 1, BAR.z1 - 1) * 0.3 + BAR.tender.home.z * 0.7, 0.8);
+    walking = !goTo(BAR.tender.home.x, BAR.shift ? -12.6 : clamp(player.z, BAR.z0 + 1, BAR.z1 - 1) * 0.3 + BAR.tender.home.z * 0.7, 0.8);
     if (!walking) n.ry += angleDiff(n.ry, Math.PI / 2) * Math.min(1, dt * 4);
     p = poseFor(walking ? 'walk' : (Math.sin(t * 0.13) > 0.2 ? 'wipe' : 'stand'), t, a);
   } else {

@@ -250,6 +250,15 @@ function texDamask() {
   return canvasTex(c, 1, 1);
 }
 // soft ground shadow + vertical ambient-occlusion gradient
+function texLaceCurtain() {
+  const W = 256, H = 420, c = mkCanvas(W, H), x = c.getContext('2d');
+  const g = x.createRadialGradient(W / 2, H * 0.45, 10, W / 2, H * 0.45, W); g.addColorStop(0, 'rgba(255,214,150,.95)'); g.addColorStop(1, 'rgba(200,130,60,.75)');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(255,248,230,.55)'; x.lineWidth = 1.2;
+  for (let yy = 0; yy < H; yy += 18) for (let xx = 0; xx < W; xx += 18) { x.beginPath(); x.arc(xx + (yy / 18 % 2) * 9, yy, 6, 0, 7); x.stroke(); }
+  x.fillStyle = 'rgba(60,30,10,.35)'; x.fillRect(W * 0.47, 0, W * 0.06, H); // gap between the curtains
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
 function texBlob() { const c = mkCanvas(128, 128), x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 4, 64, 64, 62); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(0.5, 'rgba(0,0,0,.4)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); }
 function texAO() { const c = mkCanvas(8, 128), x = c.getContext('2d'); const g = x.createLinearGradient(0, 128, 0, 0); g.addColorStop(0, 'rgba(0,0,0,.62)'); g.addColorStop(0.35, 'rgba(0,0,0,.22)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 8, 128); return new THREE.CanvasTexture(c); }
 function buildTextures() {
