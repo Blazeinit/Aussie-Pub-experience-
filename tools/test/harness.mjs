@@ -19,10 +19,10 @@ export function serve(port = 8123) {
     res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(res);
   }).listen(port);
 }
-export async function launch({ quality = 'high', file = null, w = 1280, h = 720, port = 8123, venue = null, cine = 'off' } = {}) {
+export async function launch({ quality = 'high', file = null, w = 1280, h = 720, port = 8123, venue = null, cine = 'off', mobile = false } = {}) {
   serve(port);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const page = await browser.newPage({ viewport: { width: w, height: h } });
+  const page = await browser.newPage({ viewport: { width: w, height: h }, ...(mobile ? { hasTouch: true, isMobile: true } : {}) });
   const errs = [];
   page.on('pageerror', e => errs.push('PAGEERROR ' + e.message));
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(m.type() + ' ' + m.text()); });

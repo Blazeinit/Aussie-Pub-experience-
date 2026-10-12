@@ -1,0 +1,23 @@
+// mobile layout tour: phone landscape + portrait, every main control state
+import { launch, done } from './harness.mjs';
+const [w, h, tag] = process.argv[2] === 'portrait' ? [390, 844, 'p'] : [844, 390, 'l'];
+const g = await launch({ quality: 'low', port: 8170 + (tag === 'p' ? 1 : 0), w, h, mobile: true });
+const D = 'mobile';
+await g.shot(D, tag + '00_title');
+await g.page.click('#btnNew'); await g.page.waitForTimeout(400); await g.shot(D, tag + '01_diff');
+await g.page.click('.dcard[data-diff=normal]'); await g.page.waitForTimeout(400); await g.shot(D, tag + '02_daycard');
+await g.page.click('#btnGo'); await g.page.waitForTimeout(800); await g.ev('window.__sim(2)');
+await g.ev(`document.getElementById('fade').style.transition='none'; document.getElementById('fade').style.opacity=0;`);
+await g.ev(`(()=>{ const G=window.__game; G.Game.entered=true; G.Game.askedHome=true; G.Game.closePanel(); window.__sim(1); })()`);
+await g.at(-4.5, -6.5, 0.9, 0, 1); await g.shot(D, tag + '03_walk');
+await g.ev(`(()=>{ const G=window.__game; G.Game.onKey('KeyE'); window.__sim(0.3); })()`); await g.shot(D, tag + '04_prompt_or_panel');
+await g.ev(`(()=>{ const G=window.__game; G.Game.closePanel(); G.Game.onKey('Tab'); window.__sim(0.3); })()`); await g.shot(D, tag + '05_phone');
+await g.ev(`(()=>{ const G=window.__game; G.Game.onKey('Tab'); G.Game.closePanel(); window.__sim(0.3); const m=G.MACHINES.find(m=>m.skin); G.NPCS.forEach(n=>{ if (n.spot && n.spot.machine===m) { G.release(n); n.pos.set(0,0,12); } }); m.occupiedBy=null; G.player.pos.copy(m.seatW); G.Game.sitAt(m); m.credit=50; window.__sim(1.5); })()`);
+await g.shot(D, tag + '06_pokie');
+await g.ev(`(()=>{ const G=window.__game; try{G.Game.leaveMachine();}catch(e){} window.__sim(1); const n=G.NPCS.find(n=>n!==G.bartender()&&n.state==='idle'); G.DLG.open(Object.keys(G.DLG.graphs)[0], n); window.__sim(1.5); })()`);
+await g.shot(D, tag + '07_dialogue');
+await g.ev(`(()=>{ const G=window.__game; G.DLG.close(); window.PoolGame.begin(0,'Spud'); window.__sim(0.5); })()`); await g.shot(D, tag + '08_pool');
+await g.ev(`(()=>{ window.__MG.key('KeyQ'); window.__sim(0.3); window.__Darts.begin(0); window.__sim(2); })()`); await g.shot(D, tag + '09_darts');
+await g.ev(`(()=>{ window.__MG.key('KeyQ'); window.__sim(1); const G=window.__game; G.Game.paused=true; document.getElementById('resume').classList.remove('hidden'); })()`); await g.shot(D, tag + '10_pause');
+console.log('errors', g.errs.filter(e => !/Failed to load resource|BiquadFilter|Canvas2D/.test(e)).join('\n'));
+await g.close(); done();
