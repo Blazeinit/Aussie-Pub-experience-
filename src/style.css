@@ -206,6 +206,7 @@ button{font-family:inherit;cursor:pointer}
 canvas#gl{touch-action:none}
 #touch{position:fixed;inset:0;z-index:30;pointer-events:none}
 #tStick{position:absolute;left:calc(18px + env(safe-area-inset-left));bottom:calc(18px + env(safe-area-inset-bottom));width:clamp(112px,32vmin,140px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.12),rgba(0,0,0,.34));border:2px solid rgba(255,255,255,.22);pointer-events:auto;touch-action:none}
+#tStick.float{opacity:.9}
 #tStick i{position:absolute;left:50%;top:50%;width:44%;height:44%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle at 40% 35%,rgba(255,226,150,.85),rgba(243,196,90,.5));border:2px solid rgba(255,255,255,.6);box-shadow:0 2px 10px rgba(0,0,0,.4)}
 #tBtns{position:absolute;inset:0;pointer-events:none}
 #tBtns button{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:rgba(18,11,6,.55);color:#fff;font:800 11px/1.05 Inter,sans-serif;letter-spacing:.5px;touch-action:none;-webkit-user-select:none;user-select:none;pointer-events:auto;box-shadow:0 2px 10px rgba(0,0,0,.35);backdrop-filter:blur(3px);-webkit-tap-highlight-color:transparent;transition:transform .08s,background .12s}
@@ -372,3 +373,7 @@ body.cine #subtitle{bottom:13vh}
   #title .foot{position:static;margin-top:16px;max-width:none}
   .menu{width:100%}
 }
+
+/* iPhone: no text selection / callouts / rubber-banding while playing */
+body.touchmode{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;touch-action:none;position:fixed;inset:0;overflow:hidden}
+body.touchmode #panel .box,body.touchmode .screen .card,body.touchmode #talk,body.touchmode #title{touch-action:pan-y;-webkit-overflow-scrolling:touch}

@@ -22,13 +22,24 @@ const TOUCH = {
         else if (t.identifier === this.lookId) { e.preventDefault(); input.mx += (t.clientX - this.lx) * 1.7; input.my += (t.clientY - this.ly) * 1.7 * (settings.invertY ? -1 : 1); this.lx = t.clientX; this.ly = t.clientY; }
       }
     }, { passive: false });
-    const end = e => { for (const t of e.changedTouches) { if (t.identifier === this.stickId) { this.stickId = null; this.mx = this.my = 0; knob.style.transform = ''; } if (t.identifier === this.lookId) this.lookId = null; } };
+    // the stick floats: put your thumb down anywhere on the left of the screen and it appears under it
+    const home = () => { st.style.left = st.style.top = st.style.bottom = ''; st.classList.remove('float'); };
+    const end = e => { for (const t of e.changedTouches) { if (t.identifier === this.stickId) { this.stickId = null; this.mx = this.my = 0; knob.style.transform = ''; home(); } if (t.identifier === this.lookId) this.lookId = null; } };
     addEventListener('touchend', end); addEventListener('touchcancel', end);
     // drag on the 3D view to look (not while sat at a pokie or scratching a card — those need taps)
     renderer.domElement.addEventListener('touchstart', e => {
       if (!this.on || Game.mode !== 'play' || player.seated || (MG.active && MG.active.cursor)) return;
-      const t = e.changedTouches[0]; this.lookId = t.identifier; this.lx = t.clientX; this.ly = t.clientY; e.preventDefault();
+      e.preventDefault(); AudioSys.init();
+      for (const t of e.changedTouches) {
+        if (this.stickId == null && this.mode === 'walk' && t.clientX < innerWidth * 0.42 && t.clientY > innerHeight * 0.32) {
+          const R = st.offsetWidth / 2; st.classList.add('float');
+          st.style.left = clamp(t.clientX - R, 4, innerWidth * 0.42) + 'px'; st.style.top = clamp(t.clientY - R, 4, innerHeight - 2 * R - 4) + 'px'; st.style.bottom = 'auto';
+          this.stickId = t.identifier; stickMove(t);
+        } else if (this.lookId == null) { this.lookId = t.identifier; this.lx = t.clientX; this.ly = t.clientY; }
+      }
     }, { passive: false });
+    // no pinch-zoom on iPhone (double-tap zoom and callouts are switched off in the CSS)
+    for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
     $('tPhone').addEventListener('touchstart', e => { e.preventDefault(); AudioSys.init(); Game.onKey('Tab'); }, { passive: false });
     // tap the prompt itself to do it; tap the objective to read all of it
     $('prompt').addEventListener('click', () => { if (this.on && Game.canMove()) Game.onKey('KeyE'); });

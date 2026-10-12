@@ -7,7 +7,7 @@
 const LINK_TAG = '6 OR MORE {C} START HOLD & SPIN · FILL ALL 15 FOR THE GRAND';
 Object.assign(GAMES, {
   llmp: {
-    id: 'llmp', name: 'MAGIC PEARL', sub: 'LIGHTNING LINK', feature: 'holdspin', link: true, payScale: 5.5, coinArt: 'PEARL',
+    id: 'llmp', name: 'MAGIC PEARL', sub: 'LIGHTNING LINK', feature: 'holdspin', link: true, payScale: 8.56, coinArt: 'PEARL',
     theme: { bg1: '#0a0630', bg2: '#2a7ab8', frame: '#c8e8ff', accent: '#7a4ae8', glow: '#bff4ff', text: '#eafcff', scene: 'ocean' },
     tag: LINK_TAG.replace('{C}', 'PEARLS'), syms: ['9', '10', 'J', 'Q', 'K', 'A', 'SHELL', 'STAR', 'FISH', 'TURTLE', 'WILD', 'COIN'],
     pays: Object.assign({}, ROYAL_PAYS, { SHELL: [0, 0, 0, 12, 40, 150], STAR: [0, 0, 0, 15, 50, 200], FISH: [0, 0, 0, 20, 75, 300], TURTLE: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
@@ -15,7 +15,7 @@ Object.assign(GAMES, {
     wildArt(x, g) { wildPlate(x, g, ['#7a4ae8', '#0a0630']); x.fillStyle = rg(x, -8, -10, 3, 34, ['#ffffff', '#f0e8ff', '#b8b0e8']); x.beginPath(); x.arc(0, -4, 30, 0, 7); x.fill(); wildWord(x, g, 30); }
   },
   llhl: {
-    id: 'llhl', name: 'HAPPY LANTERN', sub: 'LIGHTNING LINK', feature: 'holdspin', link: true, payScale: 5.5, coinArt: 'LANTERNCOIN',
+    id: 'llhl', name: 'HAPPY LANTERN', sub: 'LIGHTNING LINK', feature: 'holdspin', link: true, payScale: 6.96, coinArt: 'LANTERNCOIN',
     theme: { bg1: '#2a0004', bg2: '#d8201a', frame: '#ffd84a', accent: '#ff7a10', glow: '#fff0a0', text: '#fff3d0', scene: 'lanterns' },
     tag: LINK_TAG.replace('{C}', 'LANTERNS'), syms: ['9', '10', 'J', 'Q', 'K', 'A', 'ENVELOPE', 'KOI', 'INGOT', 'LANTERN', 'WILD', 'COIN'],
     pays: Object.assign({}, ROYAL_PAYS, { ENVELOPE: [0, 0, 0, 12, 40, 150], KOI: [0, 0, 0, 15, 50, 200], INGOT: [0, 0, 0, 20, 75, 300], LANTERN: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
@@ -23,7 +23,7 @@ Object.assign(GAMES, {
     wildArt(x, g) { wildPlate(x, g, ['#ff3a2a', '#4a0004']); ART.LANTERNCOIN(x, g, 0.62); wildWord(x, g, 34); }
   },
   dtrain: {
-    id: 'dtrain', name: 'DRAGON TRAIN', sub: 'GRAND STAR', feature: 'holdspin', link: true, payScale: 5.5, coinArt: 'TRAINCOIN',
+    id: 'dtrain', name: 'DRAGON TRAIN', sub: 'GRAND STAR', feature: 'holdspin', link: true, payScale: 4.03, coinArt: 'TRAINCOIN',
     theme: { bg1: '#06200a', bg2: '#1a8a3a', frame: '#ffd84a', accent: '#e8301a', glow: '#d8ffb0', text: '#f4ffe8', scene: 'rails' },
     tag: LINK_TAG.replace('{C}', 'DRAGON PEARLS'), syms: ['9', '10', 'J', 'Q', 'K', 'A', 'FAN', 'VASE', 'JUNK', 'PANDA', 'WILD', 'COIN'],
     pays: Object.assign({}, ROYAL_PAYS, { FAN: [0, 0, 0, 12, 40, 150], VASE: [0, 0, 0, 15, 50, 200], JUNK: [0, 0, 0, 20, 75, 300], PANDA: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
@@ -31,15 +31,15 @@ Object.assign(GAMES, {
     wildArt(x, g) { wildPlate(x, g, ['#1a8a3a', '#06200a']); drawLoco(x, 0, -4, 0.62); wildWord(x, g, 34); }
   },
   cashx: {
-    id: 'cashx', name: 'CASH EXPRESS', sub: 'LUXURY LINE', feature: 'holdspin', link: true, payScale: 5.5, coinArt: 'TRAINCOIN',
+    id: 'cashx', name: 'CASH EXPRESS', sub: 'LUXURY LINE', feature: 'holdspin', link: true, payScale: 1.35, coinArt: 'TRAINCOIN',
     theme: { bg1: '#0a0a18', bg2: '#5a2a8a', frame: '#e8e8f8', accent: '#d8a020', glow: '#ffe9a0', text: '#ffffff', scene: 'rails' },
     tag: LINK_TAG.replace('{C}', 'CASH TRAINS'), syms: ['CHERRY', 'BELL', 'BAR', 'DIAMOND', 'SEVENB', 'SEVENR', 'WILD', 'COIN'],
     pays: { CHERRY: [0, 0, 0, 4, 10, 40], BELL: [0, 0, 0, 6, 15, 60], BAR: [0, 0, 0, 8, 25, 100], DIAMOND: [0, 0, 0, 12, 40, 160], SEVENB: [0, 0, 0, 20, 80, 300], SEVENR: [0, 0, 0, 40, 150, 1000], WILD: [0, 0, 0, 40, 150, 1000] },
-    base: { CHERRY: 22, BELL: 18, BAR: 15, DIAMOND: 9, SEVENB: 6, SEVENR: 3.8, WILD: 2.3, COIN: 13 }, noWild: [0], wild: 'WILD', bonusSym: 'COIN',
+    base: { CHERRY: 22, BELL: 18, BAR: 15, DIAMOND: 9, SEVENB: 6, SEVENR: 3.8, WILD: 2.3, COIN: 9.5 }, noWild: [0], wild: 'WILD', bonusSym: 'COIN',
     wildArt(x, g) { wildPlate(x, g, ['#5a2a8a', '#0a0a18']); drawLoco(x, 0, -4, 0.62, '#d8a020'); wildWord(x, g, 34); }
   },
   bgold: {
-    id: 'bgold', name: 'BUFFALO GOLD', sub: 'COLLECTION', feature: 'freegames', payScale: 4.55, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
+    id: 'bgold', name: 'BUFFALO GOLD', sub: 'COLLECTION', feature: 'freegames', payScale: 4.54, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
     theme: { bg1: '#1a0a02', bg2: '#c8901a', frame: '#fff0a0', accent: '#e8b020', glow: '#fff6c0', text: '#fff8e0', scene: 'prairie' },
     tag: '3 GOLD COINS = FREE GAMES · GOLD WILDS MULTIPLY x2 x3 x5', syms: ['9', '10', 'J', 'Q', 'K', 'A', 'COUGAR', 'WOLF', 'EAGLE', 'BUFFALO', 'WILD', 'PAW'],
     pays: Object.assign({}, ROYAL_PAYS, { COUGAR: [0, 0, 0, 12, 40, 150], WOLF: [0, 0, 0, 15, 50, 200], EAGLE: [0, 0, 0, 20, 75, 300], BUFFALO: [0, 0, 0, 40, 150, 800], WILD: [0, 0, 0, 30, 120, 800] }),
@@ -47,7 +47,7 @@ Object.assign(GAMES, {
     wildArt(x, g) { wildPlate(x, g, ['#ffd84a', '#7a4a04']); x.fillStyle = '#3a1a04'; x.beginPath(); x.ellipse(0, -2, 34, 26, 0, 0, 7); x.fill(); for (const s of [-1, 1]) { x.beginPath(); x.moveTo(s * 26, -16); x.quadraticCurveTo(s * 50, -30, s * 44, -46); x.lineWidth = 7; x.strokeStyle = '#f4ead0'; x.stroke(); } wildWord(x, g, 34); }
   },
   twolf: {
-    id: 'twolf', name: 'TIMBER WOLF', sub: 'DELUXE', feature: 'freegames', payScale: 4.55, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
+    id: 'twolf', name: 'TIMBER WOLF', sub: 'DELUXE', feature: 'freegames', payScale: 4.54, wildMults: [40, 35, 18, 7], free: { WILD: 6 },
     theme: { bg1: '#040a1a', bg2: '#2a4a7a', frame: '#d8e8ff', accent: '#4a8ad8', glow: '#cfe4ff', text: '#eef6ff', scene: 'moon' },
     tag: '3 MOONS = FREE GAMES · HOWLING WILDS MULTIPLY x2 x3 x5', syms: ['9', '10', 'J', 'Q', 'K', 'A', 'EAGLE', 'COUGAR', 'BUFFALO', 'WOLF', 'WILD', 'MOONSCAT'],
     pays: Object.assign({}, ROYAL_PAYS, { EAGLE: [0, 0, 0, 12, 40, 150], COUGAR: [0, 0, 0, 15, 50, 200], BUFFALO: [0, 0, 0, 20, 75, 300], WOLF: [0, 0, 0, 30, 120, 600], WILD: [0, 0, 0, 30, 120, 800] }),
