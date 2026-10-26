@@ -1,0 +1,11 @@
+import { launch, done } from './harness.mjs';
+const g = await launch({ quality: 'low', port: 8211 });
+await g.startNight();
+await g.ev(`(()=>{ const G=window.__game; G.Game.entered=true; G.Game.askedHome=true; G.Game.closePanel(); window.__sim(1); })()`);
+const r = await g.ev(`(()=>{ const G=window.__game, P=G.player; const sp=G.SPOTS.find(s=>s.kind==='stool'&&!s.occ&&!s.club&&s.area==='bar'); const bx=-Math.sin(sp.ry), bz=-Math.cos(sp.ry);
+  P.pos.set(sp.pos.x+bx*0.9,0,sp.pos.z+bz*0.9); P.yaw=sp.ry+Math.PI; P.pitch=0.55; window.__sim(0.5);
+  const cp=G.camera.position, fw=new G.THREE.Vector3(0,0,-1).applyQuaternion(G.camera.quaternion); const d=new G.THREE.Vector3(sp.pos.x-cp.x,(sp.sitH||0.48)+0.1-cp.y,sp.pos.z-cp.z); const dist=d.length(); const dot=d.clone().normalize().dot(fw);
+  const t=G.Game.findTarget();
+  return JSON.stringify({sp:[sp.pos.x,sp.pos.z,sp.ry,sp.sitH,!!sp.occ,sp.area,sp.club], player:[P.pos.x.toFixed(2),P.pos.z.toFixed(2),P.yaw.toFixed(2),P.pitch], cam:[cp.x.toFixed(2),cp.y.toFixed(2),cp.z.toFixed(2)], dist, dot, targetId:t&&t.id, sit:t&&t.sitHint, uiOpen:G.Game.uiOpen, eat:!!G.Eat.active, seated:!!P.seated, perch:!!P.perch}); })()`);
+console.log(r);
+await g.close(); done();
