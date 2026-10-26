@@ -51,7 +51,7 @@ const SETTINGS_TABS = {
   ],
 };
 const PRESET_KEYS = ['quality', 'resScale', 'shadows', 'aa', 'bloom', 'bloomStr', 'reflections', 'shafts', 'crowd'];
-const KEYS_HELP = [['W A S D', 'Walk'], ['Shift', 'Run'], ['Mouse', 'Look'], ['E', 'Interact'], ['F', 'Sip your drink'], ['C', 'Smoke'], ['G', 'Drop your glass'], ['Tab', 'Phone'], ['Space', 'Spin / pick at a pokie'], ['↑ ↓', 'Change bet'], ['I', 'Insert cash'], ['Enter', 'Collect'], ['Q', 'Stand up / leave a game'], ['Esc', 'Pause'], ['F3', 'Performance overlay']];
+const KEYS_HELP = [['W A S D', 'Walk'], ['Shift', 'Run'], ['Mouse', 'Look'], ['E', 'Interact'], ['F', 'Sip your drink'], ['C', 'Smoke'], ['G', 'Set your drink down (or drop it)'], ['R', 'Cheers'], ['Q', 'Stand up from a seat'], ['Tab', 'Phone'], ['Space', 'Spin / pick at a pokie'], ['↑ ↓', 'Change bet'], ['I', 'Insert cash'], ['Enter', 'Collect'], ['Q', 'Stand up / leave a game'], ['Esc', 'Pause'], ['F3', 'Performance overlay']];
 let settingsTab = 'GRAPHICS';
 function openSettings(back) {
   const wrap = document.createElement('div'); wrap.className = 'settings';

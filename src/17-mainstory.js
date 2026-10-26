@@ -104,7 +104,7 @@ const STORY = {
   },
   score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + Math.min(3, Game.state.flags.goodwill || 0) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
   meeting() {
-    const S = this.st(), sc = this.score(), there = isInside(player.pos.x, player.pos.z) && player.level === 0;
+    const S = this.st(), sc = this.score(), there = inRoyal(player.pos.x, player.pos.z) && player.level === 0;
     S.ending = sc >= 7 ? 'saved' : sc >= 4 ? 'reprieve' : 'sold';
     const sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0);
     const lines = [

@@ -52,6 +52,7 @@ const TOUCH = {
     let mode = 'walk';
     if (Game.mode !== 'play') mode = 'none';
     else if (player.seated) mode = 'pokie';
+    else if (player.perch && !(typeof Eat !== 'undefined' && Eat.active) && !MG.active) mode = 'perch';
     else if (typeof Eat !== 'undefined' && Eat.active) mode = 'eat';
     else if (MG.active) mode = MG.active === Darts ? 'darts' : MG.active === BarShift ? 'shift' : MG.active === Karaoke ? 'karaoke' : 'mg';
     if (mode === this.mode) return;
@@ -59,12 +60,15 @@ const TOUCH = {
     const B = $('tBtns'); B.innerHTML = '';
     const btn = (label, cls, down, up) => { const b = document.createElement('button'); b.innerHTML = label; b.className = cls || ''; b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); AudioSys.init(); down && down(); }, { passive: false }); b.addEventListener('touchend', e => { e.preventDefault(); b.classList.remove('on'); up && up(); }, { passive: false }); b.onclick = () => { if (!('ontouchstart' in window)) { down && down(); up && up(); } }; B.appendChild(b); return b; };
     const key = code => () => Game.onKey(code);
-    $('tStick').style.display = mode === 'walk' ? '' : 'none';
-    $('tPhone').style.display = mode === 'walk' ? '' : 'none';
+    $('tStick').style.display = mode === 'walk' || mode === 'perch' ? '' : 'none';
+    $('tPhone').style.display = mode === 'walk' || mode === 'perch' ? '' : 'none';
     if (mode === 'walk') {
       btn('USE', 'big', key('KeyE'));
-      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('DROP<small>glass</small>', '', key('KeyG'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('SET<br>DOWN', '', key('KeyG')); btn('CHEERS', '', key('KeyR'));
       const r = btn('RUN', 'tog', () => { this.run = !this.run; r.classList.toggle('lit', this.run); });
+    } else if (mode === 'perch') {
+      btn('USE', 'big', key('KeyE'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('SET<br>DOWN', '', key('KeyG')); btn('CHEERS', '', key('KeyR')); btn('STAND', 'quit', key('KeyQ'));
     } else if (mode === 'darts') {
       btn('THROW<small>hold · let go in the gold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
       btn('STEADY', '', () => { keys.ShiftLeft = true; }, () => { keys.ShiftLeft = false; });

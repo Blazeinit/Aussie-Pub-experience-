@@ -112,6 +112,7 @@ const Game = {
     MACHINES.forEach(m => { m.resetPlay(); m.setMode('idle'); m.occupiedBy = null; m.credit = 0; });
     SPOTS.forEach(sp => sp.occ = null);
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
+    player.perch = null; player.eye = 1.64; fallingGlasses.length = 0;
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
     REG.spawnAll(); VenueLocals.spawn(); Shops.spawnStaff(); STORY.spawn();
@@ -283,7 +284,7 @@ const Game = {
   openBar() {
     const s = this.state;
     if (bartender.job || bartender.queue.length) { this.toast('Hang on, the bartender\'s pouring.'); return; }
-    if (this.items.length) { this.toast('Your order\'s waiting on the bar.'); return; }
+    if (this.items.some(i => !i.own)) { this.toast('Your order\'s waiting on the bar.'); return; }
     if (s.drunk >= 95) { this.kickOut(); return; }
     const rsa = s.drunk >= 80;
     const holding = player.drink && player.drink.fill > 0.08;
@@ -465,7 +466,7 @@ const Game = {
     // trivia
     if (s.event === 'trivia' && !this.trivia.done && s.time >= 20.5) {
       this.trivia.done = true;
-      if (isInside(player.pos.x, player.pos.z) && !player.seated) this.runTrivia(); else this.toast('Trivia started without you. Oh well.');
+      if (inRoyal(player.pos.x, player.pos.z) && !player.seated) this.runTrivia(); else this.toast('Trivia started without you. Oh well.');
       SFX.bell(V3(-9, 2.5, -8), 1);
     }
     // meat raffle
@@ -476,7 +477,7 @@ const Game = {
       setTimeout(() => { if (won) { s.stats.meat += won; s.night.extra += 40 * won; s.bank += 40 * won; s.mood = Math.min(100, s.mood + 25); SFX.cheer(player.pos, 2); this.toast(`🥩 YOU WON ${won > 1 ? won + ' MEAT TRAYS' : 'A MEAT TRAY'}! (~$${40 * won} of groceries saved)`, true); } else if (this.raffle.tickets) this.toast('No meat tray this week. Next Saturday…'); }, 4500);
     }
     // footy noise on Saturday
-    if (s.event === 'raffle' && s.time < 18 && isInside(player.pos.x, player.pos.z)) { this.footyT -= dt; if (this.footyT <= 0) { this.footyT = rand(25, 60); SFX.cheer(V3(0, 2.5, 0), 2); bark(choice(NPCS.filter(n => n.role !== 'bartender')) || bartender, choice(['GOOOAL!', 'Ump! Are you blind?!', 'Kick it!', 'BALL!']), true); } }
+    if (s.event === 'raffle' && s.time < 18 && inRoyal(player.pos.x, player.pos.z)) { this.footyT -= dt; if (this.footyT <= 0) { this.footyT = rand(25, 60); SFX.cheer(V3(0, 2.5, 0), 2); bark(choice(NPCS.filter(n => n.role !== 'bartender')) || bartender, choice(['GOOOAL!', 'Ump! Are you blind?!', 'Kick it!', 'BALL!']), true); } }
     // last drinks + close
     if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; Night.lastCall(); SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
@@ -524,7 +525,7 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active && !Eat.active; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !player.perch && !MG.active && !Cine.active && !Eat.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
     if (DLG.active) { DLG.key(code); return; }
@@ -549,6 +550,8 @@ const Game = {
       return;
     }
     if (code === 'KeyE') this.interact();
+    else if (code === 'KeyR') cheers();
+    else if (code === 'KeyQ' && player.perch) standUpPerch();
     else if (code === 'KeyF') sipDrink();
     else if (code === 'KeyG') dropHeld();
     else if (code === 'KeyC') startSmoke();
@@ -760,7 +763,7 @@ function wireUI() {
     Game.openPanel('HOW TO PLAY', 'A week at the Royal Hotel. Make rent on Sunday. Have a good time.', `
       <div class="ctrls"><span class="kbd">WASD</span><span>Walk (SHIFT to run — careful, you'll slosh your beer)</span><span class="kbd">MOUSE</span><span>Look</span>
       <span class="kbd">E</span><span>Interact: bar, ATM, Keno, jukebox, machines, talk to locals, pick up drinks</span><span class="kbd">F</span><span>Sip your drink</span>
-      <span class="kbd">C</span><span>Smoke (outside, or at the terrace machines). Press again for another drag.</span><span class="kbd">G</span><span>Drop your glass (the pub will cheer)</span><span class="kbd">TAB</span><span>Phone: money & messages</span>
+      <span class="kbd">C</span><span>Smoke (outside, or at the terrace machines). Press again for another drag.</span><span class="kbd">G</span><span>Set your drink on a bar or table you are looking at (or drop it: the pub will cheer)</span><span class="kbd">R</span><span>Cheers: clink glasses with someone</span><span class="kbd">E</span><span>Look at a free stool or chair to sit; walk away or Q to stand</span><span class="kbd">TAB</span><span>Phone: money & messages</span>
       <span class="kbd">SPACE</span><span>At a pokie: spin / slam-stop / pick</span><span class="kbd">↑ ↓</span><span>Change bet</span><span class="kbd">I</span><span>Insert cash</span><span class="kbd">ENTER</span><span>Collect a ticket</span><span class="kbd">G R B</span><span>Gamble a win: red or black</span><span class="kbd">Q</span><span>Stand up</span></div>
       <p style="font-size:13px;opacity:.75;line-height:1.5">Each night starts at a different time with its own event. Leave early & sober and you'll pick up overtime tomorrow. Get legless and you'll be docked pay and start late. The pokies are tuned like real ones — about 85–95% return. Over a week, the house wins.</p>`, [{ label: 'Back', fn: () => { Game.closePanel(); $('title').classList.remove('hidden'); } }]);
   };

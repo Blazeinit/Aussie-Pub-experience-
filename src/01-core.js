@@ -47,6 +47,8 @@ const PRESETS = {
 };
 function applyPreset(name) { if (PRESETS[name]) Object.assign(settings, PRESETS[name]); settings.preset = name; }
 if (savedSettings && !savedSettings.preset && savedSettings.quality) applyPreset(savedSettings.quality === 'low' ? 'low' : 'high');
+// first time on a phone or tablet: start on the lighter preset (no reflections, cheaper shadows, no MSAA) instead of 'high'
+else if (!savedSettings && typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) applyPreset('medium');
 function saveSettings() { store('ld_settings', settings); }
 const HIGH = () => settings.quality === 'high';
 

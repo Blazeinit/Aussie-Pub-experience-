@@ -389,7 +389,7 @@ function updatePlayer(dt, t) {
     player.pos.copy(player.seated.seatW);
   } else {
     const fw = V3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)), rt = V3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-    const wish = V3();
+    const wish = V3(); updatePerch(dt);
     if (Game.canMove()) {
       if (keys.KeyW || keys.ArrowUp) wish.add(fw); if (keys.KeyS || keys.ArrowDown) wish.sub(fw);
       if (TOUCH.on) { wish.addScaledVector(fw, -TOUCH.my); wish.addScaledVector(rt, TOUCH.mx); }
@@ -404,10 +404,10 @@ function updatePlayer(dt, t) {
     const acc = moving ? 12 : 9;
     player.vel.x = damp(player.vel.x, wish.x * spd, acc, dt); player.vel.z = damp(player.vel.z, wish.z * spd, acc, dt);
     player.pos.x += player.vel.x * dt; player.pos.z += player.vel.z * dt;
-    collideCircle(player.pos, 0.32, player.level);
+    if (!player.perch) collideCircle(player.pos, 0.32, player.level);
     // bump into NPCs
     for (const n of NPCS) {
-      if (player.level) break;
+      if (player.level || player.perch) break;
       const dx = player.pos.x - n.pos.x, dz = player.pos.z - n.pos.z, d = Math.hypot(dx, dz), r = 0.55;
       if (d < r && d > 0.001) {
         player.pos.x += dx / d * (r - d); player.pos.z += dz / d * (r - d);
@@ -434,7 +434,7 @@ function updatePlayer(dt, t) {
     b.root.position.set(player.pos.x, player.seated ? 0 : (player.groundY || 0), player.pos.z);
     b.root.rotation.y = player.seated ? player.seated.def.ry + Math.PI : player.yaw + Math.PI;
     a.walkPh = player.bob * 1.0; a.holdDrink = !!player.drink && !player.drink.onLedge; a.sipT = player.sip; a.smoking = !!player.cig; a.dragT = player.cig && player.cig.phase === 'inhale' ? 1 : 0; a.sitH = 0.7;
-    const kind = player.seated ? 'pokie' : moving ? 'walk' : 'stand';
+    const kind = player.seated ? 'pokie' : player.perch ? 'sit' : moving ? 'walk' : 'stand'; if (player.perch) a.sitH = player.perch.sp.sitH || 0.48;
     applyPose(b, poseFor(kind, t, a), dt, 12);
     b.J.head.visible = true;
   }

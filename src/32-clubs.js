@@ -17,9 +17,11 @@ function clubInside(x, z) { for (const k in CLUBS) if (inRect(CLUBS[k], x, z)) r
 // inside, or on its own grounds (the RSL forecourt and smokers' terrace, the Anchor's footpath)
 function clubAround(x, z) { for (const k in CLUBS) if (inRect(CLUBS[k].near, x, z)) return CLUBS[k]; return null; }
 
+let inRoyal = null;   // the Royal's own footprint (events and story that only happen there use this, not isInside)
 // ---- the rest of the game asks "am I indoors / on carpet / in a gaming room" through these: teach them about the clubs
 {
   const _in = isInside, _gam = inGaming, _gy = groundY, _surf = surfaceAt, _zone = zoneFor;
+  inRoyal = _in;
   isInside = (x, z) => _in(x, z) || !!clubInside(x, z);
   inGaming = (x, z) => _gam(x, z) || inRect(CLUBS.rsl.gaming, x, z) || inRect(CLUBS.dive.gaming, x, z);
   // the Anchor's band stage is a step up

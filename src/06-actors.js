@@ -210,16 +210,7 @@ function dropGlass(glass, vel) {
   scene.add(glass.group); glass.group.position.copy(wp); glass.group.quaternion.copy(wq); glass.group.scale.set(1, 1, 1);
   fallingGlasses.push({ glass, v: vel.clone(), w: V3(rand(-6, 6), rand(-2, 2), rand(-6, 6)) });
 }
-function updateFalling(dt, t) {
-  for (let i = fallingGlasses.length - 1; i >= 0; i--) {
-    const f = fallingGlasses[i], g = f.glass.group;
-    f.v.y -= 9.8 * dt; g.position.addScaledVector(f.v, dt);
-    g.rotateX(f.w.x * dt); g.rotateZ(f.w.z * dt);
-    f.glass.update(dt, t);
-    if (f.glass.fill > 0.02 && Math.random() < 0.6) { dropFX.emit(g.position.clone().add(V3(0, 0.12, 0)), V3(rand(-.3, .3), 0, rand(-.3, .3)), 0.01, 2, 0.9, f.glass.D.col); f.glass.fill -= dt * 0.5; }
-    if (g.position.y < groundY(g.position.x, g.position.z, g.position.y) + 0.02) { shatterGlass(g.position.clone(), f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(g.position.clone()); }
-  }
-}
+// (updateFalling lives in 33-physics.js: gravity, walls, landing on bars and tables)
 
 // beer stream from tap to glass
 function makeStream() {
@@ -381,6 +372,15 @@ function makeHuman(o = {}) {
 // Collapse the procedural body into ONE skinned mesh (rigid weights) using the shared atlas:
 // identical animation code (it drives Bones instead of Groups), one draw call per person.
 let npcSkinMat = null;
+const _lowGeos = new Map();
+function lowGeo(g) {   // the same shape with far fewer segments (cached per source geometry)
+  let l = _lowGeos.get(g); if (l) return l; const p = g.parameters || {};
+  if (g.type === 'SphereGeometry') l = new THREE.SphereGeometry(p.radius, 9, 6, p.phiStart, p.phiLength, p.thetaStart, p.thetaLength);
+  else if (g.type === 'CapsuleGeometry') l = new THREE.CapsuleGeometry(p.radius, p.length, 2, 7);
+  else if (g.type === 'CylinderGeometry') l = new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, Math.min(p.radialSegments, 8), 1, p.openEnded, p.thetaStart, p.thetaLength);
+  else l = g;
+  _lowGeos.set(g, l); return l;
+}
 function skinify(h) {
   if (!npcSkinMat) { npcSkinMat = new THREE.MeshStandardMaterial({ map: ATLAS.tex, vertexColors: true, roughness: 0.78, metalness: 0 }); interiorMats.push(npcSkinMat); }
   const body = h.root.children[0], groups = [body], names = ['body'];
@@ -388,11 +388,15 @@ function skinify(h) {
   h.root.updateMatrixWorld(true);
   const bones = groups.map(g => { const b = new THREE.Bone(); b.position.copy(g.position); b.quaternion.copy(g.quaternion); b.scale.copy(g.scale); return b; });
   groups.forEach((g, i) => { if (i === 0) h.root.add(bones[0]); else bones[groups.indexOf(g.parent)].add(bones[i]); });
-  const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), geos = [], col = new THREE.Color();
+  const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), col = new THREE.Color();
+  // two versions of the same person sharing one skeleton: full detail for up close, ~1/5 of the triangles for anyone further than a few metres
+  const build = low => {
+  const geos = [];
   groups.forEach((g, bi) => {
     for (const m of g.children) {
       if (!m.isMesh) continue;
-      const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      const src = low ? lowGeo(m.geometry) : m.geometry;
+      const geo = src.index ? src.toNonIndexed() : src.clone();
       geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
       for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
       const n = geo.attributes.position.count, ca = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
@@ -410,14 +414,15 @@ function skinify(h) {
       geos.push(geo);
     }
   });
-  const sm = new THREE.SkinnedMesh(mergeGeometries(geos), npcSkinMat);
-  geos.forEach(g => g.dispose());
-  h.root.remove(body); h.root.add(sm);
+  const merged = mergeGeometries(geos); geos.forEach(g => g.dispose()); return merged;
+  };
+  const sm = new THREE.SkinnedMesh(build(false), npcSkinMat), smLo = new THREE.SkinnedMesh(build(true), npcSkinMat);
+  h.root.remove(body); h.root.add(sm); h.root.add(smLo); smLo.visible = false;
   h.root.updateMatrixWorld(true);
-  sm.bind(new THREE.Skeleton(bones));
+  const skel = new THREE.Skeleton(bones); sm.bind(skel); smLo.bind(skel);
   const J = {}; names.forEach((n, i) => { if (i > 0) J[n] = bones[i]; });
   J.lids.scale.y = 0.05; J.jaw.scale.y = 0.35;
-  h.J = J; h.mesh = sm;
+  h.J = J; h.mesh = sm; h.meshLo = smLo; h.lod = 0;
   return h;
 }
 
@@ -692,8 +697,11 @@ function updateNPC(n, dt, t, player) {
   if (lookAt) { const ang = angleDiff(n.ry, Math.atan2(player.x - n.pos.x, player.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); p.headX = -0.05; }
   else if (n.partner && n.state === 'idle') { const ang = angleDiff(n.ry, Math.atan2(n.partner.pos.x - n.pos.x, n.partner.pos.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); }
   if (n.glassOnLedge) { p.rUAx = kind === 'pokie' ? p.rUAx : p.rUAx; }
-  applyPose(n.h, p, dt, n.state === 'walk' ? 14 : 6);
-  faceAnim(n, dt, t);
+  { const lo = n.dist2 > 64; if (lo !== (n.h.lod === 1)) { n.h.lod = lo ? 1 : 0; n.h.mesh.visible = !lo; n.h.meshLo.visible = lo; } }
+  // the face / jaw / blink detail is invisible past a few metres; the pose only needs refreshing every other frame out there
+  const far = n.dist2 > 150;
+  if (!far || (Game.frameN + (n.a.seed * 7 | 0)) % 2 === 0) applyPose(n.h, p, dt * (far ? 2 : 1), n.state === 'walk' ? 14 : 6);
+  if (!far) faceAnim(n, dt, t);
   n.phone.visible = !!a.phone && n.state === 'idle' && n.dist2 < 600;
   n.h.root.position.set(n.pos.x, groundY(n.pos.x, n.pos.z), n.pos.z); n.h.root.rotation.y = n.ry;
   if (!n.glassOnLedge && n.glass.group.visible && n.dist2 < 400) uprightInHand(n.glass.group, n.ry, a.sipT > 0 ? Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI) * 1.3 : 0);

@@ -2,7 +2,7 @@
 import { launch, done } from './harness.mjs';
 const g = await launch({ quality: 'low', port: 8204 });
 await g.startNight();
-const r = await g.ev(`(()=>{ const G = window.__game, C = G.colliders.filter(c => c.lv === 0 && !c.off); const R = 0.3, CS = 0.25, X0 = -62, X1 = 62, Z0 = -32, Z1 = 30, NX = Math.round((X1 - X0) / CS), NZ = Math.round((Z1 - Z0) / CS);
+const r = await g.ev(`(()=>{ const G = window.__game, C = G.colliders.filter(c => c.lv === 0 && !c.off); const R = 0.3, CS = 0.25, X0 = -62, X1 = 62, Z0 = -32, Z1 = 50, NX = Math.round((X1 - X0) / CS), NZ = Math.round((Z1 - Z0) / CS);
   const blocked = new Uint8Array(NX * NZ);
   // bucket colliders into coarse cells so the fill is fast
   const B = 4, bx = Math.ceil((X1 - X0) / B), bz = Math.ceil((Z1 - Z0) / B), buckets = Array.from({ length: bx * bz }, () => []);

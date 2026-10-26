@@ -48,6 +48,8 @@ const PRESETS = {
 };
 function applyPreset(name) { if (PRESETS[name]) Object.assign(settings, PRESETS[name]); settings.preset = name; }
 if (savedSettings && !savedSettings.preset && savedSettings.quality) applyPreset(savedSettings.quality === 'low' ? 'low' : 'high');
+// first time on a phone or tablet: start on the lighter preset (no reflections, cheaper shadows, no MSAA) instead of 'high'
+else if (!savedSettings && typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) applyPreset('medium');
 function saveSettings() { store('ld_settings', settings); }
 const HIGH = () => settings.quality === 'high';
 
@@ -3625,16 +3627,7 @@ function dropGlass(glass, vel) {
   scene.add(glass.group); glass.group.position.copy(wp); glass.group.quaternion.copy(wq); glass.group.scale.set(1, 1, 1);
   fallingGlasses.push({ glass, v: vel.clone(), w: V3(rand(-6, 6), rand(-2, 2), rand(-6, 6)) });
 }
-function updateFalling(dt, t) {
-  for (let i = fallingGlasses.length - 1; i >= 0; i--) {
-    const f = fallingGlasses[i], g = f.glass.group;
-    f.v.y -= 9.8 * dt; g.position.addScaledVector(f.v, dt);
-    g.rotateX(f.w.x * dt); g.rotateZ(f.w.z * dt);
-    f.glass.update(dt, t);
-    if (f.glass.fill > 0.02 && Math.random() < 0.6) { dropFX.emit(g.position.clone().add(V3(0, 0.12, 0)), V3(rand(-.3, .3), 0, rand(-.3, .3)), 0.01, 2, 0.9, f.glass.D.col); f.glass.fill -= dt * 0.5; }
-    if (g.position.y < groundY(g.position.x, g.position.z, g.position.y) + 0.02) { shatterGlass(g.position.clone(), f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(g.position.clone()); }
-  }
-}
+// (updateFalling lives in 33-physics.js: gravity, walls, landing on bars and tables)
 
 // beer stream from tap to glass
 function makeStream() {
@@ -3796,6 +3789,15 @@ function makeHuman(o = {}) {
 // Collapse the procedural body into ONE skinned mesh (rigid weights) using the shared atlas:
 // identical animation code (it drives Bones instead of Groups), one draw call per person.
 let npcSkinMat = null;
+const _lowGeos = new Map();
+function lowGeo(g) {   // the same shape with far fewer segments (cached per source geometry)
+  let l = _lowGeos.get(g); if (l) return l; const p = g.parameters || {};
+  if (g.type === 'SphereGeometry') l = new THREE.SphereGeometry(p.radius, 9, 6, p.phiStart, p.phiLength, p.thetaStart, p.thetaLength);
+  else if (g.type === 'CapsuleGeometry') l = new THREE.CapsuleGeometry(p.radius, p.length, 2, 7);
+  else if (g.type === 'CylinderGeometry') l = new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, Math.min(p.radialSegments, 8), 1, p.openEnded, p.thetaStart, p.thetaLength);
+  else l = g;
+  _lowGeos.set(g, l); return l;
+}
 function skinify(h) {
   if (!npcSkinMat) { npcSkinMat = new THREE.MeshStandardMaterial({ map: ATLAS.tex, vertexColors: true, roughness: 0.78, metalness: 0 }); interiorMats.push(npcSkinMat); }
   const body = h.root.children[0], groups = [body], names = ['body'];
@@ -3803,11 +3805,15 @@ function skinify(h) {
   h.root.updateMatrixWorld(true);
   const bones = groups.map(g => { const b = new THREE.Bone(); b.position.copy(g.position); b.quaternion.copy(g.quaternion); b.scale.copy(g.scale); return b; });
   groups.forEach((g, i) => { if (i === 0) h.root.add(bones[0]); else bones[groups.indexOf(g.parent)].add(bones[i]); });
-  const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), geos = [], col = new THREE.Color();
+  const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), col = new THREE.Color();
+  // two versions of the same person sharing one skeleton: full detail for up close, ~1/5 of the triangles for anyone further than a few metres
+  const build = low => {
+  const geos = [];
   groups.forEach((g, bi) => {
     for (const m of g.children) {
       if (!m.isMesh) continue;
-      const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      const src = low ? lowGeo(m.geometry) : m.geometry;
+      const geo = src.index ? src.toNonIndexed() : src.clone();
       geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
       for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
       const n = geo.attributes.position.count, ca = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
@@ -3825,14 +3831,15 @@ function skinify(h) {
       geos.push(geo);
     }
   });
-  const sm = new THREE.SkinnedMesh(mergeGeometries(geos), npcSkinMat);
-  geos.forEach(g => g.dispose());
-  h.root.remove(body); h.root.add(sm);
+  const merged = mergeGeometries(geos); geos.forEach(g => g.dispose()); return merged;
+  };
+  const sm = new THREE.SkinnedMesh(build(false), npcSkinMat), smLo = new THREE.SkinnedMesh(build(true), npcSkinMat);
+  h.root.remove(body); h.root.add(sm); h.root.add(smLo); smLo.visible = false;
   h.root.updateMatrixWorld(true);
-  sm.bind(new THREE.Skeleton(bones));
+  const skel = new THREE.Skeleton(bones); sm.bind(skel); smLo.bind(skel);
   const J = {}; names.forEach((n, i) => { if (i > 0) J[n] = bones[i]; });
   J.lids.scale.y = 0.05; J.jaw.scale.y = 0.35;
-  h.J = J; h.mesh = sm;
+  h.J = J; h.mesh = sm; h.meshLo = smLo; h.lod = 0;
   return h;
 }
 
@@ -4107,8 +4114,11 @@ function updateNPC(n, dt, t, player) {
   if (lookAt) { const ang = angleDiff(n.ry, Math.atan2(player.x - n.pos.x, player.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); p.headX = -0.05; }
   else if (n.partner && n.state === 'idle') { const ang = angleDiff(n.ry, Math.atan2(n.partner.pos.x - n.pos.x, n.partner.pos.z - n.pos.z)); p.headY = clamp(ang, -1.1, 1.1); }
   if (n.glassOnLedge) { p.rUAx = kind === 'pokie' ? p.rUAx : p.rUAx; }
-  applyPose(n.h, p, dt, n.state === 'walk' ? 14 : 6);
-  faceAnim(n, dt, t);
+  { const lo = n.dist2 > 64; if (lo !== (n.h.lod === 1)) { n.h.lod = lo ? 1 : 0; n.h.mesh.visible = !lo; n.h.meshLo.visible = lo; } }
+  // the face / jaw / blink detail is invisible past a few metres; the pose only needs refreshing every other frame out there
+  const far = n.dist2 > 150;
+  if (!far || (Game.frameN + (n.a.seed * 7 | 0)) % 2 === 0) applyPose(n.h, p, dt * (far ? 2 : 1), n.state === 'walk' ? 14 : 6);
+  if (!far) faceAnim(n, dt, t);
   n.phone.visible = !!a.phone && n.state === 'idle' && n.dist2 < 600;
   n.h.root.position.set(n.pos.x, groundY(n.pos.x, n.pos.z), n.pos.z); n.h.root.rotation.y = n.ry;
   if (!n.glassOnLedge && n.glass.group.visible && n.dist2 < 400) uprightInHand(n.glass.group, n.ry, a.sipT > 0 ? Math.sin(clamp(a.sipT / 1.6, 0, 1) * Math.PI) * 1.3 : 0);
@@ -4776,7 +4786,7 @@ function updatePlayer(dt, t) {
     player.pos.copy(player.seated.seatW);
   } else {
     const fw = V3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)), rt = V3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-    const wish = V3();
+    const wish = V3(); updatePerch(dt);
     if (Game.canMove()) {
       if (keys.KeyW || keys.ArrowUp) wish.add(fw); if (keys.KeyS || keys.ArrowDown) wish.sub(fw);
       if (TOUCH.on) { wish.addScaledVector(fw, -TOUCH.my); wish.addScaledVector(rt, TOUCH.mx); }
@@ -4791,10 +4801,10 @@ function updatePlayer(dt, t) {
     const acc = moving ? 12 : 9;
     player.vel.x = damp(player.vel.x, wish.x * spd, acc, dt); player.vel.z = damp(player.vel.z, wish.z * spd, acc, dt);
     player.pos.x += player.vel.x * dt; player.pos.z += player.vel.z * dt;
-    collideCircle(player.pos, 0.32, player.level);
+    if (!player.perch) collideCircle(player.pos, 0.32, player.level);
     // bump into NPCs
     for (const n of NPCS) {
-      if (player.level) break;
+      if (player.level || player.perch) break;
       const dx = player.pos.x - n.pos.x, dz = player.pos.z - n.pos.z, d = Math.hypot(dx, dz), r = 0.55;
       if (d < r && d > 0.001) {
         player.pos.x += dx / d * (r - d); player.pos.z += dz / d * (r - d);
@@ -4821,7 +4831,7 @@ function updatePlayer(dt, t) {
     b.root.position.set(player.pos.x, player.seated ? 0 : (player.groundY || 0), player.pos.z);
     b.root.rotation.y = player.seated ? player.seated.def.ry + Math.PI : player.yaw + Math.PI;
     a.walkPh = player.bob * 1.0; a.holdDrink = !!player.drink && !player.drink.onLedge; a.sipT = player.sip; a.smoking = !!player.cig; a.dragT = player.cig && player.cig.phase === 'inhale' ? 1 : 0; a.sitH = 0.7;
-    const kind = player.seated ? 'pokie' : moving ? 'walk' : 'stand';
+    const kind = player.seated ? 'pokie' : player.perch ? 'sit' : moving ? 'walk' : 'stand'; if (player.perch) a.sitH = player.perch.sp.sitH || 0.48;
     applyPose(b, poseFor(kind, t, a), dt, 12);
     b.J.head.visible = true;
   }
@@ -4942,6 +4952,7 @@ const Game = {
     MACHINES.forEach(m => { m.resetPlay(); m.setMode('idle'); m.occupiedBy = null; m.credit = 0; });
     SPOTS.forEach(sp => sp.occ = null);
     if (player.drink) { player.drink.group.parent && player.drink.group.parent.remove(player.drink.group); player.drink = null; }
+    player.perch = null; player.eye = 1.64; fallingGlasses.length = 0;
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
     REG.spawnAll(); VenueLocals.spawn(); Shops.spawnStaff(); STORY.spawn();
@@ -5113,7 +5124,7 @@ const Game = {
   openBar() {
     const s = this.state;
     if (bartender.job || bartender.queue.length) { this.toast('Hang on, the bartender\'s pouring.'); return; }
-    if (this.items.length) { this.toast('Your order\'s waiting on the bar.'); return; }
+    if (this.items.some(i => !i.own)) { this.toast('Your order\'s waiting on the bar.'); return; }
     if (s.drunk >= 95) { this.kickOut(); return; }
     const rsa = s.drunk >= 80;
     const holding = player.drink && player.drink.fill > 0.08;
@@ -5295,7 +5306,7 @@ const Game = {
     // trivia
     if (s.event === 'trivia' && !this.trivia.done && s.time >= 20.5) {
       this.trivia.done = true;
-      if (isInside(player.pos.x, player.pos.z) && !player.seated) this.runTrivia(); else this.toast('Trivia started without you. Oh well.');
+      if (inRoyal(player.pos.x, player.pos.z) && !player.seated) this.runTrivia(); else this.toast('Trivia started without you. Oh well.');
       SFX.bell(V3(-9, 2.5, -8), 1);
     }
     // meat raffle
@@ -5306,7 +5317,7 @@ const Game = {
       setTimeout(() => { if (won) { s.stats.meat += won; s.night.extra += 40 * won; s.bank += 40 * won; s.mood = Math.min(100, s.mood + 25); SFX.cheer(player.pos, 2); this.toast(`🥩 YOU WON ${won > 1 ? won + ' MEAT TRAYS' : 'A MEAT TRAY'}! (~$${40 * won} of groceries saved)`, true); } else if (this.raffle.tickets) this.toast('No meat tray this week. Next Saturday…'); }, 4500);
     }
     // footy noise on Saturday
-    if (s.event === 'raffle' && s.time < 18 && isInside(player.pos.x, player.pos.z)) { this.footyT -= dt; if (this.footyT <= 0) { this.footyT = rand(25, 60); SFX.cheer(V3(0, 2.5, 0), 2); bark(choice(NPCS.filter(n => n.role !== 'bartender')) || bartender, choice(['GOOOAL!', 'Ump! Are you blind?!', 'Kick it!', 'BALL!']), true); } }
+    if (s.event === 'raffle' && s.time < 18 && inRoyal(player.pos.x, player.pos.z)) { this.footyT -= dt; if (this.footyT <= 0) { this.footyT = rand(25, 60); SFX.cheer(V3(0, 2.5, 0), 2); bark(choice(NPCS.filter(n => n.role !== 'bartender')) || bartender, choice(['GOOOAL!', 'Ump! Are you blind?!', 'Kick it!', 'BALL!']), true); } }
     // last drinks + close
     if (!this.lastDrinks && s.time >= D.close - 0.25) { this.lastDrinks = true; Night.lastCall(); SFX.bell(V3(-9, 2.5, -8), 3); this.subtitle(`<b>${bartender.name}:</b> LAST DRINKS, EVERYBODY! LAST DRINKS!`, 4); NPCS.forEach(n => { if (n.role !== 'bartender' && Math.random() < 0.4 && n.state === 'idle') { n.leaving = true; release(n); n.state = 'walk'; n.kind = 'walk'; n.path = findPath(n.pos, NODES.S2); } }); }
     if (s.time >= D.close) { this.subtitle(`<b>${bartender.name}:</b> Righto folks, time to go home!`, 3); this.endNight('close'); }
@@ -5354,7 +5365,7 @@ const Game = {
     ask();
   },
   // -------------------------------------------------- input
-  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !MG.active && !Cine.active && !Eat.active; },
+  canMove() { return this.mode === 'play' && !this.uiOpen && !this.paused && !player.seated && !player.perch && !MG.active && !Cine.active && !Eat.active; },
   onKey(code) {
     if (this.mode !== 'play') return;
     if (DLG.active) { DLG.key(code); return; }
@@ -5379,6 +5390,8 @@ const Game = {
       return;
     }
     if (code === 'KeyE') this.interact();
+    else if (code === 'KeyR') cheers();
+    else if (code === 'KeyQ' && player.perch) standUpPerch();
     else if (code === 'KeyF') sipDrink();
     else if (code === 'KeyG') dropHeld();
     else if (code === 'KeyC') startSmoke();
@@ -5590,7 +5603,7 @@ function wireUI() {
     Game.openPanel('HOW TO PLAY', 'A week at the Royal Hotel. Make rent on Sunday. Have a good time.', `
       <div class="ctrls"><span class="kbd">WASD</span><span>Walk (SHIFT to run — careful, you'll slosh your beer)</span><span class="kbd">MOUSE</span><span>Look</span>
       <span class="kbd">E</span><span>Interact: bar, ATM, Keno, jukebox, machines, talk to locals, pick up drinks</span><span class="kbd">F</span><span>Sip your drink</span>
-      <span class="kbd">C</span><span>Smoke (outside, or at the terrace machines). Press again for another drag.</span><span class="kbd">G</span><span>Drop your glass (the pub will cheer)</span><span class="kbd">TAB</span><span>Phone: money & messages</span>
+      <span class="kbd">C</span><span>Smoke (outside, or at the terrace machines). Press again for another drag.</span><span class="kbd">G</span><span>Set your drink on a bar or table you are looking at (or drop it: the pub will cheer)</span><span class="kbd">R</span><span>Cheers: clink glasses with someone</span><span class="kbd">E</span><span>Look at a free stool or chair to sit; walk away or Q to stand</span><span class="kbd">TAB</span><span>Phone: money & messages</span>
       <span class="kbd">SPACE</span><span>At a pokie: spin / slam-stop / pick</span><span class="kbd">↑ ↓</span><span>Change bet</span><span class="kbd">I</span><span>Insert cash</span><span class="kbd">ENTER</span><span>Collect a ticket</span><span class="kbd">G R B</span><span>Gamble a win: red or black</span><span class="kbd">Q</span><span>Stand up</span></div>
       <p style="font-size:13px;opacity:.75;line-height:1.5">Each night starts at a different time with its own event. Leave early & sober and you'll pick up overtime tomorrow. Get legless and you'll be docked pay and start late. The pokies are tuned like real ones — about 85–95% return. Over a week, the house wins.</p>`, [{ label: 'Back', fn: () => { Game.closePanel(); $('title').classList.remove('hidden'); } }]);
   };
@@ -8221,7 +8234,7 @@ const SETTINGS_TABS = {
   ],
 };
 const PRESET_KEYS = ['quality', 'resScale', 'shadows', 'aa', 'bloom', 'bloomStr', 'reflections', 'shafts', 'crowd'];
-const KEYS_HELP = [['W A S D', 'Walk'], ['Shift', 'Run'], ['Mouse', 'Look'], ['E', 'Interact'], ['F', 'Sip your drink'], ['C', 'Smoke'], ['G', 'Drop your glass'], ['Tab', 'Phone'], ['Space', 'Spin / pick at a pokie'], ['↑ ↓', 'Change bet'], ['I', 'Insert cash'], ['Enter', 'Collect'], ['Q', 'Stand up / leave a game'], ['Esc', 'Pause'], ['F3', 'Performance overlay']];
+const KEYS_HELP = [['W A S D', 'Walk'], ['Shift', 'Run'], ['Mouse', 'Look'], ['E', 'Interact'], ['F', 'Sip your drink'], ['C', 'Smoke'], ['G', 'Set your drink down (or drop it)'], ['R', 'Cheers'], ['Q', 'Stand up from a seat'], ['Tab', 'Phone'], ['Space', 'Spin / pick at a pokie'], ['↑ ↓', 'Change bet'], ['I', 'Insert cash'], ['Enter', 'Collect'], ['Q', 'Stand up / leave a game'], ['Esc', 'Pause'], ['F3', 'Performance overlay']];
 let settingsTab = 'GRAPHICS';
 function openSettings(back) {
   const wrap = document.createElement('div'); wrap.className = 'settings';
@@ -8384,7 +8397,7 @@ const STORY = {
   },
   score() { const S = this.st(), sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0); return Math.min(6, sigs) + (S.licence ? 3 : 0) + Math.min(3, Math.floor(S.fund / 100)) + Math.min(3, Game.state.flags.goodwill || 0) + (S.letter === 'signed' ? -2 : 0) + (S.bribe2 === 'took' ? -4 : 0); },
   meeting() {
-    const S = this.st(), sc = this.score(), there = isInside(player.pos.x, player.pos.z) && player.level === 0;
+    const S = this.st(), sc = this.score(), there = inRoyal(player.pos.x, player.pos.z) && player.level === 0;
     S.ending = sc >= 7 ? 'saved' : sc >= 4 ? 'reprieve' : 'sold';
     const sigs = Object.keys(S.sigs).length + (Game.state.flags.petition ? 1 : 0);
     const lines = [
@@ -8484,6 +8497,7 @@ const TOUCH = {
     let mode = 'walk';
     if (Game.mode !== 'play') mode = 'none';
     else if (player.seated) mode = 'pokie';
+    else if (player.perch && !(typeof Eat !== 'undefined' && Eat.active) && !MG.active) mode = 'perch';
     else if (typeof Eat !== 'undefined' && Eat.active) mode = 'eat';
     else if (MG.active) mode = MG.active === Darts ? 'darts' : MG.active === BarShift ? 'shift' : MG.active === Karaoke ? 'karaoke' : 'mg';
     if (mode === this.mode) return;
@@ -8491,12 +8505,15 @@ const TOUCH = {
     const B = $('tBtns'); B.innerHTML = '';
     const btn = (label, cls, down, up) => { const b = document.createElement('button'); b.innerHTML = label; b.className = cls || ''; b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); AudioSys.init(); down && down(); }, { passive: false }); b.addEventListener('touchend', e => { e.preventDefault(); b.classList.remove('on'); up && up(); }, { passive: false }); b.onclick = () => { if (!('ontouchstart' in window)) { down && down(); up && up(); } }; B.appendChild(b); return b; };
     const key = code => () => Game.onKey(code);
-    $('tStick').style.display = mode === 'walk' ? '' : 'none';
-    $('tPhone').style.display = mode === 'walk' ? '' : 'none';
+    $('tStick').style.display = mode === 'walk' || mode === 'perch' ? '' : 'none';
+    $('tPhone').style.display = mode === 'walk' || mode === 'perch' ? '' : 'none';
     if (mode === 'walk') {
       btn('USE', 'big', key('KeyE'));
-      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('DROP<small>glass</small>', '', key('KeyG'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('SET<br>DOWN', '', key('KeyG')); btn('CHEERS', '', key('KeyR'));
       const r = btn('RUN', 'tog', () => { this.run = !this.run; r.classList.toggle('lit', this.run); });
+    } else if (mode === 'perch') {
+      btn('USE', 'big', key('KeyE'));
+      btn('SIP', '', key('KeyF')); btn('SMOKE', '', key('KeyC')); btn('SET<br>DOWN', '', key('KeyG')); btn('CHEERS', '', key('KeyR')); btn('STAND', 'quit', key('KeyQ'));
     } else if (mode === 'darts') {
       btn('THROW<small>hold · let go in the gold</small>', 'big', () => MG.down({ button: 0 }), () => MG.up({ button: 0 }));
       btn('STEADY', '', () => { keys.ShiftLeft = true; }, () => { keys.ShiftLeft = false; });
@@ -9130,6 +9147,7 @@ const Night = {
     Music.level = Math.max(0.2, Music.level - 0.3);
     this.log('🔔', 'Last drinks called');
     if (Game.mode !== 'play' || Game.uiOpen || MG.active || player.seated) { if (player.seated) Game.toast('Last drinks! Wrap it up, champ.'); return; }
+    if (!inRoyal(player.pos.x, player.pos.z)) { Game.toast('Last drinks! The bell\'s gone at the Royal — time to wrap it up.'); return; }
     if (Cine.lastCall(bartender)) { const iv = setInterval(() => { if (!Cine.active) { clearInterval(iv); if (Game.mode === 'play' && !Game.uiOpen && !MG.active) setTimeout(() => this.lastCallPanel(), 400); } }, 300); return; }
     setTimeout(() => { if (Game.mode !== 'play' || Game.uiOpen || MG.active) return; this.lastCallPanel(); }, 3600);
   },
@@ -11216,9 +11234,11 @@ function clubInside(x, z) { for (const k in CLUBS) if (inRect(CLUBS[k], x, z)) r
 // inside, or on its own grounds (the RSL forecourt and smokers' terrace, the Anchor's footpath)
 function clubAround(x, z) { for (const k in CLUBS) if (inRect(CLUBS[k].near, x, z)) return CLUBS[k]; return null; }
 
+let inRoyal = null;   // the Royal's own footprint (events and story that only happen there use this, not isInside)
 // ---- the rest of the game asks "am I indoors / on carpet / in a gaming room" through these: teach them about the clubs
 {
   const _in = isInside, _gam = inGaming, _gy = groundY, _surf = surfaceAt, _zone = zoneFor;
+  inRoyal = _in;
   isInside = (x, z) => _in(x, z) || !!clubInside(x, z);
   inGaming = (x, z) => _gam(x, z) || inRect(CLUBS.rsl.gaming, x, z) || inRect(CLUBS.dive.gaming, x, z);
   // the Anchor's band stage is a step up
@@ -11720,6 +11740,198 @@ const Clubs = {
   },
 };
 
+// ---- src/33-physics.js ----
+
+// =====================================================================
+//  THINGS YOU CAN DO WITH THE ROOM: surfaces, setting a drink down, sitting anywhere, cheers, the telly
+//  Surfaces ("tops") are the flat places a glass can land or be put: bar counters and tables.  They are registered as
+//  the world is built (any big barTop slab is picked up automatically) so physics knows where "the bar" is.
+// =====================================================================
+const Tops = [];
+function addTop(cx, cz, w, d, y, club = null) { Tops.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, y, club }); }
+{
+  // every big slab of bar-top material is a surface (counters, tables); small trinkets are ignored
+  const _box = addBoxS, _cyl = addCylS, _add = Batcher.prototype.add;
+  addBoxS = function (b, mat, x, y, z, w, h, d, ry = 0, uvs = 0) { if (mat === MAT.barTop && w >= 0.55 && d >= 0.35 && h <= 0.12) { const q = Math.abs(Math.sin(ry)) > 0.7; addTop(x, z, q ? d : w, q ? w : d, y + h / 2); } return _box(b, mat, x, y, z, w, h, d, ry, uvs); };
+  addCylS = function (b, mat, x, y, z, r, h, seg = 20, ry = 0, rx = 0, rz = 0) { if (mat === MAT.barTop && r >= 0.25 && h <= 0.12) addTop(x, z, r * 1.7, r * 1.7, y + h / 2); return _cyl(b, mat, x, y, z, r, h, seg, ry, rx, rz); };
+  Batcher.prototype.add = function (geo, mat, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = 1, sz = 1) { if (mat === MAT.barTop && geo === G.box && sx >= 0.55 && sz >= 0.35 && sy <= 0.12) { const q = Math.abs(Math.sin(ry)) > 0.7; addTop(x, z, q ? sz : sx, q ? sx : sz, y + sy / 2); } return _add.call(this, geo, mat, x, y, z, ry, rx, rz, sx, sy, sz); };
+}
+// highest surface at (x, z) that is at or below `y` (+ a little give); the floor if there is none
+function supportAt(x, z, y) {
+  let best = groundY(x, z, y), isTop = false;
+  for (const t of Tops) if (x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1 && t.y <= y + 0.08 && t.y > best) { best = t.y; isTop = true; }
+  return { y: best, top: isTop };
+}
+// a ray from the eye along the view: where does it land on a surface within arm's reach?
+function topInReach(maxDist = 2.3) {
+  const o = camera.position, f = V3(0, 0, -1).applyQuaternion(camera.quaternion); let best = null;
+  if (f.y > -0.04) return null;
+  for (const t of Tops) {
+    const k = (t.y - o.y) / f.y; if (k < 0.25 || k > maxDist) continue;
+    const x = o.x + f.x * k, z = o.z + f.z * k;
+    if (x > t.x0 + 0.04 && x < t.x1 - 0.04 && z > t.z0 + 0.04 && z < t.z1 - 0.04 && (!best || k < best.k)) best = { k, x, z, y: t.y };
+  }
+  return best;
+}
+// colliders as walls for flying glass
+function bounceOffWalls(pos, vel, r = 0.045) {
+  if (pos.y > 1.9) return;
+  for (const c of colliders) {
+    if (c.lv !== 0 || c.off || (c.h && pos.y > c.h)) continue;
+    if (pos.x > c.x0 - r && pos.x < c.x1 + r && pos.z > c.z0 - r && pos.z < c.z1 + r) {
+      const l = pos.x - (c.x0 - r), rr = (c.x1 + r) - pos.x, b = pos.z - (c.z0 - r), f = (c.z1 + r) - pos.z, m = Math.min(l, rr, b, f);
+      if (m === l) { pos.x = c.x0 - r; vel.x = -Math.abs(vel.x) * 0.35; } else if (m === rr) { pos.x = c.x1 + r; vel.x = Math.abs(vel.x) * 0.35; }
+      else if (m === b) { pos.z = c.z0 - r; vel.z = -Math.abs(vel.z) * 0.35; } else { pos.z = c.z1 + r; vel.z = Math.abs(vel.z) * 0.35; }
+      vel.y *= 0.9; SFX.tone(rand(1800, 2600), 0.04, { gain: 0.03, pos: pos.clone() });
+    }
+  }
+}
+// glass physics: gravity, spin, bounce off walls, land on bars and tables (a gentle landing is a landing, a hard one is a smash)
+function updateFalling(dt, t) {
+  for (let i = fallingGlasses.length - 1; i >= 0; i--) {
+    const f = fallingGlasses[i], g = f.glass.group;
+    f.v.y -= 9.8 * dt; g.position.addScaledVector(f.v, dt); bounceOffWalls(g.position, f.v);
+    g.rotateX(f.w.x * dt); g.rotateZ(f.w.z * dt); f.glass.update(dt, t);
+    if (f.glass.fill > 0.02 && Math.random() < 0.6) { dropFX.emit(g.position.clone().add(V3(0, 0.12, 0)), V3(rand(-.3, .3), 0, rand(-.3, .3)), 0.01, 2, 0.9, f.glass.D.col); f.glass.fill -= dt * 0.5; }
+    const sup = supportAt(g.position.x, g.position.z, g.position.y + dt * Math.max(0, -f.v.y) + 0.02);
+    if (f.v.y < 0 && g.position.y <= sup.y + 0.015) {
+      const speed = -f.v.y, hz = Math.hypot(f.v.x, f.v.z);
+      if (sup.top && speed < 2.9 && hz < 3.2) { landGlass(f.glass, g.position.x, sup.y, g.position.z, hz > 0.5 ? Math.atan2(f.v.x, f.v.z) : null, Math.min(1, hz / 3)); fallingGlasses.splice(i, 1); continue; }
+      const p = g.position.clone(); p.y = sup.y + 0.01;
+      shatterGlass(p, f.glass); scene.remove(g); fallingGlasses.splice(i, 1); Game.onGlassSmash(p);
+    }
+  }
+}
+// a glass that has landed upright on a surface: a little splash, then it can be picked up again
+function landGlass(glass, x, y, z, slideDir, slide) {
+  const g = glass.group; g.quaternion.identity(); g.position.set(x, y, z);
+  if (slideDir != null && slide > 0.15) { g.position.x += Math.sin(slideDir) * slide * 0.25; g.position.z += Math.cos(slideDir) * slide * 0.25; const s = supportAt(g.position.x, g.position.z, y + 0.05); if (!s.top || Math.abs(s.y - y) > 0.03) { g.position.set(x, y, z); } }
+  SFX.clink(g.position.clone()); if (glass.fill > 0.1) { glass.fill = Math.max(0.05, glass.fill - 0.12); for (let k = 0; k < 6; k++) dropFX.emit(g.position.clone().add(V3(0, 0.1, 0)), V3(rand(-.4, .4), rand(.3, .9), rand(-.4, .4)), 0.01, 3, 0.9, glass.D.col); }
+  Game.placeItem({ kind: 'drink', glass, own: true }, g.position.clone());
+}
+// set the glass in your hand down on the bar or table you're looking at (G); otherwise it drops
+function putDownHeld() {
+  const d = player.drink; if (!d) return false; if (d.onLedge) { Game.toast('Your drink is on the ledge.'); return true; }
+  const hit = topInReach(); if (!hit) return false;
+  player.drink = null; vm.R.curl(0.2);
+  d.group.updateWorldMatrix(true, false); scene.attach(d.group); d.group.scale.set(1, 1, 1);
+  d.group.quaternion.identity(); d.group.position.set(hit.x, hit.y, hit.z);
+  SFX.clink(d.group.position.clone());
+  Game.placeItem({ kind: 'drink', glass: d, own: true }, d.group.position.clone());
+  Game.toast('Put your drink down. Pick it up again with E.');
+  return true;
+}
+{
+  const _drop = dropHeld;
+  dropHeld = function () { if (putDownHeld()) return; _drop(); };
+}
+
+// ---------------------------------------------------------------- sit anywhere
+// any free stool or chair: sit, look around, sip, smoke, eat, chat; walk off (or Q) to stand up
+player.perch = null;
+function sitOn(sp) {
+  if (player.perch || player.seated || sp.occ) return;
+  sp.occ = { reserved: true, player: true }; player.perch = { sp, from: player.pos.clone(), t: 0, eyeFrom: player.eye };
+  player.pos.set(sp.pos.x, 0, sp.pos.z); player.vel.set(0, 0, 0); player.yawTo = sp.ry + Math.PI;
+  SFX.thud && SFX.thud(sp.pos.clone()); Game.toast('You sit down. Walk away (or Q) to stand up.');
+}
+function standUpPerch() {
+  const P = player.perch; if (!P) return; const sp = P.sp;
+  sp.occ = null; player.perch = null; player.eye = 1.64;
+  // step back out of the seat, away from the table
+  const bx = -Math.sin(sp.ry), bz = -Math.cos(sp.ry);
+  const cand = [[bx, bz], [bz, -bx], [-bz, bx], [-bx, -bz]].map(([dx, dz]) => V3(sp.pos.x + dx * 0.7, 0, sp.pos.z + dz * 0.7));
+  const ok = cand.find(p => { const c = p.clone(); collideCircle(c, 0.32, 0); return c.distanceTo(p) < 0.02; }) || cand[0];
+  player.pos.copy(ok); collideCircle(player.pos, 0.32, 0);
+}
+function updatePerch(dt) {
+  const P = player.perch; if (!P) return false;
+  const sp = P.sp; P.t += dt;
+  player.pos.set(sp.pos.x, 0, sp.pos.z); player.vel.set(0, 0, 0);
+  player.eye = lerp(P.eyeFrom, (sp.sitH || 0.48) + 0.78, smooth(clamp(P.t / 0.5, 0, 1)));
+  if (P.t < 0.6 && player.yawTo != null) player.yaw += angleDiff(player.yaw, player.yawTo) * Math.min(1, dt * 4);
+  const wants = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight || (TOUCH.on && Math.hypot(TOUCH.mx, TOUCH.my) > 0.45);
+  if (P.t > 0.7 && wants && !Game.uiOpen) standUpPerch();
+  return true;
+}
+// "Sit down" shows up in the targeting like any other interaction
+const _findTarget = Game.findTarget;
+Game.findTarget = function () {
+  const t = player.perch ? findTargetFrom.call(this) : _findTarget.call(this);
+  if (t && !t.sitHint) return t;
+  if (player.perch || player.seated || this.uiOpen || MG.active || Eat.active) return t;
+  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = 0.78;
+  for (const sp of SPOTS) {
+    if ((sp.kind !== 'stool' && sp.kind !== 'chair') || sp.occ || sp.hidden || sp.machine || sp.staff) continue;
+    const d = V3(sp.pos.x - cp.x, (sp.sitH || 0.48) + 0.1 - cp.y, sp.pos.z - cp.z), dist = d.length(); if (dist > 1.7) continue;
+    const dot = d.normalize().dot(fw); if (dot > bs) { bs = dot; best = sp; }
+  }
+  if (best) return { sitHint: true, label: () => 'Sit down', action: () => sitOn(best) };
+  return t;
+};
+// the normal targeting, but allowed while perched (everything within reach of the seat)
+function findTargetFrom() {
+  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = 0;
+  for (const it of interactables) {
+    if (!it.enabled() || it.zone) continue;
+    const d = _v1.copy(it.pos).sub(cp), dist = d.length(); if (dist > Math.min(it.r, 2.4)) continue;
+    const dot = d.normalize().dot(fw); if (dot < 0.8) continue;
+    const sc = dot - dist * 0.08 + (it.temp ? 0.3 : 0); if (sc > bs) { bs = sc; best = it; }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------- cheers
+// R with a drink in hand: clink with whoever you're facing
+function cheers() {
+  const d = player.drink;
+  if (!d || d.onLedge || d.fill < 0.08) { Game.toast('You need a drink in your hand to say cheers.'); return; }
+  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = 0.8;
+  for (const n of NPCS) { if (n.state === 'walk' || n.band || n.mg && !n.staff) continue; const dv = V3(n.pos.x - cp.x, 1.4 - cp.y, n.pos.z - cp.z), dist = dv.length(); if (dist > 2.4) continue; const dot = dv.normalize().dot(fw); if (dot > bs) { bs = dot; best = n; } }
+  if (!best) { Game.toast('Nobody to cheers. Face someone.'); return; }
+  const s = Game.state, key = best.regular || best.local || best.name, mem = DLG.mem(key);
+  SFX.clink(best.pos.clone().add(V3(0, 1.3, 0)));
+  best.a.sipT = 1.6; best.a.talk = 2; best.cheerT = 0.9;
+  if (!best.a.holdDrink && !best.staff) { best.a.holdDrink = true; best.glass.group.visible = true; }
+  bark(best, choice(['Cheers, mate!', 'Good health!', 'Chin chin!', 'Yewww!', 'Bottoms up!', 'Cheers big ears.']), true);
+  const first = !mem.cheered; mem.cheered = (mem.cheered || 0) + 1;
+  s.mood = clamp(s.mood + (first ? 5 : 1.5), 0, 100); relUp(key, first ? 4 : 1);
+  if (first) Night.log('🥂', `Cheersed ${best.name}`);
+  Night.ev && Night.ev('cheers', key);
+  player.sip = 0.8; d.fill = Math.max(0, d.fill - 0.03);
+}
+
+// ---------------------------------------------------------------- the telly
+const TV_CHANNELS = ['racing', 'footy', 'news', 'weather'];
+function drawChannel(tv, kind, x, W, H, t) {
+  const bg = x.createLinearGradient(0, 0, 0, H);
+  if (kind === 'news') {
+    bg.addColorStop(0, '#102a5a'); bg.addColorStop(1, '#061230'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#c8d4f0'; x.beginPath(); x.arc(110, 74, 24, 0, 7); x.fill(); x.fillStyle = '#243a6a'; x.beginPath(); x.moveTo(70, H - 60); x.quadraticCurveTo(110, 96, 150, H - 60); x.fill();
+    x.fillStyle = '#fff'; x.font = 'bold 18px Inter, sans-serif'; x.fillText('6 NEWS', 190, 38);
+    x.font = '13px Inter, sans-serif'; x.fillStyle = '#9fb4e8'; x.fillText(['COUNCIL VOTES ON PUB RE-ZONE', 'WATTLE CREEK RSL RAISES $12K', 'SHIRE WARNS OF SUNDAY SHOWERS', 'LOCAL LEGEND WINS MEAT TRAY'][Math.floor(t / 7) % 4], 190, 62);
+    x.fillStyle = '#c8102e'; x.fillRect(0, H - 26, W, 26); x.fillStyle = '#fff'; x.font = 'bold 12px Inter, sans-serif';
+    const tick = '   ★ POTHOLES ON MAIN ST   ★ RAIN TO CLEAR BY 9PM   ★ KENO JACKPOT ROLLS OVER   ★ BAZZA\'S UTE FOUND   '; const off = -((t * 40) % 560); for (let k = 0; k < 3; k++) x.fillText(tick, off + k * 560, H - 9);
+  } else {
+    bg.addColorStop(0, '#2a7ac8'); bg.addColorStop(1, '#0a3a7a'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#fff'; x.font = 'bold 15px Inter, sans-serif'; x.fillText('WATTLE CREEK · 7 DAY', 10, 22);
+    const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'], tmp = [24, 22, 19, 21, 26, 28, 25], ic = ['☀', '⛅', '🌧', '⛅', '☀', '☀', '⛈'];
+    days.forEach((dn, i) => { const X = 18 + i * 43; x.fillStyle = 'rgba(255,255,255,.14)'; x.fillRect(X - 6, 40, 40, 100); x.fillStyle = '#fff'; x.font = 'bold 12px Inter, sans-serif'; x.fillText(dn, X, 56); x.font = '22px sans-serif'; x.fillText(ic[i], X + 2, 94); x.font = 'bold 15px Inter, sans-serif'; x.fillText(tmp[i] + '°', X + 2, 124); });
+    x.fillStyle = 'rgba(0,0,0,.4)'; x.fillRect(0, H - 22, W, 22); x.fillStyle = '#ffe27a'; x.font = '12px Inter, sans-serif'; x.fillText('Chance of a shower, then a cold one at the pub.', 10, H - 7);
+  }
+}
+{
+  const _drawTV = drawTV;
+  drawTV = function (tv, dt) { const k = tv.channel || tv.kind; if (k === 'news' || k === 'weather') { tv.t += dt; drawChannel(tv, k, tv.c.getContext('2d'), 320, 180, tv.t); tv.tex.needsUpdate = true; return; } const was = tv.kind; tv.kind = k; _drawTV(tv, dt); tv.kind = was; };
+  const _makeTV = makeTV;
+  makeTV = function (x, y, z, ry, kind) {
+    const tv = _makeTV(x, y, z, ry, kind);
+    addInteract({ id: 'tv', pos: V3(x, Math.min(y, 1.9), z).addScaledVector(V3(Math.sin(ry), 0, Math.cos(ry)), 0.6), r: 4.5, enabled: () => !MG.active && !Game.uiOpen, label: () => `Change the channel (${(tv.channel || tv.kind).toUpperCase()})`,
+      action: () => { const cur = TV_CHANNELS.indexOf(tv.channel || tv.kind); tv.channel = TV_CHANNELS[(cur + 1) % TV_CHANNELS.length]; SFX.click(); SFX.noise(0.12, { freq: 3000, q: 1, gain: 0.04, pos: tv.group.position.clone() }); Game.toast(`Channel: ${tv.channel.toUpperCase()}`); } });
+    return tv;
+  };
+}
+
 // ---- src/99-boot.js ----
 
 // =====================================================================
@@ -11778,4 +11990,4 @@ window.__touchOn = () => { settings.touch = 'on'; applySettings(); }; window.__m
 window.__rtp = (id, n = 100000, bet = 1) => { const g = GAMES[id]; let w = 0, hit = 0, feat = 0; for (let i = 0; i < n; i++) { const s = fullSpin(g, bet, JP, false); w += s.win; if (s.win > 0) hit++; if (s.feature) feat++; } return { rtp: +(w / (n * bet)).toFixed(3), hit: +(hit / n).toFixed(3), feat: +(feat / n).toFixed(4) }; };
 window.__rtpCal = (id, n = 120000, target = 0.9) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; const a = window.__rtp(id, n).rtp; g.payScale = 2; const b = window.__rtp(id, n).rtp; g.payScale = keep; const L = b - a, F = 2 * a - b; return { id, line: +L.toFixed(3), feature: +F.toFixed(3), payScale: +((target - F) / L).toFixed(2), was: keep }; };
 window.__rtpLine = (id, n = 400000) => { const g = GAMES[id], keep = g.payScale || 1; g.payScale = 1; let w = 0; for (let i = 0; i < n; i++) { const r = spinGrid(g, 1, false); w += evalLines(g, r, 1, false).total; } g.payScale = keep; return +(w / n).toFixed(4); };
-window.__game = { THREE, findPath, collideCircle, roomAt, nearestNode, NODES, EDGES, get VENUE() { return VENUE; }, CLUBS, Clubs, SPOTS, claim, release, seatNPC, NpcMeals, FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };
+window.__game = { Tops, supportAt, topInReach, dropGlass, makeGlass, giveDrink, fallingGlasses, cheers, sitOn, standUpPerch, THREE, findPath, collideCircle, roomAt, nearestNode, NODES, EDGES, get VENUE() { return VENUE; }, CLUBS, Clubs, SPOTS, claim, release, seatNPC, NpcMeals, FOODS, makeFood, Eat, Cine, Overheard, DLG, VenueLocals, TEX, MAT, colliders, keys, dynamic, Game, REG, Night, Moments, STORY, DAYS, bartender: () => bartender, renderer, player, scene, camera, MACHINES, NPCS, JP, setTimeOfDay, interactables, sipDrink, startSmoke, dropHeld };

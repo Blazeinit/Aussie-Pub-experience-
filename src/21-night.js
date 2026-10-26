@@ -194,6 +194,7 @@ const Night = {
     Music.level = Math.max(0.2, Music.level - 0.3);
     this.log('🔔', 'Last drinks called');
     if (Game.mode !== 'play' || Game.uiOpen || MG.active || player.seated) { if (player.seated) Game.toast('Last drinks! Wrap it up, champ.'); return; }
+    if (!inRoyal(player.pos.x, player.pos.z)) { Game.toast('Last drinks! The bell\'s gone at the Royal — time to wrap it up.'); return; }
     if (Cine.lastCall(bartender)) { const iv = setInterval(() => { if (!Cine.active) { clearInterval(iv); if (Game.mode === 'play' && !Game.uiOpen && !MG.active) setTimeout(() => this.lastCallPanel(), 400); } }, 300); return; }
     setTimeout(() => { if (Game.mode !== 'play' || Game.uiOpen || MG.active) return; this.lastCallPanel(); }, 3600);
   },
