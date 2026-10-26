@@ -587,6 +587,7 @@ function buildBar() {
   SB.add(uvBox(new THREE.BoxGeometry(0.8, 0.06, L + 0.3), .8, .06, L, 1), MAT.barTop, F - 0.25, 1.08, (z0 + z1) / 2);
   SB.add(uvBox(new THREE.BoxGeometry(4.6, 0.06, 0.8), 4.6, .06, .8, 1), MAT.barTop, -10.75, 1.08, z0 + 0.27);
   SB.add(uvBox(new THREE.BoxGeometry(4.6, 0.06, 0.8), 4.6, .06, .8, 1), MAT.barTop, -10.75, 1.08, z1 - 0.27);
+  addTop(F - 0.25, (z0 + z1) / 2, 0.8, L + 0.3, 1.11); addTop(-10.75, z0 + 0.27, 4.6, 0.8, 1.11); addTop(-10.75, z1 - 0.27, 4.6, 0.8, 1.11);
   // brass foot rail
   addCylS(SB, MAT.brass, F + 0.12, 0.22, (z0 + z1) / 2, 0.025, L, 12, 0, Math.PI / 2);
   for (let z = z0 + 0.5; z < z1; z += 1.6) SB.add(G.box, MAT.brass, F + 0.06, 0.22, z, 0, 0, 0, 0.12, 0.03, 0.03);

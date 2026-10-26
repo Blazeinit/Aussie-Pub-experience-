@@ -1450,6 +1450,7 @@ function buildBar() {
   SB.add(uvBox(new THREE.BoxGeometry(0.8, 0.06, L + 0.3), .8, .06, L, 1), MAT.barTop, F - 0.25, 1.08, (z0 + z1) / 2);
   SB.add(uvBox(new THREE.BoxGeometry(4.6, 0.06, 0.8), 4.6, .06, .8, 1), MAT.barTop, -10.75, 1.08, z0 + 0.27);
   SB.add(uvBox(new THREE.BoxGeometry(4.6, 0.06, 0.8), 4.6, .06, .8, 1), MAT.barTop, -10.75, 1.08, z1 - 0.27);
+  addTop(F - 0.25, (z0 + z1) / 2, 0.8, L + 0.3, 1.11); addTop(-10.75, z0 + 0.27, 4.6, 0.8, 1.11); addTop(-10.75, z1 - 0.27, 4.6, 0.8, 1.11);
   // brass foot rail
   addCylS(SB, MAT.brass, F + 0.12, 0.22, (z0 + z1) / 2, 0.025, L, 12, 0, Math.PI / 2);
   for (let z = z0 + 0.5; z < z1; z += 1.6) SB.add(G.box, MAT.brass, F + 0.06, 0.22, z, 0, 0, 0, 0.12, 0.03, 0.03);
@@ -11858,9 +11859,10 @@ function updatePerch(dt) {
 const _findTarget = Game.findTarget;
 Game.findTarget = function () {
   const t = player.perch ? findTargetFrom.call(this) : _findTarget.call(this);
-  if (t && !t.sitHint) return t;
   if (player.perch || player.seated || this.uiOpen || MG.active || Eat.active) return t;
-  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = 0.78;
+  // looking straight at a free seat beats a big, loose target like "the bar"; anything small and specific (a drink, a person, a machine) still wins
+  const loose = !t || t.id === 'bar' || t.id === 'rslbar' || t.id === 'divebar' || t.id === 'tv' || (t.r && t.r > 3 && !t.temp);
+  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = loose ? 0.86 : 0.97;
   for (const sp of SPOTS) {
     if ((sp.kind !== 'stool' && sp.kind !== 'chair') || sp.occ || sp.hidden || sp.machine || sp.staff) continue;
     const d = V3(sp.pos.x - cp.x, (sp.sitH || 0.48) + 0.1 - cp.y, sp.pos.z - cp.z), dist = d.length(); if (dist > 1.7) continue;

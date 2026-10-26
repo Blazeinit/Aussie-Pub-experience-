@@ -115,9 +115,10 @@ function updatePerch(dt) {
 const _findTarget = Game.findTarget;
 Game.findTarget = function () {
   const t = player.perch ? findTargetFrom.call(this) : _findTarget.call(this);
-  if (t && !t.sitHint) return t;
   if (player.perch || player.seated || this.uiOpen || MG.active || Eat.active) return t;
-  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = 0.78;
+  // looking straight at a free seat beats a big, loose target like "the bar"; anything small and specific (a drink, a person, a machine) still wins
+  const loose = !t || t.id === 'bar' || t.id === 'rslbar' || t.id === 'divebar' || t.id === 'tv' || (t.r && t.r > 3 && !t.temp);
+  const fw = V3(0, 0, -1).applyQuaternion(camera.quaternion), cp = camera.position; let best = null, bs = loose ? 0.86 : 0.97;
   for (const sp of SPOTS) {
     if ((sp.kind !== 'stool' && sp.kind !== 'chair') || sp.occ || sp.hidden || sp.machine || sp.staff) continue;
     const d = V3(sp.pos.x - cp.x, (sp.sitH || 0.48) + 0.1 - cp.y, sp.pos.z - cp.z), dist = d.length(); if (dist > 1.7) continue;
