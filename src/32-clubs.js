@@ -115,7 +115,7 @@ function buildRSL() {
   const tiles = ClubBits.ceilingTiles(); tiles.map.repeat.set((X1 - X0) / 1.2, (Z1 - Z0) / 1.2);
   plane(X1 - X0, Z1 - Z0, tiles, (X0 + X1) / 2, H, (Z0 + Z1) / 2, Math.PI / 2);
   // fluorescent troffers: bright, a little cool
-  const lightPanel = ClubBits.glowMat('#fbfcff');
+  const lightPanel = ClubBits.glowMat('#c9ccd2');
   for (let x = X0 + 2.2; x < X1 - 1; x += 3.2) for (let z = Z0 + 2.2; z < Z1 - 1; z += 3.0) { if (x > 41 && z > 35) continue; addBoxS(SB, lightPanel, x, H - 0.02, z, 1.2, 0.03, 0.6); }
   // the gaming room gets warm downlights and a LED cove instead
   for (let x = 42.5; x < 50; x += 2.2) for (let z = 36.5; z < 46; z += 2.4) SB.add(G.cyl8, ClubBits.glowMat('#ffe2b0'), x, H - 0.02, z, 0, 0, 0, 0.09, 0.02, 0.09);
@@ -146,7 +146,7 @@ function buildRSL() {
   for (const px of [36.2, 40.8]) addCylS(SBX, MAT.chrome, px, 1.5, Z0 - 2.85, 0.07, 3.0, 10);
   for (const px of [37.2, 38.5, 39.8]) { SBX.add(G.cyl8, ClubBits.glowMat('#fff2d0'), px, 2.93, Z0 - 1.5, 0, 0, 0, 0.12, 0.02, 0.12); atmo.pendants && atmo.pendants.push(V3(px, 2.9, Z0 - 1.5)); }
   haloSprite(V3(38.5, 2.7, Z0 - 1.6), 4, 0xffe0b0, 0.6);
-  ClubBits.board(['RSL'], { w: 256, h: 128, bg: '#c8102e', color: '#fff', font: 'Bungee, Impact', size: 84 }, 1.2, 0.6, 38.5, 3.48, Z0 - 3.0, Math.PI, 1.4);
+  ClubBits.board(['ENTRY · MEMBERS & GUESTS'], { w: 1024, h: 96, bg: '#173a78', color: '#fff', size: 60 }, 3.2, 0.3, 38.5, 3.05, Z0 - 3.02, Math.PI, 1.2);
   // automatic glass doors
   C.doors = [-1, 1].map(s => { const d = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.6, 0.04), glass); d.position.set(38.5 + s * 0.55, 1.3, Z0); scene.add(d); const fr = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.06), MAT.chrome); fr.position.y = 1.32; d.add(fr); return { m: d, s, open: 0 }; });
   // ---- the forecourt: pavers, the courtesy bus, flagpole, memorial, planters
@@ -435,7 +435,7 @@ const Clubs = {
     const want = (inC || (aroundC && !isInside(c.x, c.z) && aroundC)) ? (inC || aroundC).id : 'royal';
     if (Game.mode === 'play' && want !== VENUE.id) {
       VENUE = VENUES[want];
-      if (want !== this.prevVenue) { this.prevVenue = want; try { Music.song = Music.pick(Game.state.event); } catch (e) { /* music not ready */ } if (Game.entered || want !== 'royal') Game.toast(want === 'royal' ? 'Back at the Royal.' : `Welcome to ${VENUES[want].name}.`); }
+      if (want !== this.prevVenue) { this.prevVenue = want; try { Music.song = Music.pick(Game.state.event); } catch (e) { /* music not ready */ } Game.objective && Game.objective(); if (Game.entered || want !== 'royal') Game.toast(want === 'royal' ? 'Back at the Royal.' : `Welcome to ${VENUES[want].name}.`); }
     }
     // the RSL's sliding doors and the flag
     const R = CLUBS.rsl;
@@ -464,7 +464,7 @@ const Clubs = {
       st.club = id; st.staff = true; st.smoker = false; st.gambler = false;
       MG.lockNPC(st, C.staffPos, C.staffRy, 'stand'); st.pos.copy(C.staffPos); st.ry = C.staffRy; C.staff = st;
       // regulars and punters
-      const count = clamp(Math.round(D.crowd * V.crowd * 0.85 * (settings.crowd || 1)), 7, 22);
+      const count = clamp(Math.round(D.crowd * V.crowd * 1.35 * (settings.crowd || 1)), id === 'rsl' ? 15 : 13, 28);
       for (let i = 0; i < count; i++) {
         const n = mkNPC(); n.club = id;
         if (id === 'rsl' && Math.random() < 0.45) { n.gambler = true; }

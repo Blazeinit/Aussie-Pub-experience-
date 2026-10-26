@@ -21,7 +21,7 @@ const VENUES = {
   rsl: {
     id: 'rsl', name: 'WATTLE CREEK RSL', hotel: 'RSL SUB-BRANCH', est: 'EST. 1921', short: 'the RSL', sub: 'MEMBERS & GUESTS WELCOME', terrazzo: 'RSL',
     blurb: 'The club. Carpet you could land a plane on, a courtesy bus, $14 schnitty night, and the newest machines in town, only here: Lightning Dollar Link, Thunder Empire, Lightning Link (Magic Pearl, Happy Lantern), Dragon Train, Cash Express, Buffalo Gold and Timber Wolf.',
-    story: false, priceMul: 0.82, crowd: 1.2, exposure: 1.08, warm: 0.5, fare: 12, unlock: 0,
+    story: false, priceMul: 0.82, crowd: 1.2, exposure: 0.98, warm: 0.5, fare: 12, unlock: 0,
     tint: { carpet: 0xffffff, gaming: 0x2a3a6a, paint: 0xffffff, ceiling: 0xd2d6dc, wood: 0xc8b8a8 },
     fascia: ['#14305a', '#0a1a3a', '#e8c56a'], roof: '#14305a', roofStroke: '#f1e4bd', deckLine: 'WATTLE CREEK RSL · GAMING · 1c',
     machines: {
