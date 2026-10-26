@@ -450,6 +450,12 @@ const Clubs = {
     // the band rocks out when the music is up
     for (const n of this.band || []) { n.bandT = (n.bandT || rand(1, 4)) - dt; if (n.bandT <= 0) { n.bandT = rand(1.5, 4); if (n.bandRole !== 'drums') n.cheerT = rand(0.5, 1.2); } if (n.mg) n.mg.look = n.bandRole === 'drums' ? null : camera.position; }
   },
+  // is this person worth DRAWING?  Someone inside a building is only seen from outside through a window, so past a dozen metres they're skipped
+  seen(n) {
+    const bldg = n.club || (inRoyal(n.pos.x, n.pos.z) ? 'royal' : null); if (!bldg) return true;
+    const c = camera.position, here = clubInside(c.x, c.z) ? clubInside(c.x, c.z).id : inRoyal(c.x, c.z) ? 'royal' : null;
+    return here === bldg || n.dist2 < 196;
+  },
   // is this NPC worth simulating and drawing from where the camera is?
   live(n) {
     if (n.club) return this.cam === n.club || inRect(CLUBS[n.club].near, camera.position.x, camera.position.z) || (camera.position.x - CLUBS[n.club].hub.x) ** 2 + (camera.position.z - CLUBS[n.club].hub.z) ** 2 < 1600;

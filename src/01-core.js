@@ -203,7 +203,7 @@ function applyQuality() {
   if (typeof perf !== 'undefined') perf.show = settings.showFps || /[?&]perf/.test(location.search);
   if (typeof Game !== 'undefined') Game.timeScale = 0.8 / 60 * settings.timeSpeed;
   // Low: drop the optional lights and the decorative light shafts/dust
-  (window.__optionalLights || []).forEach(l => l.visible = HIGH());
+  (window.__optionalLights || []).forEach(l => l.visible = HIGH() && settings.preset !== 'medium');   // phones (medium) skip the decorative point lights: every pixel pays for each one
   if (typeof shadowDirty !== 'undefined') shadowDirty = 2;
 }
 

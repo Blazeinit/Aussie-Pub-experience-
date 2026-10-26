@@ -204,7 +204,7 @@ function applyQuality() {
   if (typeof perf !== 'undefined') perf.show = settings.showFps || /[?&]perf/.test(location.search);
   if (typeof Game !== 'undefined') Game.timeScale = 0.8 / 60 * settings.timeSpeed;
   // Low: drop the optional lights and the decorative light shafts/dust
-  (window.__optionalLights || []).forEach(l => l.visible = HIGH());
+  (window.__optionalLights || []).forEach(l => l.visible = HIGH() && settings.preset !== 'medium');   // phones (medium) skip the decorative point lights: every pixel pays for each one
   if (typeof shadowDirty !== 'undefined') shadowDirty = 2;
 }
 
@@ -5557,7 +5557,7 @@ function simulate(dt) {
     // world simulation (also runs behind title for ambience)
     const pp = Game.mode === 'play' ? player.pos : camera.position;
     const actors = [{ x: pp.x, z: pp.z, r: 0.32 }];
-    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; const live = n === bartender || Clubs.live(n); n.h.root.visible = live; if (!live) continue; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
+    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; const live = n === bartender || Clubs.live(n); n.h.root.visible = live && Clubs.seen(n); if (!live) continue; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
     updateDoors(dt, actors);
     for (const m of MACHINES) {
       if (m.mode === 'player') { m.update(dt); m.draw(); }
@@ -11667,6 +11667,12 @@ const Clubs = {
     }
     // the band rocks out when the music is up
     for (const n of this.band || []) { n.bandT = (n.bandT || rand(1, 4)) - dt; if (n.bandT <= 0) { n.bandT = rand(1.5, 4); if (n.bandRole !== 'drums') n.cheerT = rand(0.5, 1.2); } if (n.mg) n.mg.look = n.bandRole === 'drums' ? null : camera.position; }
+  },
+  // is this person worth DRAWING?  Someone inside a building is only seen from outside through a window, so past a dozen metres they're skipped
+  seen(n) {
+    const bldg = n.club || (inRoyal(n.pos.x, n.pos.z) ? 'royal' : null); if (!bldg) return true;
+    const c = camera.position, here = clubInside(c.x, c.z) ? clubInside(c.x, c.z).id : inRoyal(c.x, c.z) ? 'royal' : null;
+    return here === bldg || n.dist2 < 196;
   },
   // is this NPC worth simulating and drawing from where the camera is?
   live(n) {

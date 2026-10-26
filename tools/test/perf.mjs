@@ -1,6 +1,6 @@
 // where does the frame go? draw calls / triangles / lights / CPU sim time at stops in each pub
 import { launch, done } from './harness.mjs';
-const g = await launch({ quality: process.argv[2] || 'high', port: 8200 });
+const g = await launch({ quality: process.argv[2] || 'high', port: 8200, w: 844, h: 390 });
 await g.startNight();
 await g.ev(`(()=>{ const G=window.__game; G.Game.entered=true; G.Game.askedHome=true; G.Game.closePanel(); window.__sim(1); })()`);
 const stops = [['street_royal', -7.5, 21, 0.12], ['royal_bar', -4, -8, -1.57], ['royal_gaming', 8, -9, 0], ['royal_garden', 6, -22, 1.6], ['rsl_front', 38.5, 14, Math.PI], ['rsl_bistro', 36, 36, -1], ['rsl_gaming', 45, 38, 0.3], ['dive_front', -37, 9, 0], ['dive_in', -37, -2, -1.2]];

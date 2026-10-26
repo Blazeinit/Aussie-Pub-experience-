@@ -716,7 +716,7 @@ function simulate(dt) {
     // world simulation (also runs behind title for ambience)
     const pp = Game.mode === 'play' ? player.pos : camera.position;
     const actors = [{ x: pp.x, z: pp.z, r: 0.32 }];
-    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; const live = n === bartender || Clubs.live(n); n.h.root.visible = live; if (!live) continue; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
+    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; const live = n === bartender || Clubs.live(n); n.h.root.visible = live && Clubs.seen(n); if (!live) continue; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
     updateDoors(dt, actors);
     for (const m of MACHINES) {
       if (m.mode === 'player') { m.update(dt); m.draw(); }
