@@ -4964,7 +4964,7 @@ const Game = {
     this.objective();
     { const seen = s.flags.seen = s.flags.seen || {}; const first = !seen.royal; seen.royal = 1; if (!startC) Cine.opening(first); }
     const where = startC ? VENUES[this.startAt].short : 'the Royal';
-    setTimeout(() => this.subtitle(startC ? `<i>${where[0].toUpperCase() + where.slice(1)} tonight. The Royal's just up the street if it's dead.</i>` : s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is the Royal.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is the Royal.</i>', 5), 600);
+    setTimeout(() => this.subtitle(startC ? `<i>${where[0].toUpperCase() + where.slice(1)} tonight. The Royal's just ${this.startAt === 'rsl' ? 'over the road' : 'down the street'} if it's dead.</i>` : s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is the Royal.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is the Royal.</i>', 5), 600);
   },
   endNight(reason) {
     if (this.mode !== 'play') return;
