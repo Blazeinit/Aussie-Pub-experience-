@@ -217,12 +217,15 @@ const PoolGame = (() => {
     },
     begin(stake, who) {
       const skills = { Spud: 0.5, 'Slick Rick': 0.85, Kenno: 0.55, Bev: 0.3 }, skill = skills[who] != null ? skills[who] : rand(0.35, 0.7);
-      const { n, sp } = MG.opponent(o => o.kind === 'pool', who && who !== 'A local' ? who : null);
+      // whichever table you're standing at (the Royal's, or the one at the Rusty Anchor)
+      const tbl = SPOTS.filter(o => o.kind === 'pool').sort((a, b) => a.pos.distanceToSquared(player.pos) - b.pos.distanceToSquared(player.pos))[0];
+      const club = tbl ? tbl.club || null : null;
+      const { n, sp } = MG.opponent(o => o.kind === 'pool' && (o.club || null) === club, who && who !== 'A local' ? who : null);
       const sim = new POOL.Sim(), match = new POOL.Match(sim, ['You', n.name], { breaker: 0, rack: false });
       gm = { sim, match, opp: { name: n.name, n }, sp, stake, skill, phase: 'place', angle: 0, power: 0, charging: false, spin: { top: 0, side: 0 }, sink: {}, t: 0, msg: '', px: T.cueStart.x, pz: T.cueStart.z, pdir: 1 };
       sim.rack(); match.newGame(0, false);
       if (stake) { Game.state.wallet -= stake; }
-      MG.lockNPC(n, V3(-4.1, 0, -12.6), -Math.PI / 2);
+      MG.lockNPC(n, tbl ? tbl.pos.clone() : V3(-4.1, 0, -12.6), tbl ? tbl.ry : -Math.PI / 2); if (club) n.club = club; if (tbl && n.pos.distanceTo(tbl.pos) > 6) n.pos.copy(tbl.pos);   // a fresh local appears at the table rather than walking through walls
       MG.start(api);
     },
     enter() {

@@ -578,7 +578,7 @@ function release(n) {
 function chooseNextSpot(n) {
   const ev = Game.state.event;
   const w = [];
-  const add = (f, weight) => { const list = freeSpots(f); if (list.length) w.push([list, weight]); };
+  const add = (f, weight) => { const list = freeSpots(s => (s.club || null) === (n.club || null) && !s.staff && !s.door && f(s)); if (list.length) w.push([list, weight]); };
   if (n.gambler) add(s => s.kind === 'pokie' && (!s.smoke || n.smoker), 4);
   add(s => s.area === 'bar' && (s.kind === 'stool' || s.kind === 'stand' || s.kind === 'lean'), 3);
   add(s => s.area === 'lounge', ev === 'parma' ? 4 : 1.5);
@@ -593,7 +593,7 @@ function chooseNextSpot(n) {
 function streetApproach(n) { const w = [V3(-8.6, 0, 13.0), V3(-8.6, 0, 9.4), NODES.S2.clone(), NODES.S0.clone()]; if (n.pos.z < 12.9 || n.pos.x < -9) return w.slice(2); return w; }
 function sendTo(n, s) {
   claim(n, s);
-  n.path = findPath(n.pos, s.pos); n.path.push(s.pos.clone());
+  n.path = n.club ? [CLUBS[n.club].hub.clone()] : findPath(n.pos, s.pos); n.path.push(s.pos.clone());
   n.state = 'walk'; n.kind = 'walk';
   n.a.holdDrink = Math.random() < 0.6; n.glass.group.visible = n.a.holdDrink;
 }
@@ -675,7 +675,7 @@ function updateNPC(n, dt, t, player) {
       if (a.dragT > 0 && a.dragT < 0.3 && Math.random() < dt * 30) { n.h.J.head.updateWorldMatrix(true, false); const hp = _v1.setFromMatrixPosition(n.h.J.head.matrixWorld).add(V3(0, 0.08, 0)); const fw = V3(Math.sin(n.ry), 0.15, Math.cos(n.ry)); smokeFX.emit(hp.addScaledVector(fw, 0.12), fw.multiplyScalar(0.5), 0.05, 3, 0.18, [0.9, 0.9, 0.92], 0.18); } }
     if (n.timer <= 0 && n.kind === 'pokie' && s && s.machine && s.machine.occupiedBy === n && !s.machine.canSpin()) n.timer = 1.5;   // nobody walks off mid-feature
     if (n.timer <= 0) {
-      const ns = Math.random() < 0.1 ? SPOTS.find(s => s.kind === 'toilet') : chooseNextSpot(n);
+      const ns = Math.random() < 0.1 && !n.club ? SPOTS.find(s => s.kind === 'toilet') : chooseNextSpot(n);
       if (ns && ns !== n.spot && !ns.occ) { release(n); sendTo(n, ns); }
       else n.timer = rand(20, 60);
       if (ns && ns.kind === 'toilet') ns.occ = null;

@@ -42,7 +42,7 @@ const TRIVIA = [
 const KENO_PAY = { 0: 2, 5: 2, 6: 15, 7: 50, 8: 400, 9: 4000, 10: 100000 };
 
 const Game = {
-  mode: 'loading', paused: false, uiOpen: false, player, time: 0, frameN: 0, entered: false,
+  mode: 'loading', paused: false, uiOpen: false, player, time: 0, frameN: 0, entered: false, startAt: store('ld_start') || 'royal',
   state: { day: 0, time: 19, wallet: 0, bank: 0, drunk: 0, mood: 60, crave: 30, hunger: 20, bladder: 0, cigs: 0, tickets: [], event: null, stats: {}, night: {}, debts: [], next: {}, cigsTonight: 0, strikes: 0, rel: {}, flags: {}, tonight: {} },
   items: [], // drinks/food sitting on the bar for the player
   keno: { next: 0, drawing: false, drawn: [], shown: 0, t: 0, game: 412, tickets: [] },
@@ -85,7 +85,7 @@ const Game = {
       <div class="dname">${D.name}</div><div class="dtime">${hh(start)} · DAY ${s.day + 1} OF 7 · ${dd.label.toUpperCase()}</div>
       <div class="event">${D.title}</div>
       <div class="chapter"><small>${CHAPTERS[s.day].title.toUpperCase()}</small>${CHAPTERS[s.day].narr}</div>
-      ${s.day < 6 ? `<div class="venues"><small>WHERE TO TONIGHT?</small>${Object.values(VENUES).map(v => { const ok = venueOpen(v.id), here = v.id === VENUE.id; return `<button class="vchip ${here ? 'on' : ''} ${ok ? '' : 'off'}" data-v="${v.id}" ${ok ? '' : 'disabled'}><b>${v.name}</b><span>${ok ? v.blurb : `Locked: build your standing at the Royal first (${v.unlock}+).`}</span><i>${here ? 'you are here' : v.fare ? `cab $${v.fare}` : 'home turf'}${v.story ? ' · story night' : ' · a night off'}</i></button>`; }).join('')}</div>` : ''}
+      ${s.day < 6 ? `<div class="venues"><small>WHERE TO START TONIGHT? (ALL ON THE ONE STREET)</small>${Object.values(VENUES).map(v => { const here = v.id === (this.startAt || 'royal'); return `<button class="vchip ${here ? 'on' : ''}" data-v="${v.id}"><b>${v.name}</b><span>${v.blurb}</span><i>${here ? 'start here tonight' : v.story ? 'story night · walk over any time' : 'on the same street · walk over any time'}</i></button>`; }).join('')}</div>` : ''}
       <p>${D.desc}</p>
       ${s.startHang ? '<p class="neg"><b>Hungover.</b> You got going an hour late and everything is a bit too loud.</p>' : ''}
       ${msgs.map(m => `<p style="margin:4px 0">${m}</p>`).join('')}
@@ -94,7 +94,7 @@ const Game = {
       <div style="margin-top:18px"><button class="cbtn" id="btnGo">HEAD TO THE PUB →</button></div>`;
     $('title').classList.add('hidden'); $('summary').classList.add('hidden'); $('dayCard').classList.remove('hidden');
     $('btnGo').onclick = () => { AudioSys.init(); $('dayCard').classList.add('hidden'); this.startNight(); };
-    document.querySelectorAll('.vchip').forEach(b => b.onclick = () => { if (b.dataset.v !== VENUE.id) { AudioSys.init(); travelTo(b.dataset.v); } });
+    document.querySelectorAll('.vchip').forEach(b => b.onclick = () => { if (b.classList.contains('off')) return; this.startAt = b.dataset.v; store('ld_start', this.startAt); document.querySelectorAll('.vchip').forEach(o => { o.classList.toggle('on', o === b); const i = o.querySelector('i'); if (i) i.textContent = o === b ? 'start here tonight' : (VENUES[o.dataset.v].story ? 'story night · walk over any time' : 'on the same street · walk over any time'); }); SFX.click && SFX.click(); });
     this.mode = 'card';
   },
   startNight() {
@@ -115,21 +115,26 @@ const Game = {
     player.cig = null; player.cigMesh.g.visible = false; player.seated = null; player.sip = 0;
     puddles.forEach(p => scene.remove(p)); puddles.length = 0;
     REG.spawnAll(); VenueLocals.spawn(); Shops.spawnStaff(); STORY.spawn();
+    VENUE = VENUES.royal; Clubs.prevVenue = 'royal';
     spawnPatrons(Math.round(D.crowd * VENUE.crowd * (0.85 + Math.random() * 0.3) * settings.crowd));
+    Clubs.spawn();
     Night.start(); RANDOM.plan(); Racing.setup(); Karaoke.started = Karaoke.awarded = false; Karaoke.scores = []; Karaoke.draw(); BAR.shift = false; player.level = 0; player.auto = null;
     this.arrivals = Math.round(D.crowd * 0.35); this.arriveT = 20;
     AudioSys.amp.crowd = clamp(D.crowd / 18, 0.4, 1.4);
     Music.song = Music.pick(D.event); Music.level = D.event === 'knockoff' || D.event === 'raffle' ? 0.9 : 0.45;
     // player on the far footpath, facing the pub
-    player.pos.set(-7.5, 0, 21.2); player.yaw = 0.12; player.pitch = 0.04; player.vel.set(0, 0, 0);
+    const startC = CLUBS[this.startAt];
+    if (startC) { player.pos.copy(startC.spawn); player.yaw = startC.yaw; } else { player.pos.set(-7.5, 0, 21.2); player.yaw = 0.12; }
+    player.pitch = 0.04; player.vel.set(0, 0, 0);
     updateBoards(D);
     setTimeOfDay(s.time, D.weather);
     this.mode = 'play'; this.paused = false;
     $('hud').classList.remove('hidden'); $('deck').classList.add('hidden');
     this.fade(1, 0); lockPointer(); this.useTab = false;
     this.objective();
-    { const seen = s.flags.seen = s.flags.seen || {}; const first = !seen[VENUE.id]; seen[VENUE.id] = 1; Cine.opening(first); }
-    setTimeout(() => this.subtitle(s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is ' + VENUE.short + '.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is ' + VENUE.short + '.</i>', 5), 600);
+    { const seen = s.flags.seen = s.flags.seen || {}; const first = !seen.royal; seen.royal = 1; if (!startC) Cine.opening(first); }
+    const where = startC ? VENUES[this.startAt].short : 'the Royal';
+    setTimeout(() => this.subtitle(startC ? `<i>${where[0].toUpperCase() + where.slice(1)} tonight. The Royal's just up the street if it's dead.</i>` : s.startHang ? '<i>Head\'s pounding. The street\'s too quiet. Only thing lit up is the Royal.</i>' : '<i>The street\'s dead. Only thing lit up for blocks is the Royal.</i>', 5), 600);
   },
   endNight(reason) {
     if (this.mode !== 'play') return;
@@ -494,7 +499,7 @@ const Game = {
     if (s.crave > 75) s.mood = Math.max(0, s.mood - 0.04 * gm);
     if (s.drunk >= 98 && !s.kicked) this.kickOut();
     // leaving via the street
-    if (this.entered && player.pos.z > 18.6 && !this.askedHome && !this.uiOpen) { this.askedHome = true; this.openPanel('HEAD HOME?', `It's ${this.clockText()}. ${s.time < 22 && s.drunk < 35 ? 'An early, sober night means a bonus tomorrow.' : ''}`, '', [{ label: 'Walk home', fn: () => { this.closePanel(); this.walkHome(); } }, { label: 'One more', fn: () => { this.closePanel(); } }]); }
+    if (this.entered && player.pos.z > 18.6 && player.pos.x < 22 && !clubAround(player.pos.x, player.pos.z) && !this.askedHome && !this.uiOpen) { this.askedHome = true; this.openPanel('HEAD HOME?', `It's ${this.clockText()}. ${s.time < 22 && s.drunk < 35 ? 'An early, sober night means a bonus tomorrow.' : ''}`, '', [{ label: 'Walk home', fn: () => { this.closePanel(); this.walkHome(); } }, { label: 'One more', fn: () => { this.closePanel(); } }]); }
     if (player.pos.z < 17 && this.askedHome) this.askedHome = false;
     if (!this.entered && isInside(player.pos.x, player.pos.z)) { this.entered = true; this.toast(`Welcome to ${VENUE.id === 'royal' ? 'the Royal' : VENUE.name.split(' ').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')}.`); this.objective(); this.subtitle(`<b>${bartender.name}:</b> ${choice(["G'day! What can I get ya?", 'Evenin\'! Bar\'s open.', "How ya goin', mate?"])}`, 3); }
     if (s.wallet + s.bank + s.tickets.reduce((a, b) => a + b, 0) + this.machineCredit() < 0.5 && !this.brokeWarned) { this.brokeWarned = true; this.toast('You\'re completely skint. Water\'s free, the walk home is too.', true); }
@@ -708,7 +713,7 @@ function simulate(dt) {
     // world simulation (also runs behind title for ambience)
     const pp = Game.mode === 'play' ? player.pos : camera.position;
     const actors = [{ x: pp.x, z: pp.z, r: 0.32 }];
-    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
+    for (const n of NPCS) { n.dist2 = (n.pos.x - camera.position.x) ** 2 + (n.pos.z - camera.position.z) ** 2; const live = n === bartender || Clubs.live(n); n.h.root.visible = live; if (!live) continue; if (Game.mode !== 'play' || !Game.paused) updateNPC(n, dt, elapsed, pp); if (n.state === 'walk') actors.push({ x: n.pos.x, z: n.pos.z, r: 0.25 }); }
     updateDoors(dt, actors);
     for (const m of MACHINES) {
       if (m.mode === 'player') { m.update(dt); m.draw(); }
@@ -732,7 +737,7 @@ function simulate(dt) {
     if (window.__fogOut) { scene.fog.color.copy(window.__fogOut.c).lerp(_hazeCol.set(gam ? 0x26131f : 0x2c1c11), atmo.iF); scene.fog.density = lerp(window.__fogOut.d, gam ? 0.032 : 0.026, atmo.iF); }
     Town.glow(atmo.nightF); fxPass.uniforms.uWarm.value = atmo.iF * VENUE.warm * (1 - Night.house * 0.55); fxPass.uniforms.uDim.value = Night.dark * 0.5 * atmo.iF; fxPass.uniforms.uNight.value = atmo.nightF;
     updateAtmosphere(dt, elapsed, camera.position, inside);
-    updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
+    Clubs.update(dt); updateZones(dt); updateTraffic(dt); TOUCH.update(); PokieFX.update(dt); CashFX.update(dt); ATM.update(dt); Juke.update(dt);
     updatePeopleShadows();
     bloom.threshold = damp(bloom.threshold, inside ? 0.82 : lerp(0.82, 4.0, window.__dayF || 0), 3, dt);
     renderer.toneMappingExposure = damp(renderer.toneMappingExposure, (inside ? (1.15 * VENUE.exposure + Night.house * 0.55) * (1 - Night.dark * 0.8) : lerp(1.25, 0.62, window.__dayF || 0)) * settings.brightness, 2, dt);

@@ -33,7 +33,7 @@ const VENUES = {
   dive: {
     id: 'dive', name: 'THE RUSTY ANCHOR', hotel: 'RUSTY ANCHOR', est: 'EST. 1964', short: 'the Rusty Anchor', sub: 'COLD BEER · HOT CHIPS · NO DRAMA', terrazzo: 'ANCHOR',
     blurb: "A sticky-carpet dive near the wharf. Cheap pots, old-school pokies (Queen of the Nile, Big Red, 5 Dragons), loud bands and a bouncer called Tiny.",
-    story: false, priceMul: 0.7, crowd: 1.05, exposure: 0.84, warm: 1.15, fare: 8, unlock: 15,
+    story: false, priceMul: 0.7, crowd: 1.05, exposure: 0.84, warm: 1.15, fare: 8, unlock: 0,
     tint: { carpet: 0xffffff, gaming: 0x3a2a2a, paint: 0xffffff, ceiling: 0xa09074, wood: 0x9a8a78 },
     fascia: ['#2a1a14', '#140a08', '#e8a050'], roof: '#5a2a14', roofStroke: '#e8c88a', deckLine: 'THE RUSTY ANCHOR · POKIES · 1c',
     machines: {
@@ -43,7 +43,7 @@ const VENUES = {
     bartenders: ['Tiny', 'Shaz', 'Gaz'], songs: [2, 3, 7, 6], moments: ['bucks', 'blackout', 'busker', 'footy'],
   },
 };
-const VENUE = VENUES[store('ld_venue')] || VENUES.royal;
+let VENUE = VENUES.royal;   // the building you're standing in (see Clubs.update); the world is built with the Royal's look
 function venueOpen(id) { const V = VENUES[id]; if (!V) return false; const f = store('ld_save'); const rep = (f && f.flags && f.flags.rep) || 0; return rep >= (V.unlock || 0) || !!window.__unlockVenues; }
 // the colour of the place: tint the shared materials once they exist
 function applyVenueMaterials() {

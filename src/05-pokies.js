@@ -502,7 +502,7 @@ function buildMachineMesh(def, idx) {
   const seatW = toW(0, 0, 0.82);
   const m = new Machine(def, idx, { root, scr, btns, deck, seatW, fw, ledge: toW(-0.45, 0.995, 0.18), ash: toW(0.45, 1.01, 0.18), screenW: toW(0, D.cy, 0.04), dims: D, ashLocal: V3(0.45, 1.01, 0.18) });
   MACHINES.push(m);
-  addSpot({ kind: 'pokie', pos: seatW.clone(), ry: def.ry + Math.PI, sitH: 0.7, area: def.smoke ? 'terrace' : 'gaming', machine: m, smoke: def.smoke });
+  addSpot({ kind: 'pokie', pos: seatW.clone(), ry: def.ry + Math.PI, sitH: 0.7, area: def.smoke ? 'terrace' : 'gaming', machine: m, smoke: def.smoke, club: def.club });
   addInteract({ id: 'machine' + idx, pos: toW(0, 1.3, 0.3), r: 1.7, label: () => m.occupiedBy ? `${g.name} ${g.sub} — in use` : `Sit at ${g.name} ${g.sub}${def.smoke ? '  (smoking area)' : ''}`, enabled: () => !m.occupiedBy, action: () => Game.sitAt(m) });
   return m;
 }

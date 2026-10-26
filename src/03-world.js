@@ -290,7 +290,7 @@ function buildStreet() {
   addCol(-9.5, 19.05, 1.9, 0.5);
 
   // ---- the neighbours: painted shopfronts with lit windows, awnings and signs (see 25-town.js) ----
-  townBlock(-46, -27, 2, 12, 7.0, 1, 'offices');
+  // (-46 .. -27.5 on this side is the Rusty Anchor; see 32-clubs.js)
   townBlock(-27, -14, 2, 12, 4.6, 1, 'vacant');
   townBlock(19.6, 33, 2, 22, 4.8, 1, 'hardware');
   townBlock(33, 50, 2, 14, 6.6, 1, 'bakery');
@@ -299,7 +299,7 @@ function buildStreet() {
   townBlock(-12, 6, 24, 10, 5.4, -1, 'chemist');
   townBlock(6, 7.6, 24, 12, 7.0, -1, 'brick');
   townBlock(12.4, 26, 24, 12, 7.0, -1, 'opshop');   // the gap in between is the kebab shop (buildKebab)
-  townBlock(26, 50, 24, 10, 5.0, -1, 'hardware');
+  // (26 .. 50 over the road is Wattle Creek RSL and its forecourt; see 32-clubs.js)
   // FOR LEASE sign
   const fl = signTex(['FOR LEASE', '0400 000 000'], { w: 512, h: 256, bg: '#f4f4f0', color: ['#c7352b', '#222'], sizes: [110, 50], border: '#c7352b' });
   signPlane(fl, 1.6, 0.8, -20, 2.2, 2.09, 0);
