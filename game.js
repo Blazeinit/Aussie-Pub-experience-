@@ -11477,7 +11477,7 @@ function buildCourtesyBus(x, z) {
 // =====================================================================
 function buildDive() {
   const C = CLUBS.dive, X0 = C.x0, X1 = C.x1, Z0 = C.z0, Z1 = C.z1, H = C.ceil;
-  const floor = M({ map: TEX.timber, color: 0x5a4636, roughness: 0.45 }), black = M({ color: 0x141214, roughness: 0.9 }), wain = M({ map: TEX.wainscot, color: 0x5a3a24, roughness: 0.6 });
+  const floor = MAT.timber.clone(); floor.color.multiplyScalar(0.62); interiorMats.push(floor); const black = M({ color: 0x141214, roughness: 0.9 }), wain = M({ map: TEX.wainscot, color: 0x5a3a24, roughness: 0.6 });
   const tin = M({ map: TEX.corr, color: 0x2e5a58, roughness: 0.55, metalness: 0.35 }, false), brickOut = M({ map: TEX.brickDark, roughness: 0.9 }, false);
   plane(X1 - X0, Z1 - Z0, floor, (X0 + X1) / 2, 0.006, (Z0 + Z1) / 2, -Math.PI / 2, 0, 2);
   plane(X1 - X0, Z1 - Z0, black, (X0 + X1) / 2, H, (Z0 + Z1) / 2, Math.PI / 2);
@@ -11768,7 +11768,7 @@ async function boot() {
     if (store('ld_resume')) { store('ld_resume', null); if (Game.load()) Game.showDayCard(); }   // we just caught a cab to another pub
     window.__ready = true;
   } catch (e) {
-    console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message;
+    console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message; window.__bootStack = e.stack;
   }
 }
 requestAnimationFrame(frame);

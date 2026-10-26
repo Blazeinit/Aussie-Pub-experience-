@@ -46,7 +46,7 @@ async function boot() {
     if (store('ld_resume')) { store('ld_resume', null); if (Game.load()) Game.showDayCard(); }   // we just caught a cab to another pub
     window.__ready = true;
   } catch (e) {
-    console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message;
+    console.error(e); $('loadtxt').textContent = 'Error: ' + e.message; window.__bootError = e.message; window.__bootStack = e.stack;
   }
 }
 requestAnimationFrame(frame);
