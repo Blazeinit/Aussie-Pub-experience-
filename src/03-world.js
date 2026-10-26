@@ -291,6 +291,7 @@ function buildStreet() {
 
   // ---- the neighbours: painted shopfronts with lit windows, awnings and signs (see 25-town.js) ----
   // (-46 .. -27.5 on this side is the Rusty Anchor; see 32-clubs.js)
+  townBlock(-60, -46.2, 2, 12, 7.0, 1, 'offices');
   townBlock(-27, -14, 2, 12, 4.6, 1, 'vacant');
   townBlock(19.6, 33, 2, 22, 4.8, 1, 'hardware');
   townBlock(33, 50, 2, 14, 6.6, 1, 'bakery');
