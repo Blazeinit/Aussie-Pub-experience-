@@ -5,7 +5,7 @@
 - [x] Pub classics: Queen of the Nile, Big Red, Buffalo (+ 5 Dragons, Where's the Gold retitles)
 - [x] Real HDRI reflections via npm package (@pmndrs/assets, Poly Haven CC0)
 - [x] Gents rebuilt; entry doors rebuilt; main-street shopfronts
-- [x] B. Venues: Royal, RSL club, Rusty Anchor (per-venue machines, prices, palettes, songs, moments)
+- [x] B. Venues: Royal, RSL club, Rusty Anchor — now all on ONE map: walk between them (no cab/reload). Each has its own exterior, interior, bar + staff, machines, crowd, lights; the venue follows you
 - [x] C. Food models + kitchen-pass serving + first-person eating for every dish
 - [x] D. Dialogue graph runner, regular arcs, overheard chat, cinematic director
 - [x] Pool: playable eight-ball on the house table
